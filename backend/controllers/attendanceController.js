@@ -1,0 +1,1279 @@
+const mongoose = require('mongoose');
+const Attendance = require('../models/Attendance');
+const User = require('../models/User');
+const School = require('../models/School');
+const DatabaseOptimization = require('../utils/databaseOptimization');
+const UserGenerator = require('../utils/userGenerator');
+
+// Enhanced attendance marking with multiple methods and tracking
+exports.markAttendance = async (req, res) => {
+  try {
+    const {
+      studentId,
+      class: className,
+      section,
+      date,
+      status,
+      attendanceType = 'daily',
+      method = 'manual',
+      deviceId,
+      location,
+      periods,
+      leaveDetails,
+      lateDetails,
+      teacherNotes
+    } = req.body;
+
+    // Check if user is admin or teacher
+    if (!['admin', 'teacher'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const schoolCode = req.user.schoolCode;
+    const schoolId = req.user.schoolId;
+    
+    // Get student information
+    const student = await UserGenerator.getUserByIdOrEmail(schoolCode, studentId);
+    
+    if (!student || student.role !== 'student') {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Check if attendance already exists for this student-date
+    let attendance = await Attendance.findOne({
+      schoolCode,
+      studentId,
+      date: new Date(date)
+    });
+
+    const currentTime = new Date();
+    const attendanceData = {
+      schoolId,
+      schoolCode,
+      studentId,
+      studentName: `${student.name.firstName} ${student.name.lastName}`,
+      studentRollNumber: student.studentDetails?.rollNumber,
+      class: className,
+      section,
+      date: new Date(date),
+      status,
+      attendanceType,
+      timeTracking: {
+        schoolStartTime: '08:00',
+        schoolEndTime: '15:30'
+      }
+    };
+
+    // Set check-in/check-out based on status
+    if (status === 'present' || status === 'late') {
+      attendanceData.timeTracking.checkIn = {
+        time: currentTime.toTimeString().slice(0, 5),
+        timestamp: currentTime,
+        method,
+        recordedBy: req.user._id,
+        deviceId,
+        location
+      };
+    }
+
+    // Add period-wise attendance if provided
+    if (periods && periods.length > 0) {
+      attendanceData.timeTracking.periods = periods.map(period => ({
+        ...period,
+        markedAt: new Date(),
+        markedBy: req.user._id
+      }));
+      
+      // Calculate totals
+      attendanceData.timeTracking.totalPeriodsScheduled = periods.length;
+      attendanceData.timeTracking.totalPeriodsPresent = periods.filter(p => p.status === 'present').length;
+    }
+
+    // Add leave details if absent
+    if (status === 'absent' && leaveDetails) {
+      attendanceData.leaveDetails = {
+        ...leaveDetails,
+        appliedBy: leaveDetails.appliedBy || req.user._id,
+        appliedAt: new Date()
+      };
+    }
+
+    // Add late details if late
+    if (status === 'late' && lateDetails) {
+      attendanceData.lateDetails = lateDetails;
+    }
+
+    // Add teacher notes
+    if (teacherNotes) {
+      attendanceData.teacherNotes = [{
+        teacherId: req.user._id,
+        teacherName: `${req.user.name.firstName} ${req.user.name.lastName}`,
+        note: teacherNotes,
+        timestamp: new Date()
+      }];
+    }
+
+    if (attendance) {
+      // Update existing attendance
+      if (attendance.isLocked) {
+        return res.status(400).json({ message: 'Attendance is locked and cannot be modified' });
+      }
+
+      // Track modifications
+      const modifications = [];
+      if (attendance.status !== status) {
+        modifications.push({
+          field: 'status',
+          oldValue: attendance.status,
+          newValue: status,
+          modifiedBy: req.user._id,
+          modifiedAt: new Date(),
+          reason: 'Status update'
+        });
+      }
+
+      // Update attendance
+      Object.assign(attendance, attendanceData);
+      attendance.modifications = [...(attendance.modifications || []), ...modifications];
+      attendance.lastModifiedBy = req.user._id;
+      attendance.lastModifiedAt = new Date();
+
+    } else {
+      // Create new attendance record
+      attendanceData.createdBy = req.user._id;
+      attendanceData.createdAt = new Date();
+      attendance = new Attendance(attendanceData);
+    }
+
+    await attendance.save();
+
+    // Send parent notification for absence or late arrival
+    if (status === 'absent' || status === 'late') {
+      await sendParentNotification(attendance, student);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Attendance marked successfully',
+      attendance: {
+        attendanceId: attendance.attendanceId,
+        studentName: attendance.studentName,
+        status: attendance.status,
+        date: attendance.date,
+        timeTracking: attendance.timeTracking
+      }
+    });
+
+  } catch (error) {
+    console.error('Error marking attendance:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Session-based bulk attendance marking (morning/afternoon)
+exports.markSessionAttendance = async (req, res) => {
+  try {
+    const {
+      date,
+      class: className,
+      section,
+      session, // 'morning' or 'afternoon'
+      students // Array of { studentId, userId, status }
+    } = req.body;
+
+    // Check permissions
+    if (!['admin', 'teacher'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const schoolCode = req.user.schoolCode;
+    const schoolId = req.user.schoolId;
+    const results = [];
+    const sessionTime = session === 'morning' ? '08:00' : '13:00';
+    const markedBy = req.user.name || req.user.userId;
+
+    console.log(`🎯 Processing ${session} attendance for Class ${className} Section ${section} on ${date}`);
+    console.log(`👥 Students to process: ${students.length}`);
+    console.log(`🏫 School code: ${schoolCode}, School ID: ${schoolId}`);
+    console.log(`👤 Marked by: ${markedBy} (${req.user.role})`);
+
+    // Use school-specific database for attendance storage
+    const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+    const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const attendanceCollection = schoolConnection.collection('attendances');
+
+    // Create the session attendance document ID
+    const sessionDocumentId = `${date}_${className}_${section}_${session}`;
+    
+    // Check if attendance is already marked (frozen) for this session
+    const existingSession = await attendanceCollection.findOne({ _id: sessionDocumentId });
+    if (existingSession) {
+      console.log(`🔒 Attendance already marked and frozen for ${session} session`);
+      return res.status(400).json({
+        success: false,
+        message: `${session.charAt(0).toUpperCase() + session.slice(1)} attendance has already been marked and is frozen. Cannot modify existing attendance.`,
+        data: {
+          date,
+          class: className,
+          section,
+          session,
+          isFrozen: true,
+          existingDocument: {
+            documentId: sessionDocumentId,
+            markedAt: existingSession.markedAt,
+            markedBy: existingSession.markedBy,
+            totalStudents: existingSession.totalStudents,
+            progress: existingSession.progress
+          }
+        }
+      });
+    }
+    
+    // Process all students and collect their data
+    const processedStudents = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const studentData of students) {
+      try {
+        console.log(`🔍 Processing student: ${studentData.userId || studentData.studentId} with status: ${studentData.status}`);
+        
+        // Validate required fields
+        if (!studentData.studentId || !studentData.status) {
+          console.log(`❌ Missing data for student: ${JSON.stringify(studentData)}`);
+          failCount++;
+          continue;
+        }
+
+        // Get student information using UserGenerator
+        console.log(`🔎 Looking up student: ${studentData.studentId} in school: ${schoolCode}`);
+        const student = await UserGenerator.getUserByIdOrEmail(schoolCode, studentData.studentId);
+
+        if (!student || student.role !== 'student') {
+          console.log(`❌ Student not found or not a student: ${studentData.studentId}`);
+          failCount++;
+          continue;
+        }
+
+        console.log(`✅ Found student: ${student.name?.displayName || student.name} (${student.userId})`);
+
+        // Add student data to the processed list
+        processedStudents.push({
+          studentId: student.userId, // "P-S-0997"
+          studentName: student.name?.displayName || student.name,
+          studentDetails: {
+            firstName: student.name?.firstName || '',
+            lastName: student.name?.lastName || '',
+            displayName: student.name?.displayName || student.name
+          },
+          class: className,
+          section: section,
+          status: studentData.status, // "present", "absent", "half-day"
+          markedAt: new Date(),
+          rollNumber: student.studentDetails?.rollNumber || student.userId
+        });
+
+        successCount++;
+
+      } catch (error) {
+        console.error(`Error processing student ${studentData.studentId}:`, error);
+        failCount++;
+      }
+    }
+
+    // Create the single session attendance document
+    const sessionAttendanceDocument = {
+      // Document Identification
+      _id: sessionDocumentId,
+      documentType: 'session_attendance',
+      
+      // Session Information
+      date: new Date(date),
+      dateString: date, // "2025-09-07"
+      session: session, // "morning" or "afternoon"
+      dayOfWeek: new Date(date).toLocaleDateString('en-US', { weekday: 'long' }),
+      
+      // Class Information
+      class: className,
+      section: section,
+      classInfo: `${session.charAt(0).toUpperCase() + session.slice(1)} Attendance - Class ${className} Section ${section}`,
+      
+      // Progress Information
+      totalStudents: students.length,
+      processedStudents: processedStudents.length,
+      successCount: successCount,
+      failCount: failCount,
+      progress: `${successCount}/${students.length} marked`,
+      
+      // All Students Data
+      students: processedStudents,
+      
+      // Academic Information
+      academicYear: new Date().getFullYear().toString(),
+      schoolCode: schoolCode,
+      
+      // Metadata
+      createdAt: new Date(),
+      createdBy: req.user._id || req.user.userId,
+      markedBy: markedBy,
+      markedByRole: req.user.role,
+      
+      // Session Timing
+      sessionTime: sessionTime,
+      markedAt: new Date()
+    };
+
+    // Store the single document (upsert to handle updates)
+    await attendanceCollection.replaceOne(
+      { _id: sessionDocumentId },
+      sessionAttendanceDocument,
+      { upsert: true }
+    );
+
+    console.log(`✅ Stored ${session} attendance document for Class ${className} Section ${section}`);
+    console.log(`📊 Document contains ${processedStudents.length} students`);
+
+    // Create response results
+    const responseResults = processedStudents.map(student => ({
+      studentId: student.studentId,
+      userId: student.studentId,
+      success: true,
+      message: `${session} attendance marked successfully`
+    }));
+
+    // Add failed students to response results
+    const failedCount = students.length - successCount;
+    for (let i = 0; i < failedCount; i++) {
+      responseResults.push({
+        studentId: `failed_${i}`,
+        userId: `failed_${i}`,
+        success: false,
+        message: 'Failed to process student'
+      });
+    }
+
+    console.log(`Attendance marking completed: ${successCount} successful, ${failCount} failed`);
+
+    res.json({
+      success: true,
+      message: `${session.charAt(0).toUpperCase() + session.slice(1)} attendance marked successfully: ${successCount} students processed, ${failCount} failed`,
+      data: {
+        date,
+        class: className,
+        section,
+        session,
+        totalStudents: students.length,
+        successCount,
+        failCount,
+        progress: `${successCount}/${students.length} marked`,
+        documentId: sessionDocumentId,
+        studentsData: processedStudents,
+        results: responseResults
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in markSessionAttendance:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while marking attendance',
+      error: error.message 
+    });
+  }
+};
+
+// Bulk attendance marking for entire class
+exports.markBulkAttendance = async (req, res) => {
+  try {
+    const {
+      class: className,
+      section,
+      date,
+      students, // Array of { studentId, status, notes }
+      academicYear,
+      period,
+      subject
+    } = req.body;
+
+    // Check permissions
+    if (!['admin', 'teacher'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const schoolCode = req.user.schoolCode;
+    const results = [];
+
+    for (const studentData of students) {
+      try {
+        const student = await User.findOne({ 
+          _id: studentData.studentId, 
+          role: 'student',
+          schoolCode: schoolCode 
+        });
+
+        if (!student) {
+          results.push({
+            studentId: studentData.studentId,
+            success: false,
+            error: 'Student not found'
+          });
+          continue;
+        }
+
+        // Check if attendance already exists
+        let attendance = await Attendance.findOne({
+          schoolCode,
+          studentId: studentData.studentId,
+          date: new Date(date)
+        });
+
+        const attendanceData = {
+          schoolId: req.user.schoolId,
+          schoolCode,
+          studentId: studentData.studentId,
+          studentName: `${student.name.firstName} ${student.name.lastName}`,
+          studentRollNumber: student.studentDetails?.rollNumber,
+          class: className,
+          section,
+          date: new Date(date),
+          status: studentData.status,
+          attendanceType: 'daily',
+          timeTracking: {
+            schoolStartTime: '08:00',
+            schoolEndTime: '15:30'
+          },
+          createdBy: req.user._id
+        };
+
+        // Add period information if provided
+        if (period && subject) {
+          attendanceData.timeTracking.periods = [{
+            periodNumber: period,
+            subjectName: subject,
+            teacherId: req.user._id,
+            teacherName: `${req.user.name.firstName} ${req.user.name.lastName}`,
+            status: studentData.status,
+            markedAt: new Date(),
+            markedBy: req.user._id
+          }];
+        }
+
+        // Add notes if provided
+        if (studentData.notes) {
+          attendanceData.teacherNotes = [{
+            teacherId: req.user._id,
+            teacherName: `${req.user.name.firstName} ${req.user.name.lastName}`,
+            note: studentData.notes,
+            timestamp: new Date()
+          }];
+        }
+
+        if (attendance) {
+          // Update existing
+          Object.assign(attendance, attendanceData);
+          attendance.lastModifiedBy = req.user._id;
+          attendance.lastModifiedAt = new Date();
+        } else {
+          // Create new
+          attendance = new Attendance(attendanceData);
+        }
+
+        await attendance.save();
+
+        results.push({
+          studentId: studentData.studentId,
+          studentName: attendanceData.studentName,
+          success: true,
+          attendanceId: attendance.attendanceId
+        });
+
+        // Send notifications for absent students
+        if (studentData.status === 'absent') {
+          await sendParentNotification(attendance, student);
+        }
+
+      } catch (error) {
+        results.push({
+          studentId: studentData.studentId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    res.json({
+      success: true,
+      message: `Attendance marked: ${successCount} successful, ${failCount} failed`,
+      results,
+      summary: {
+        total: students.length,
+        successful: successCount,
+        failed: failCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error marking bulk attendance:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get attendance for a class
+exports.getAttendance = async (req, res) => {
+  try {
+    const { class: className, section, date, startDate, endDate, session } = req.query;
+    const schoolCode = req.user.schoolCode || 'P'; // Default fallback
+
+    console.log(`📊 Getting attendance for Class ${className} Section ${section} Date ${date} Session ${session}`);
+
+    // Check if user has access
+    if (!['admin', 'teacher', 'student', 'parent'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Use school-specific database for attendance retrieval
+    const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+    const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const attendanceCollection = schoolConnection.collection('attendances');
+
+    let attendanceDocuments = [];
+
+    if (date && className && section) {
+      // Get specific date attendance for both sessions
+      const morningDocId = `${date}_${className}_${section}_morning`;
+      const afternoonDocId = `${date}_${className}_${section}_afternoon`;
+
+      const morningDoc = await attendanceCollection.findOne({ _id: morningDocId });
+      const afternoonDoc = await attendanceCollection.findOne({ _id: afternoonDocId });
+
+      if (morningDoc) attendanceDocuments.push(morningDoc);
+      if (afternoonDoc) attendanceDocuments.push(afternoonDoc);
+
+    } else if (date && session && className && section) {
+      // Get specific session attendance
+      const docId = `${date}_${className}_${section}_${session}`;
+      const doc = await attendanceCollection.findOne({ _id: docId });
+      if (doc) attendanceDocuments.push(doc);
+
+    } else if (startDate && endDate && className && section) {
+      // Get attendance for date range
+      const query = {
+        documentType: 'session_attendance',
+        class: className,
+        section: section,
+        dateString: {
+          $gte: startDate,
+          $lte: endDate
+        }
+      };
+      attendanceDocuments = await attendanceCollection.find(query).toArray();
+
+    } else {
+      // Get recent attendance (last 30 days) if no specific filters
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const query = {
+        documentType: 'session_attendance',
+        date: { $gte: thirtyDaysAgo }
+      };
+      
+      if (className) query.class = className;
+      if (section) query.section = section;
+      
+      attendanceDocuments = await attendanceCollection.find(query)
+        .sort({ date: -1 })
+        .limit(50)
+        .toArray();
+    }
+
+    // Filter for students/parents (they can only see their own attendance)
+    if (req.user.role === 'student') {
+      attendanceDocuments = attendanceDocuments.map(doc => {
+        const studentRecord = doc.students?.find(s => s.studentId === req.user.userId);
+        if (studentRecord) {
+          return {
+            ...doc,
+            students: [studentRecord], // Only show the student's own record
+            totalStudents: 1,
+            processedStudents: 1
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
+    if (req.user.role === 'parent') {
+      // Find child's studentId (this would need proper parent-child relationship lookup)
+      const childStudentId = req.user.childStudentId; // This would need to be implemented
+      attendanceDocuments = attendanceDocuments.map(doc => {
+        const studentRecord = doc.students?.find(s => s.studentId === childStudentId);
+        if (studentRecord) {
+          return {
+            ...doc,
+            students: [studentRecord],
+            totalStudents: 1,
+            processedStudents: 1
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
+    // Transform the data for frontend compatibility
+    const transformedAttendance = attendanceDocuments.map(doc => ({
+      _id: doc._id,
+      date: doc.date,
+      dateString: doc.dateString,
+      class: doc.class,
+      section: doc.section,
+      session: doc.session,
+      sessionTime: doc.sessionTime,
+      dayOfWeek: doc.dayOfWeek,
+      classInfo: doc.classInfo,
+      totalStudents: doc.totalStudents,
+      processedStudents: doc.processedStudents,
+      successCount: doc.successCount,
+      failCount: doc.failCount,
+      progress: doc.progress,
+      students: doc.students || [],
+      academicYear: doc.academicYear,
+      markedBy: doc.markedBy,
+      markedByRole: doc.markedByRole,
+      createdAt: doc.createdAt,
+      markedAt: doc.markedAt,
+      isFrozen: true, // All saved attendance is frozen (cannot be modified)
+      canModify: false // Attendance cannot be modified once saved
+    }));
+
+    console.log(`✅ Found ${transformedAttendance.length} attendance sessions`);
+
+    res.json({
+      success: true,
+      message: `Found ${transformedAttendance.length} attendance sessions`,
+      data: transformedAttendance,
+      totalSessions: transformedAttendance.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching attendance', 
+      error: error.message 
+    });
+  }
+};
+
+// Check if attendance session is already marked (frozen)
+exports.checkSessionStatus = async (req, res) => {
+  try {
+    const { class: className, section, date, session } = req.query;
+    const schoolCode = req.user.schoolCode || 'P';
+
+    console.log(`🔍 Checking session status for ${date}_${className}_${section}_${session}`);
+
+    // Use school-specific database for attendance retrieval
+    const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+    const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const attendanceCollection = schoolConnection.collection('attendances');
+
+    const sessionDocumentId = `${date}_${className}_${section}_${session}`;
+    const existingSession = await attendanceCollection.findOne({ _id: sessionDocumentId });
+
+    if (existingSession) {
+      // Session is marked and frozen
+      res.json({
+        success: true,
+        isMarked: true,
+        isFrozen: true,
+        canModify: false,
+        message: `${session.charAt(0).toUpperCase() + session.slice(1)} attendance is already marked and frozen`,
+        data: {
+          documentId: sessionDocumentId,
+          markedAt: existingSession.markedAt,
+          markedBy: existingSession.markedBy,
+          totalStudents: existingSession.totalStudents,
+          progress: existingSession.progress,
+          session: existingSession.session,
+          classInfo: existingSession.classInfo
+        }
+      });
+    } else {
+      // Session is not marked yet
+      res.json({
+        success: true,
+        isMarked: false,
+        isFrozen: false,
+        canModify: true,
+        message: `${session.charAt(0).toUpperCase() + session.slice(1)} attendance can be marked`,
+        data: {
+          documentId: sessionDocumentId,
+          date,
+          class: className,
+          section,
+          session
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error checking session status:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error checking session status', 
+      error: error.message 
+    });
+  }
+};
+
+// Get attendance statistics
+exports.getAttendanceStats = async (req, res) => {
+  try {
+    const { class: className, section, startDate, endDate } = req.query;
+
+    // Check if user has access (more flexible role checking)
+    if (!req.user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    const schoolCode = req.user.schoolCode;
+    
+    // Build match query
+    const matchQuery = { schoolCode };
+    if (className && className !== 'all') matchQuery.class = className;
+    if (section) matchQuery.section = section;
+    
+    if (startDate && endDate) {
+      matchQuery.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    const stats = await Attendance.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalDays: { $sum: 1 },
+          totalPresent: { $sum: '$presentCount' },
+          totalAbsent: { $sum: '$absentCount' },
+          totalLate: { $sum: '$lateCount' },
+          totalHalfDay: { $sum: '$halfDayCount' },
+          totalExcused: { $sum: '$excusedCount' }
+        }
+      }
+    ]);
+
+    if (stats.length === 0) {
+      return res.json({
+        totalDays: 0,
+        totalPresent: 0,
+        totalAbsent: 0,
+        totalLate: 0,
+        totalHalfDay: 0,
+        totalExcused: 0,
+        averageAttendance: 0
+      });
+    }
+
+    const stat = stats[0];
+    const totalStudents = stat.totalPresent + stat.totalAbsent + stat.totalLate + stat.totalHalfDay + stat.totalExcused;
+    const averageAttendance = totalStudents > 0 ? Math.round((stat.totalPresent / totalStudents) * 100) : 0;
+
+    res.json({
+      totalDays: stat.totalDays,
+      totalPresent: stat.totalPresent,
+      totalAbsent: stat.totalAbsent,
+      totalLate: stat.totalLate,
+      totalHalfDay: stat.totalHalfDay,
+      totalExcused: stat.totalExcused,
+      averageAttendance
+    });
+
+  } catch (error) {
+    console.error('Error fetching attendance stats:', error);
+    res.status(500).json({ message: 'Error fetching attendance stats', error: error.message });
+  }
+};
+
+// Lock attendance (prevent further modifications)
+exports.lockAttendance = async (req, res) => {
+  try {
+    const { attendanceId } = req.params;
+
+    // Check if user is admin or teacher
+    if (!['admin', 'teacher'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const attendance = await Attendance.findById(attendanceId);
+    if (!attendance) {
+      return res.status(404).json({ message: 'Attendance not found' });
+    }
+
+    // Check if user has access to this attendance's school
+    if (req.user.schoolId?.toString() !== attendance.schoolId?.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    attendance.isLocked = true;
+    attendance.lockedBy = req.user._id;
+    attendance.lockedAt = new Date();
+    attendance.updatedBy = req.user._id;
+    attendance.updatedAt = new Date();
+
+    await attendance.save();
+
+    res.json({ 
+      message: 'Attendance locked successfully',
+      attendance: {
+        id: attendance._id,
+        isLocked: attendance.isLocked,
+        lockedAt: attendance.lockedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error locking attendance:', error);
+    res.status(500).json({ message: 'Error locking attendance', error: error.message });
+  }
+};
+
+// Get student attendance report
+exports.getStudentAttendanceReport = async (req, res) => {
+  try {
+    const { studentId, startDate, endDate } = req.query;
+
+    // Check if user has access
+    if (!['admin', 'teacher', 'student', 'parent'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const schoolId = req.user.schoolId;
+    
+    // Determine which student to get report for
+    let targetStudentId = studentId;
+    
+    if (req.user.role === 'student') {
+      targetStudentId = req.user._id;
+    } else if (req.user.role === 'parent') {
+      const student = await User.findOne({
+        'parentDetails.parentId': req.user.parentDetails?.parentId
+      });
+      if (student) {
+        targetStudentId = student._id;
+      }
+    }
+
+    if (!targetStudentId) {
+      return res.status(400).json({ message: 'Student ID is required' });
+    }
+
+    // Build query
+    const query = {
+      schoolId,
+      'records.student': targetStudentId
+    };
+    
+    if (startDate && endDate) {
+      query.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    const attendance = await Attendance.find(query)
+      .populate('records.student', 'name email studentDetails')
+      .sort({ date: -1 });
+
+    // Calculate summary
+    let totalDays = 0;
+    let presentDays = 0;
+    let absentDays = 0;
+    let lateDays = 0;
+    let halfDays = 0;
+    let excusedDays = 0;
+
+    attendance.forEach(record => {
+      const studentRecord = record.records.find(r => r.student._id.toString() === targetStudentId.toString());
+      if (studentRecord) {
+        totalDays++;
+        switch (studentRecord.status) {
+          case 'present':
+            presentDays++;
+            break;
+          case 'absent':
+            absentDays++;
+            break;
+          case 'late':
+            lateDays++;
+            break;
+          case 'half-day':
+            halfDays++;
+            break;
+          case 'excused':
+            excusedDays++;
+            break;
+        }
+      }
+    });
+
+    const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+
+    res.json({
+      student: attendance[0]?.records.find(r => r.student._id.toString() === targetStudentId.toString())?.student,
+      summary: {
+        totalDays,
+        presentDays,
+        absentDays,
+        lateDays,
+        halfDays,
+        excusedDays,
+        attendancePercentage
+      },
+      details: attendance
+    });
+
+  } catch (error) {
+    console.error('Error fetching student attendance report:', error);
+    res.status(500).json({ message: 'Error fetching student attendance report', error: error.message });
+  }
+};
+
+// Helper function to send parent notifications
+const sendParentNotification = async (attendance, student) => {
+  try {
+    // Find parent
+    const parent = await User.findOne({
+      _id: student.studentDetails?.parentId,
+      role: 'parent'
+    });
+
+    if (!parent) return;
+
+    // Simulate SMS/Email notification (integrate with actual service)
+    const message = `Dear Parent, Your child ${attendance.studentName} is ${attendance.status} today at ${new Date().toLocaleTimeString()}. - School`;
+    
+    console.log(`Notification sent to ${parent.email}: ${message}`);
+    
+    // Update attendance with notification status
+    attendance.parentNotification = {
+      sent: true,
+      sentAt: new Date(),
+      method: 'sms' // or 'email'
+    };
+    
+    await attendance.save();
+    
+  } catch (error) {
+    console.error('Error sending parent notification:', error);
+  }
+};
+
+// Get attendance analytics and reports
+exports.getAttendanceAnalytics = async (req, res) => {
+  try {
+    const { 
+      class: className, 
+      section, 
+      startDate, 
+      endDate, 
+      studentId,
+      type = 'monthly' 
+    } = req.query;
+
+    const schoolCode = req.user.schoolCode;
+    const filters = { schoolCode };
+
+    // Add filters based on query params
+    if (className) filters.class = className;
+    if (section) filters.section = section;
+    if (studentId) filters.studentId = studentId;
+    if (startDate && endDate) {
+      filters.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    let analytics;
+
+    switch (type) {
+      case 'daily':
+        analytics = await getDailyAnalytics(filters);
+        break;
+      case 'weekly':
+        analytics = await getWeeklyAnalytics(filters);
+        break;
+      case 'monthly':
+        analytics = await getMonthlyAnalytics(filters);
+        break;
+      case 'student':
+        analytics = await getStudentAnalytics(filters);
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid analytics type' });
+    }
+
+    res.json({
+      success: true,
+      type,
+      filters,
+      analytics
+    });
+
+  } catch (error) {
+    console.error('Error fetching attendance analytics:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Daily attendance analytics
+const getDailyAnalytics = async (filters) => {
+  return await Attendance.aggregate([
+    { $match: filters },
+    {
+      $group: {
+        _id: {
+          date: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+          class: '$class',
+          section: '$section'
+        },
+        totalStudents: { $sum: 1 },
+        presentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] }
+        },
+        absentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] }
+        },
+        lateCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] }
+        }
+      }
+    },
+    {
+      $project: {
+        date: '$_id.date',
+        class: '$_id.class',
+        section: '$_id.section',
+        totalStudents: 1,
+        presentCount: 1,
+        absentCount: 1,
+        lateCount: 1,
+        attendancePercentage: {
+          $multiply: [
+            { $divide: ['$presentCount', '$totalStudents'] },
+            100
+          ]
+        }
+      }
+    },
+    { $sort: { date: -1 } }
+  ]);
+};
+
+// Weekly attendance analytics
+const getWeeklyAnalytics = async (filters) => {
+  return await Attendance.aggregate([
+    { $match: filters },
+    {
+      $group: {
+        _id: {
+          week: { $week: '$date' },
+          year: { $year: '$date' },
+          class: '$class',
+          section: '$section'
+        },
+        totalStudents: { $sum: 1 },
+        presentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] }
+        },
+        absentCount: {
+          $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] }
+        },
+        averageAttendance: { $avg: '$timeTracking.attendancePercentage' }
+      }
+    },
+    {
+      $project: {
+        week: '$_id.week',
+        year: '$_id.year',
+        class: '$_id.class',
+        section: '$_id.section',
+        totalStudents: 1,
+        presentCount: 1,
+        absentCount: 1,
+        averageAttendance: { $round: ['$averageAttendance', 2] },
+        attendancePercentage: {
+          $multiply: [
+            { $divide: ['$presentCount', '$totalStudents'] },
+            100
+          ]
+        }
+      }
+    },
+    { $sort: { year: -1, week: -1 } }
+  ]);
+};
+
+// Monthly attendance analytics
+const getMonthlyAnalytics = async (filters) => {
+  return await Attendance.aggregate([
+    { $match: filters },
+    {
+      $group: {
+        _id: {
+          month: '$monthYear',
+          class: '$class',
+          section: '$section'
+        },
+        totalRecords: { $sum: 1 },
+        totalPresent: {
+          $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] }
+        },
+        totalAbsent: {
+          $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] }
+        },
+        totalLate: {
+          $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] }
+        },
+        uniqueStudents: { $addToSet: '$studentId' }
+      }
+    },
+    {
+      $project: {
+        month: '$_id.month',
+        class: '$_id.class',
+        section: '$_id.section',
+        totalRecords: 1,
+        totalPresent: 1,
+        totalAbsent: 1,
+        totalLate: 1,
+        uniqueStudents: { $size: '$uniqueStudents' },
+        attendancePercentage: {
+          $round: [
+            {
+              $multiply: [
+                { $divide: ['$totalPresent', '$totalRecords'] },
+                100
+              ]
+            },
+            2
+          ]
+        }
+      }
+    },
+    { $sort: { month: -1 } }
+  ]);
+};
+
+// Student-specific analytics
+const getStudentAnalytics = async (filters) => {
+  return await Attendance.aggregate([
+    { $match: filters },
+    {
+      $group: {
+        _id: {
+          studentId: '$studentId',
+          studentName: '$studentName'
+        },
+        totalDays: { $sum: 1 },
+        presentDays: {
+          $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] }
+        },
+        absentDays: {
+          $sum: { $cond: [{ $eq: ['$status', 'absent'] }, 1, 0] }
+        },
+        lateDays: {
+          $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] }
+        },
+        averagePeriodsPresent: { $avg: '$timeTracking.totalPeriodsPresent' }
+      }
+    },
+    {
+      $project: {
+        studentId: '$_id.studentId',
+        studentName: '$_id.studentName',
+        totalDays: 1,
+        presentDays: 1,
+        absentDays: 1,
+        lateDays: 1,
+        averagePeriodsPresent: { $round: ['$averagePeriodsPresent', 1] },
+        attendancePercentage: {
+          $round: [
+            {
+              $multiply: [
+                { $divide: ['$presentDays', '$totalDays'] },
+                100
+              ]
+            },
+            2
+          ]
+        }
+      }
+    },
+    { $sort: { attendancePercentage: -1 } }
+  ]);
+};
+
+// Get attendance for a specific class and section
+exports.getClassAttendance = async (req, res) => {
+  try {
+    const { class: className, section, date, session } = req.query;
+    const schoolCode = req.user.schoolCode;
+
+    const query = {
+      schoolCode,
+      class: className,
+      section,
+      date: new Date(date)
+    };
+
+    // Add session filter if provided
+    if (session) {
+      query['sessionInfo.session'] = session;
+    }
+
+    const attendanceRecords = await Attendance.find(query)
+      .populate('studentId', 'name userId studentDetails')
+      .sort({ studentName: 1 });
+
+    const formattedRecords = attendanceRecords.map(record => ({
+      attendanceId: record.attendanceId,
+      studentId: record.studentId._id,
+      studentName: record.studentName,
+      userId: record.studentId.userId,
+      rollNumber: record.studentRollNumber,
+      status: record.status,
+      session: record.sessionInfo?.session,
+      markedAt: record.sessionInfo?.markedAt || record.createdAt,
+      markedBy: record.sessionInfo?.markerName || 'System',
+      timeTracking: record.timeTracking
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        class: className,
+        section,
+        date,
+        session,
+        totalRecords: formattedRecords.length,
+        records: formattedRecords
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching class attendance:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while fetching attendance',
+      error: error.message 
+    });
+  }
+};
