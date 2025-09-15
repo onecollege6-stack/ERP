@@ -49,4 +49,19 @@ router.put(
   testDetailsController.updateTestDetails
 );
 
+// Get test types for a specific class
+router.get(
+  '/class/:className',
+  validateSchoolAccess(['admin', 'teacher']),
+  testDetailsController.getClassTestTypes
+);
+
+// Update test types for a specific class (admin only)
+router.put(
+  '/class/:className',
+  requireSchoolContext,
+  validateSchoolAccess(['admin']),
+  testDetailsController.updateClassTestTypes
+);
+
 module.exports = router;

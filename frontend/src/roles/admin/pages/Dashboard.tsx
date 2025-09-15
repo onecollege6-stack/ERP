@@ -142,7 +142,15 @@ const Dashboard: React.FC = () => {
               }
             }
             
-            setUsers(allUsers);
+            // Normalize user objects so `name` is always a string (displayName or first+last)
+            const normalized = allUsers.map(u => {
+              const userObj: any = { ...u };
+              if (userObj.name && typeof userObj.name === 'object') {
+                userObj.name = userObj.name.displayName || (((userObj.name.firstName || '') + ' ' + (userObj.name.lastName || '')).trim()) || userObj.email;
+              }
+              return userObj;
+            });
+            setUsers(normalized);
             debug.usersFetch = { 
               success: true, 
               totalUsers: allUsers.length,
@@ -399,10 +407,9 @@ const Dashboard: React.FC = () => {
                       <tr key={user._id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">
-                            {typeof user.name === 'object' && user.name ? 
-                              (user.name.displayName || `${user.name.firstName || ''} ${user.name.lastName || ''}`.trim()) :
-                              user.name || user.email || 'Unknown User'
-                            }
+                            {typeof (user as any).name === 'string'
+                              ? (user as any).name
+                              : ((user as any).name?.displayName || (((user as any).name?.firstName || '') + ' ' + ((user as any).name?.lastName || '')).trim() || user.email || 'Unknown User')}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

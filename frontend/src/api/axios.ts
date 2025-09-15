@@ -12,20 +12,35 @@ const api = axios.create({
 // Add a request interceptor to include token if available
 api.interceptors.request.use((config) => {
   let token;
+  let schoolCode;
+  
+  // Try to get auth data from localStorage
   const auth = localStorage.getItem('erp.auth');
   if (auth) {
     try {
       const parsed = JSON.parse(auth);
       token = parsed.token;
-    } catch {}
+      schoolCode = parsed.user?.schoolCode;
+    } catch (error) {
+      console.error('Error parsing auth data:', error);
+    }
   }
+  
   // Fallback to direct token storage
   if (!token) {
     token = localStorage.getItem('token');
   }
+  
+  // Set authorization header if token is available
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
+  
+  // Set school code header if available
+  if (schoolCode) {
+    config.headers['X-School-Code'] = schoolCode;
+  }
+  
   return config;
 });
 

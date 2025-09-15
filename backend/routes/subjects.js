@@ -2,8 +2,13 @@ const express = require('express');
 const router = express.Router();
 const subjectController = require('../controllers/subjectController');
 const authMiddleware = require('../middleware/auth');
+const { setSchoolContext, requireSchoolContext, validateSchoolAccess } = require('../middleware/schoolContext');
 
-// Subject Management Routes
+// Apply authentication middleware to all routes
+router.use(authMiddleware.auth);
+
+// Apply school context middleware
+router.use(setSchoolContext);
 
 // Create a new subject
 router.post(
@@ -61,14 +66,14 @@ router.put(
 // Get all subjects for academic details management
 router.get(
   '/all',
-  authMiddleware.auth,
+  validateSchoolAccess(['admin', 'teacher']),
   subjectController.getAllSubjects
 );
 
 // Bulk save subjects for academic details management
 router.post(
   '/bulk-save',
-  authMiddleware.auth,
+  validateSchoolAccess(['admin', 'superadmin']),
   subjectController.bulkSaveSubjects
 );
 

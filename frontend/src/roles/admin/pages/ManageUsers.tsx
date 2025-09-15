@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Edit, Trash2, Download, Filter, UserCheck, UserX, Eye, Lock, Unlock, Building, RotateCcw } from 'lucide-react';
 import { schoolUserAPI } from '../../../api/schoolUsers';
 import { toast } from 'react-hot-toast';
@@ -263,30 +263,88 @@ const ManageUsers: React.FC = () => {
     return userId!;
   };
 
-  // Helper function to generate random password
+  // Helper function to generate secure random password
   const generatePassword = (): string => {
     const length = 8;
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*";
+    
+    // Ensure at least one character from each category
     let password = "";
-    for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
+    password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
+    password += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    password += symbols.charAt(Math.floor(Math.random() * symbols.length));
+    
+    // Fill the rest with random characters from all categories
+    const allChars = lowercase + uppercase + numbers + symbols;
+    for (let i = password.length; i < length; i++) {
+      password += allChars.charAt(Math.floor(Math.random() * allChars.length));
     }
-    return password;
+    
+    // Shuffle the password to randomize character positions
+    return password.split('').sort(() => Math.random() - 0.5).join('');
   };
 
-  // Function to handle role change and auto-generate ID and password
+  // Prevent double submissions using a ref (synchronous guard)
+  const isSubmittingRef = useRef(false);
+
+  // Basic client-side validation before submitting the form
+  const validateFormBeforeSubmit = (): string[] => {
+    const errors: string[] = [];
+
+    // Common required fields
+    if (!formData.firstName || formData.firstName.trim() === '') errors.push('First name is required');
+    if (!formData.lastName || formData.lastName.trim() === '') errors.push('Last name is required');
+    if (!formData.email || !formData.email.includes('@')) errors.push('A valid email is required');
+    if (!formData.phone || formData.phone.replace(/\D/g, '').length < 10) errors.push('A valid 10-digit phone number is required');
+    if (!formData.dateOfBirth) errors.push('Date of birth is required');
+    if (!formData.gender) errors.push('Gender is required');
+    if (!formData.address || formData.address.trim() === '') errors.push('Address is required');
+
+    // Role-specific checks
+    if (formData.role === 'student') {
+      if (!formData.class || formData.class === '') errors.push('Class selection is required for students');
+      if (!formData.fatherName || formData.fatherName.trim() === '') errors.push("Father's name is required for students");
+      if (!formData.motherName || formData.motherName.trim() === '') errors.push("Mother's name is required for students");
+    }
+
+    return errors;
+  };
+
+  // Function to handle role change and auto-generate password and ID
   const handleRoleChange = async (role: 'student' | 'teacher' | 'admin') => {
+    console.log(`🔄 Role changed to: ${role}`);
     const password = generatePassword();
     
-    // Fetch the next available user ID from the backend
-    await fetchNextUserId(role);
-    
+    // Auto-fetch next ID for the selected role
     setFormData(prev => ({
       ...prev,
       role,
-      userId: '', // Will be set when nextUserId is fetched
+      userId: '', // will be updated when fetch completes
       generatedPassword: password
     }));
+    
+    // Clear any existing next ID state
+    setNextUserId('');
+    
+    try {
+      console.log(`🚀 Auto-fetching next ID for role: ${role}`);
+      const fetchedId = await fetchNextUserId(role);
+      
+      if (fetchedId) {
+        console.log(`✅ Auto-generated ID for ${role}: ${fetchedId}`);
+        toast.success(`Role set to ${role.charAt(0).toUpperCase() + role.slice(1)}. Next available ID: ${fetchedId}`);
+      } else {
+        console.log(`❌ Failed to auto-fetch ID for role: ${role}`);
+        toast.error(`Role set to ${role.charAt(0).toUpperCase() + role.slice(1)}, but failed to fetch ID. Please try again.`);
+      }
+    } catch (error) {
+      console.error(`❌ Error auto-fetching ID for role ${role}:`, error);
+      toast.error(`Role set to ${role.charAt(0).toUpperCase() + role.slice(1)}, but failed to fetch ID. Please try again.`);
+    }
   };
   const [users, setUsers] = useState<User[]>([]);
   const [school, setSchool] = useState<School | null>(null);
@@ -659,7 +717,7 @@ const ManageUsers: React.FC = () => {
     if (showAddModal && !formData.userId) {
       handleRoleChange(formData.role);
     }
-  }, [showAddModal, users]); // Add users as dependency so it regenerates when users list changes
+  }, [showAddModal]); // only run when modal opens, do not re-run on users list changes
 
   // Update formData userId when nextUserId is fetched
   useEffect(() => {
@@ -678,9 +736,106 @@ const ManageUsers: React.FC = () => {
         ...prev,
         role: activeTab
       }));
-      fetchNextUserId(activeTab);
     }
   }, [activeTab, showAddModal]);
+
+  // Debug function to test API endpoints
+  const debugNextIdAPI = async () => {
+    console.log('=== 🐛 DEBUG: Testing Next ID API ===');
+    
+    const roles = ['student', 'teacher', 'admin'];
+    const authData = localStorage.getItem('erp.auth');
+    const token = authData ? JSON.parse(authData).token : null;
+    
+    if (!token) {
+      console.log('❌ No authentication token found');
+      return;
+    }
+    
+    console.log('🔑 Using token:', token.substring(0, 20) + '...');
+    console.log('👤 User context:', { schoolCode: user?.schoolCode, role: user?.role });
+    
+    for (const role of roles) {
+      try {
+        console.log(`\n🔍 Testing ${role.toUpperCase()} endpoint...`);
+        
+        const headers: Record<string, string> = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+
+        if (user?.schoolCode) {
+          headers['x-school-code'] = user.schoolCode;
+        }
+        
+        const response = await fetch(`http://localhost:5000/api/users/next-id/${role}`, {
+          method: 'GET',
+          headers
+        });
+        
+        console.log(`📊 ${role} Response Status:`, response.status, response.statusText);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ ${role.toUpperCase()} Next ID:`, data);
+        } else {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          console.log(`❌ ${role.toUpperCase()} Error:`, errorData);
+        }
+        
+      } catch (error) {
+        console.error(`❌ ${role.toUpperCase()} Network Error:`, error);
+      }
+    }
+    
+    console.log('=== 🐛 DEBUG COMPLETE ===\n');
+  };
+
+  // Add debugging useEffect (only in development)
+  useEffect(() => {
+    // Only run in development mode
+    if (process.env.NODE_ENV === 'development' && user?.schoolCode) {
+      console.log('🐛 Development mode detected, running API debug...');
+      // Add a small delay to ensure user context is loaded
+      setTimeout(() => {
+        debugNextIdAPI();
+      }, 1000);
+    }
+  }, [user?.schoolCode]); // Run when user context is available
+
+  // Manual test function - can be called from browser console
+  // Usage: window.testManageUsersAPI()
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Register a safe manual test function. It will attempt to call fetchNextUserId if available at runtime.
+      (window as any).testManageUsersAPI = async () => {
+        console.log('🧪 Manual API Test Started');
+        await debugNextIdAPI();
+
+        // Test individual role endpoints
+        const roles = ['student', 'teacher', 'admin'];
+        for (const role of roles) {
+          try {
+            console.log(`\n🧪 Testing ${role} ID generation...`);
+            // Access fetchNextUserId from window if it was exposed; otherwise call via component scope
+            const fn = (window as any).fetchNextUserId || fetchNextUserId;
+            if (typeof fn === 'function') {
+              const result = await fn(role);
+              console.log(`Result for ${role}:`, result);
+            } else {
+              console.warn('fetchNextUserId not available to call');
+            }
+          } catch (err) {
+            console.error('Error testing role', role, err);
+          }
+        }
+
+        console.log('🧪 Manual API Test Complete');
+      };
+
+      console.log('🧪 Test function registered: window.testManageUsersAPI()');
+    }
+  }, [user]);
 
   const fetchUsers = async () => {
     try {
@@ -805,14 +960,23 @@ const ManageUsers: React.FC = () => {
 
   // Fetch next available user ID for the selected role
   const fetchNextUserId = async (role: string) => {
+    if (!role) {
+      console.log('❌ No role provided to fetchNextUserId');
+      setNextUserId('');
+      return '';
+    }
+    
     try {
       setLoadingNextId(true);
+      console.log(`🔍 Fetching next user ID for role: ${role}`);
+      
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       
       if (!token) {
-        console.error('No token available');
-        return;
+        console.error('❌ No authentication token available');
+        toast.error('Authentication required. Please login again.');
+        return '';
       }
 
       // Include school context header
@@ -824,27 +988,65 @@ const ManageUsers: React.FC = () => {
       // Add school context if available
       if (user?.schoolCode) {
         headers['x-school-code'] = user.schoolCode;
+        console.log(`🏫 Adding school context: ${user.schoolCode}`);
+      } else {
+        console.log('⚠️ No school code available in user context');
       }
 
+      console.log('📡 Making API request to:', `http://localhost:5000/api/users/next-id/${role}`);
+      console.log('📋 Request headers:', headers);
+
       const response = await fetch(`http://localhost:5000/api/users/next-id/${role}`, {
+        method: 'GET',
         headers
       });
 
+      console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+
       if (response.ok) {
         const data = await response.json();
-        setNextUserId(data.nextUserId);
-        console.log(`Next ${role} ID:`, data.nextUserId);
+        console.log('✅ API Response data:', data);
+        
+        if (data.success && data.nextUserId) {
+          const fetchedId = data.nextUserId;
+          setNextUserId(fetchedId);
+          // Update formData immediately with the fetched ID
+          setFormData(prev => ({ ...prev, userId: fetchedId }));
+          console.log(`✅ Successfully fetched next ${role} ID: ${fetchedId}`);
+          toast.success(`Next available ID: ${fetchedId}`);
+          return fetchedId;
+        } else {
+          console.error('❌ Invalid response format:', data);
+          toast.error(data.message || 'Invalid response from server');
+          setNextUserId('');
+          return '';
+        }
       } else {
-        console.error('Failed to fetch next user ID');
+        const errorData = await response.json().catch(() => ({ message: 'Server error' }));
+        console.error('❌ Failed to fetch next user ID:', response.status, errorData);
+        toast.error(errorData.message || `Failed to fetch next user ID (${response.status})`);
         setNextUserId('');
+        return '';
       }
     } catch (error) {
-      console.error('Error fetching next user ID:', error);
+      console.error('❌ Error fetching next user ID:', error);
+      toast.error(`Network error: ${error.message}`);
       setNextUserId('');
+      return '';
     } finally {
       setLoadingNextId(false);
     }
   };
+
+  // Expose fetchNextUserId to window in development for manual testing (avoids TDZ when used by test function)
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    try {
+      (window as any).fetchNextUserId = fetchNextUserId;
+      console.log('🧪 Exposed fetchNextUserId on window for manual testing');
+    } catch (err) {
+      // ignore
+    }
+  }
 
   const fetchSchoolDetails = async () => {
     try {
@@ -921,13 +1123,26 @@ const ManageUsers: React.FC = () => {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Prevent double submit
+      if (isSubmittingRef.current) return;
+
+      // Client-side validation: block submission if invalid
+      const clientErrors = validateFormBeforeSubmit();
+      if (clientErrors.length > 0) {
+        clientErrors.slice(0, 3).forEach(err => toast.error(err));
+        // ensure default Enter does not trigger generation of next ID
+        return;
+      }
+
+      isSubmittingRef.current = true;
       setLoading(true);
-      
+
       // Validate email uniqueness across all roles before creating user
       const emailExists = await checkEmailExists(formData.email);
       if (emailExists.exists) {
         toast.error(`Email already exists for ${emailExists.role}: ${emailExists.name}`);
         setLoading(false);
+        isSubmittingRef.current = false;
         return;
       }
       
@@ -1098,14 +1313,37 @@ const ManageUsers: React.FC = () => {
 
       console.log('Creating user with data:', newUserData);
       
-      await schoolUserAPI.addUser(schoolCode, newUserData, token);
-      
-      // Show credentials modal
+      // Final check: ensure we have a generated userId (if not, fetch one now)
+      if (!formData.userId) {
+        // try to fetch a next ID synchronously; if it fails, continue without it
+        try {
+          await fetchNextUserId(formData.role);
+          newUserData.userId = nextUserId || formData.userId;
+        } catch (err) {
+          console.warn('Could not fetch next user ID before create, proceeding with provided ID if any');
+        }
+      }
+
+      // Call API and capture server-assigned user info (server may generate userId)
+      const createRes: any = await schoolUserAPI.addUser(schoolCode, newUserData, token);
+
+      // Show credentials modal using ONLY server response (never frontend fallbacks)
+      // Handle different response formats from different endpoints
+      const serverUserId = createRes?.data?.user?.userId || createRes?.data?.credentials?.userId || createRes?.user?.userId || createRes?.userId;
+      const serverPassword = createRes?.data?.credentials?.password || createRes?.data?.user?.tempPassword || createRes?.user?.tempPassword;
+      const serverEmail = createRes?.data?.user?.email || createRes?.user?.email || formData.email;
+      const serverRole = createRes?.data?.user?.role || createRes?.user?.role || formData.role;
+
+      if (!serverUserId || !serverPassword) {
+        console.error('Server response:', createRes);
+        throw new Error('Server did not return required user credentials');
+      }
+
       setShowCredentials({
-        userId: formData.userId,
-        password: formData.generatedPassword,
-        email: formData.email,
-        role: formData.role
+        userId: serverUserId,
+        password: serverPassword,
+        email: serverEmail,
+        role: serverRole
       });
       
       toast.success('User created successfully');
@@ -1114,9 +1352,10 @@ const ManageUsers: React.FC = () => {
       fetchUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
-      toast.error(error.response?.data?.message || 'Failed to create user');
+      toast.error(error.response?.data?.message || error.message || 'Failed to create user');
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -1560,6 +1799,100 @@ const ManageUsers: React.FC = () => {
     return matchesSearch && matchesRole && matchesGrade && matchesSection;
   });
 
+  // Simple form validity check for disabling submit button
+  const isFormValid = () => {
+    const errors = validateFormBeforeSubmit();
+    return errors.length === 0;
+  };
+
+  // Compute human-friendly missing fields list for tooltip
+  const missingFieldsForTooltip = () => {
+    const errors = validateFormBeforeSubmit();
+    if (errors.length === 0) return '';
+    // Map validation messages to shorter labels where possible
+    const mapLabel = (msg: string) => {
+      if (msg.includes('First name')) return 'First name';
+      if (msg.includes('Last name')) return 'Last name';
+      if (msg.includes('email')) return 'Email';
+      if (msg.includes('phone')) return 'Phone';
+      if (msg.includes('Date of birth')) return 'Date of birth';
+      if (msg.includes('Gender')) return 'Gender';
+      if (msg.includes('Address')) return 'Address';
+      if (msg.includes('Class selection')) return 'Class';
+      if (msg.includes("Father's name")) return "Father's name";
+      if (msg.includes("Mother's name")) return "Mother's name";
+      return msg;
+    };
+
+    const labels = errors.map(mapLabel);
+    return `Missing: ${Array.from(new Set(labels)).join(', ')}`;
+  };
+
+  // Arrow/Enter based navigation inside the Add User form
+  const getFocusableElements = (container: HTMLElement) => {
+    const selector = 'input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex="-1"])';
+    const nodeList = Array.from(container.querySelectorAll<HTMLElement>(selector));
+    // Filter out elements that are not visible
+    return nodeList.filter(el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+  };
+
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    const key = e.key;
+    if (!['Enter', 'ArrowDown', 'ArrowUp'].includes(key)) return;
+
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // If inside a textarea, don't intercept (allow newlines and arrow movement)
+    if (target.tagName === 'TEXTAREA') return;
+
+    // For input elements, respect caret position: only move next on Enter or ArrowDown when caret at end
+    if (target.tagName === 'INPUT') {
+      const input = target as HTMLInputElement;
+      // If the input supports selectionStart, check caret pos
+      if (typeof input.selectionStart === 'number') {
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        // If there is a selection, don't move
+        if (start !== end) return;
+
+        if (key === 'ArrowDown' || key === 'Enter') {
+          // only move when caret is at end
+          if (start < (input.value?.length || 0)) return;
+        }
+
+        if (key === 'ArrowUp') {
+          // only move up when caret at start
+          if (start > 0) return;
+        }
+      }
+    }
+
+    // Find the form container
+    let formEl: HTMLElement | null = target.closest('form');
+    if (!formEl) return;
+
+    const focusables = getFocusableElements(formEl);
+    const currentIndex = focusables.indexOf(target as HTMLElement);
+    if (currentIndex === -1) return;
+
+    let nextIndex = currentIndex;
+    if (key === 'Enter' || key === 'ArrowDown') nextIndex = Math.min(focusables.length - 1, currentIndex + 1);
+    if (key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+
+    if (nextIndex !== currentIndex) {
+      e.preventDefault();
+      const nextEl = focusables[nextIndex];
+      // Focus and if input/select, select the text for convenience
+      nextEl.focus();
+      try {
+        if ((nextEl as HTMLInputElement).select) (nextEl as HTMLInputElement).select();
+      } catch (err) {
+        // ignore
+      }
+    }
+  };
+
   const exportUsers = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
       "Name,Email,Role,Phone,Status,Created Date\n" +
@@ -1666,7 +1999,14 @@ const ManageUsers: React.FC = () => {
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
             <button
-              onClick={() => setActiveTab('student')}
+              onClick={() => {
+                console.log('🔄 Switching to Student tab');
+                setActiveTab('student');
+                // If modal is open, update the role immediately
+                if (showAddModal) {
+                  handleRoleChange('student');
+                }
+              }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'student'
                   ? 'border-blue-500 text-blue-600'
@@ -1676,7 +2016,14 @@ const ManageUsers: React.FC = () => {
               Students ({users.filter(u => u.role === 'student').length})
             </button>
             <button
-              onClick={() => setActiveTab('teacher')}
+              onClick={() => {
+                console.log('🔄 Switching to Teacher tab');
+                setActiveTab('teacher');
+                // If modal is open, update the role immediately
+                if (showAddModal) {
+                  handleRoleChange('teacher');
+                }
+              }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'teacher'
                   ? 'border-blue-500 text-blue-600'
@@ -1686,7 +2033,14 @@ const ManageUsers: React.FC = () => {
               Teachers ({users.filter(u => u.role === 'teacher').length})
             </button>
             <button
-              onClick={() => setActiveTab('admin')}
+              onClick={() => {
+                console.log('🔄 Switching to Admin tab');
+                setActiveTab('admin');
+                // If modal is open, update the role immediately
+                if (showAddModal) {
+                  handleRoleChange('admin');
+                }
+              }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'admin'
                   ? 'border-blue-500 text-blue-600'
@@ -2091,7 +2445,7 @@ const ManageUsers: React.FC = () => {
             <h3 className="text-xl font-bold text-gray-900 mb-6">
               Add New {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - Enrollment Form
             </h3>
-            <form onSubmit={handleAddUser} className="space-y-6">
+            <form onSubmit={handleAddUser} onKeyDown={handleFormKeyDown} className="space-y-6">
               
               {/* Role Selection */}
               <div className="bg-blue-50 p-4 rounded-lg">
@@ -2114,15 +2468,34 @@ const ManageUsers: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={loadingNextId ? 'Generating next ID...' : (formData.userId || 'Select role to generate ID')}
+                      value={loadingNextId ? 'Generating next ID...' : (formData.userId || nextUserId || 'Select a role to auto-generate ID')}
                       readOnly
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
                       placeholder="Next sequential ID will appear here"
                     />
+                    {!formData.userId && !loadingNextId && formData.role && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-xs text-blue-700">
+                          💡 Select a role above to automatically fetch the next available ID from the database
+                        </p>
+                      </div>
+                    )}
                     {formData.userId && !loadingNextId && (
-                      <p className="text-xs text-green-600 mt-1">
-                        This is the next available ID for {formData.role} role
-                      </p>
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <p className="text-xs text-green-700 font-medium">
+                          ✅ Next available ID for {formData.role} role: <strong>{formData.userId}</strong>
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          This ID has been reserved from the backend database
+                        </p>
+                      </div>
+                    )}
+                    {loadingNextId && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-xs text-blue-700">
+                          🔄 Fetching next available ID from database...
+                        </p>
+                      </div>
                     )}
                   </div>
                   <div>
@@ -2132,15 +2505,31 @@ const ManageUsers: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={formData.generatedPassword || 'Password will be generated automatically'}
+                      value={formData.generatedPassword || 'Password will be generated when role is selected'}
                       readOnly
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
-                      placeholder="Auto-generated password will appear here"
+                      className={`w-full border rounded-lg px-3 py-2 font-mono ${
+                        formData.generatedPassword 
+                          ? 'bg-green-50 border-green-300 text-green-800' 
+                          : 'bg-gray-100 border-gray-300 text-gray-500'
+                      }`}
+                      placeholder="8-character secure password will appear here"
                     />
                     {formData.generatedPassword && (
-                      <p className="text-xs text-green-600 mt-1">
-                        8-character secure password generated
-                      </p>
+                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <p className="text-xs text-green-700 font-medium">
+                          ✅ 8-character secure password generated: <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Copy this password - user will need it for first login
+                        </p>
+                      </div>
+                    )}
+                    {!formData.generatedPassword && formData.role && (
+                      <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
+                        <p className="text-xs text-gray-600">
+                          🔒 Password will be auto-generated when you select a role
+                        </p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3188,8 +3577,9 @@ const ManageUsers: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !isFormValid()}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  title={loading ? 'Please wait...' : (!isFormValid() ? missingFieldsForTooltip() : undefined)}
                 >
                   {loading ? 'Adding...' : 'Add User'}
                 </button>

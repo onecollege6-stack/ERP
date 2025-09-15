@@ -773,11 +773,11 @@ exports.createSchool = async (req, res) => {
         .join('')
         .substring(0, 6); // Limit to 6 characters
 
-    // Validate code format
-    if (!/^[A-Z0-9]{2,10}$/.test(code)) {
+    // Validate code format (allow 1-10 characters to support single-letter codes)
+    if (!/^[A-Z0-9]{1,10}$/.test(code)) {
       return res.status(400).json({
         success: false,
-        message: 'School code must be 2-10 characters long and contain only letters and numbers'
+        message: 'School code must be 1-10 characters long and contain only letters and numbers'
       });
     }
 
@@ -934,6 +934,7 @@ async function createSchoolDatabase(school) {
       'teachers',        // School teachers
       'students',        // School students
       'parents',         // Student parents
+  'testdetails',     // Academic test configuration per class
       'access_matrix',   // Role-based permissions
       'classes',         // Class information
       'subjects',        // Subject information
@@ -1017,6 +1018,19 @@ async function createSchoolDatabase(school) {
         
         await collection.insertMany(sequences);
         console.log(`📊 Initialized ID sequences for ${school.code}`);
+      } else if (collectionName === 'testdetails') {
+        // Initialize test details placeholder for academic test configuration
+        const testDetailsDoc = {
+          _placeholder: true,
+          schoolId: school._id,
+          schoolCode: school.code,
+          academicYear: school.settings?.academicYear?.currentYear || new Date().getFullYear().toString(),
+          classTestTypes: {}, // map of class -> array of test type names
+          createdAt: new Date(),
+          note: 'Placeholder for per-class test type configuration; editable via superadmin Academic Test Configuration'
+        };
+        await collection.insertOne(testDetailsDoc);
+        console.log(`🧾 Initialized testdetails collection for ${school.code}`);
       } else {
         // Create collection with a placeholder document for user collections
         if (['admins', 'teachers', 'students', 'parents'].includes(collectionName)) {
@@ -1561,6 +1575,69 @@ exports.deleteSchool = async (req, res) => {
     console.log(`[DELETE TEST DETAILS] Deleted ${deletedTestDetails.deletedCount} test details`);
 
     // Delete the school
+    // Drop the dedicated database if present (add verbose diagnostics)
+    let dbDropInfo = { attempted: false, mongoUri: null, error: null, dropped: false, dbListBefore: [], dbListAfter: [] };
+    // Determine db name via SchoolDatabaseManager to ensure consistent naming
+    const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+    const derivedDbName = SchoolDatabaseManager.getDatabaseName(school.code);
+    const dbNameToDrop = school.databaseName || derivedDbName;
+
+    if (dbNameToDrop) {
+      dbDropInfo.attempted = true;
+      dbDropInfo.derivedDbName = derivedDbName;
+      dbDropInfo.dbNameToDrop = dbNameToDrop;
+      try {
+        const { MongoClient } = require('mongodb');
+        const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
+        dbDropInfo.mongoUri = mongoUri;
+
+        const adminClient = new MongoClient(mongoUri, { useUnifiedTopology: true });
+        await adminClient.connect();
+
+        // List databases before drop for diagnostics
+        try {
+          const admin = adminClient.db().admin();
+          const { databases } = await admin.listDatabases();
+          dbDropInfo.dbListBefore = databases.map(d => d.name);
+          console.log(`[DB DROP DEBUG] Databases before drop: ${dbDropInfo.dbListBefore.join(', ')}`);
+        } catch (listErr) {
+          console.warn('[DB DROP DEBUG] Could not list databases before drop:', listErr.message || listErr);
+        }
+
+        const adminDb = adminClient.db(school.databaseName);
+        // Attempt to drop the database and capture the result
+        try {
+          const dropResult = await adminDb.dropDatabase();
+          dbDropInfo.dropped = !!dropResult;
+          console.log(`[DB DROP RESULT] dropDatabase(${school.databaseName}) returned:`, dropResult);
+        } catch (dropErr) {
+          dbDropInfo.error = dropErr.message || String(dropErr);
+          console.error(`[DB DROP ERROR] Failed to drop database ${school.databaseName}:`, dbDropInfo.error);
+        }
+
+        // List databases after drop for diagnostics
+        try {
+          const admin = adminClient.db().admin();
+          const { databases } = await admin.listDatabases();
+          dbDropInfo.dbListAfter = databases.map(d => d.name);
+          console.log(`[DB DROP DEBUG] Databases after drop: ${dbDropInfo.dbListAfter.join(', ')}`);
+        } catch (listErr) {
+          console.warn('[DB DROP DEBUG] Could not list databases after drop:', listErr.message || listErr);
+        }
+
+        await adminClient.close();
+        if (dbDropInfo.dropped) {
+          console.log(`[DB DROPPED] Dropped database ${school.databaseName} for school ${school.code}`);
+        } else {
+          console.warn(`[DB DROP] Database ${school.databaseName} was not dropped. See dbDropInfo for details.`);
+        }
+      } catch (dbErr) {
+        dbDropInfo.error = dbErr.message || String(dbErr);
+        console.error(`[DB DROP ERROR] Failed to drop database ${school.databaseName}:`, dbDropInfo.error);
+        // Continue — don't block deletion if DB drop fails
+      }
+    }
+
     const deletedSchool = await School.findByIdAndDelete(schoolId);
     
     if (!deletedSchool) {
@@ -1579,7 +1656,8 @@ exports.deleteSchool = async (req, res) => {
         code: school.code 
       },
       deletedUsers: deletedUsers.deletedCount,
-      deletedTestDetails: deletedTestDetails.deletedCount
+      deletedTestDetails: deletedTestDetails.deletedCount,
+      dbDropInfo
     });
   } catch (error) {
     console.error('[DELETE ERROR] Error deleting school:', error);
@@ -1635,6 +1713,20 @@ exports.addSchool = async (req, res) => {
     });
 
     await newSchool.save();
+    
+    // Create default test details for the school
+    try {
+      await TestDetails.createDefaultTestTypes(
+        newSchool._id, 
+        newSchool.code, 
+        req.user ? req.user._id : null
+      );
+      console.log(`[TEST DETAILS CREATED] Default test types created for school ${newSchool.code}`);
+    } catch (testError) {
+      console.error(`[TEST DETAILS ERROR] Failed to create test details for school ${newSchool.code}:`, testError);
+      // Don't fail school creation if test details creation fails
+    }
+    
     res.status(201).json({ message: 'School added successfully', school: newSchool });
   } catch (error) {
     console.error('[ADD SCHOOL ERROR]', error);

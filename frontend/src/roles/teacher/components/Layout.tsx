@@ -10,7 +10,9 @@ import {
   Menu,
   X,
   LogOut,
-  School
+  School,
+  Home,
+  UserCheck
 } from 'lucide-react';
 import { currentUser } from '../utils/mockData';
 
@@ -65,7 +67,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, onLo
 
         <div className="flex flex-col h-full">
           <nav className="flex-1 px-4 py-6 space-y-2">
-            {navigation.map((item) => {
+            {menuItems.map((item) => {
               const Icon = item.icon;
               return (
                 <button

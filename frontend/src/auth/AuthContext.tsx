@@ -41,6 +41,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const persist = useCallback((next: AuthState) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    
+    // Also store the school code separately for easier access
+    if (next.user?.schoolCode) {
+      localStorage.setItem('erp.schoolCode', next.user.schoolCode);
+    } else {
+      localStorage.removeItem('erp.schoolCode');
+    }
   }, []);
 
   useEffect(() => {
@@ -82,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const next: AuthState = { user: null, token: null, loading: false };
     setState(next);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('erp.schoolCode');
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({ ...state, login, logout }), [state, login, logout]);

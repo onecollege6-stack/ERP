@@ -42,10 +42,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
-  // Hardcoded options for reliable UI performance
+  // Class options matching our class-subjects system
   const classes = [
-    'LKG', 'UKG', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
-    'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+    'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
   ];
 
   const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -58,7 +57,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
   const fetchSubjectsForClass = async (className: string) => {
     try {
-      const response = await fetch('/api/subjects/all', {
+      console.log(`🔍 Fetching subjects for class: ${className}`);
+      
+      const response = await fetch(`/api/class-subjects/class/${encodeURIComponent(className)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -67,25 +68,29 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
       if (response.ok) {
         const data = await response.json();
-        const classSubjects = data.subjects
-          ?.filter((subject: any) => subject.className === className && subject.isActive)
-          ?.map((subject: any) => subject.name || subject.subjectName) || [];
+        console.log('✅ Class subjects response:', data);
         
-        setAvailableSubjects(classSubjects);
+        // Extract subjects from the response
+        const subjects = data.data?.subjects || [];
+        const subjectNames = subjects
+          .filter((subject: any) => subject.isActive)
+          .map((subject: any) => subject.name);
+        
+        console.log('📚 Available subjects:', subjectNames);
+        setAvailableSubjects(subjectNames);
         
         // If current subject is not available for selected class, reset it
-        if (formData.subject && !classSubjects.includes(formData.subject)) {
+        if (formData.subject && !subjectNames.includes(formData.subject)) {
           setFormData(prev => ({ ...prev, subject: '' }));
         }
+      } else {
+        console.error('❌ Failed to fetch subjects:', response.status, response.statusText);
+        setAvailableSubjects([]);
       }
     } catch (error) {
-      console.error('Error fetching subjects:', error);
-      // Fallback to hardcoded subjects if API fails
-      setAvailableSubjects([
-        'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 
-        'History', 'Geography', 'Computer Science', 'Economics', 'Art',
-        'Physical Education', 'Music', 'Drawing', 'Social Studies', 'Science'
-      ]);
+      console.error('❌ Error fetching subjects:', error);
+      // Fallback to empty array if API fails
+      setAvailableSubjects([]);
     }
   };
 
@@ -278,7 +283,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                   >
                     <option value="">Select Class</option>
                     {classes.map(cls => (
-                      <option key={cls} value={cls}>{cls}</option>
+                      <option key={cls} value={cls}>
+                        {cls === 'LKG' ? 'LKG' : cls === 'UKG' ? 'UKG' : `Class ${cls}`}
+                      </option>
                     ))}
                   </select>
                   {errors.class && <p className="text-red-500 text-xs mt-1">{errors.class}</p>}

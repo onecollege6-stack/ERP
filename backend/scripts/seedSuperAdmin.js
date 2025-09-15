@@ -7,7 +7,7 @@ require('dotenv').config();
 const seedSuperAdmin = async () => {
   try {
     // Connect to MongoDB
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/institute_erp';
+    const MONGODB_URI = ;
 
     const connection = await mongoose.connect(MONGODB_URI, {
       maxPoolSize: 50,

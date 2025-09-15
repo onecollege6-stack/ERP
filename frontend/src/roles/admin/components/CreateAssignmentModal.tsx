@@ -42,10 +42,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
-  // Hardcoded options for reliable UI performance
+  // Class options matching our class-subjects system
   const classes = [
-    'LKG', 'UKG', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5',
-    'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+    'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
   ];
 
   const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -58,34 +57,82 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
 
   const fetchSubjectsForClass = async (className: string) => {
     try {
-      const response = await fetch('/api/subjects/all', {
+      console.log(`🔍 Fetching subjects for class: ${className}`);
+      
+      // Add more detailed logging
+      console.log(`🔗 Request URL: /api/class-subjects/class/${encodeURIComponent(className)}`);
+      console.log(`🔑 Auth token available: ${!!token}`);
+      
+      // Try the regular endpoint first
+      let response = await fetch(`/api/class-subjects/class/${encodeURIComponent(className)}`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
 
+      console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+      
+      // If the regular endpoint fails, try the direct endpoint
+      if (!response.ok) {
+        console.log(`⚠️ Regular endpoint failed, trying direct endpoint...`);
+        
+        // Get the user's school code from the auth context
+        let userSchoolCode = '';
+        try {
+          const authData = localStorage.getItem('erp.auth');
+          if (authData) {
+            const parsedAuth = JSON.parse(authData);
+            userSchoolCode = parsedAuth.user?.schoolCode || '';
+            console.log(`🏫 Using school code from auth: "${userSchoolCode}"`);
+          }
+        } catch (err) {
+          console.error('Error parsing auth data:', err);
+        }
+        
+        // Try direct endpoint with the user's school code
+        response = await fetch(`/api/direct-test/class-subjects/${encodeURIComponent(className)}?schoolCode=${userSchoolCode}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-School-Code': userSchoolCode
+          }
+        });
+        
+        console.log(`📡 Direct endpoint response: ${response.status} ${response.statusText}`);
+      }
+      
       if (response.ok) {
         const data = await response.json();
-        const classSubjects = data.subjects
-          ?.filter((subject: any) => subject.className === className && subject.isActive)
-          ?.map((subject: any) => subject.name || subject.subjectName) || [];
+        console.log('✅ Class subjects response:', data);
         
-        setAvailableSubjects(classSubjects);
+        // Extract subjects from the response
+        const subjects = data.data?.subjects || [];
+        const subjectNames = subjects
+          .filter((subject: any) => subject.isActive)
+          .map((subject: any) => subject.name);
+        
+        console.log('📚 Available subjects:', subjectNames);
+        setAvailableSubjects(subjectNames);
         
         // If current subject is not available for selected class, reset it
-        if (formData.subject && !classSubjects.includes(formData.subject)) {
+        if (formData.subject && !subjectNames.includes(formData.subject)) {
           setFormData(prev => ({ ...prev, subject: '' }));
         }
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch subjects:', response.status, response.statusText);
+        console.error('❌ Error details:', errorText);
+        setAvailableSubjects([]);
       }
     } catch (error) {
-      console.error('Error fetching subjects:', error);
-      // Fallback to hardcoded subjects if API fails
-      setAvailableSubjects([
-        'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 
-        'History', 'Geography', 'Computer Science', 'Economics', 'Art',
-        'Physical Education', 'Music', 'Drawing', 'Social Studies', 'Science'
-      ]);
+      console.error('❌ Error fetching subjects:', error);
+      // Fallback to empty array if API fails
+      setAvailableSubjects([]);
     }
   };
 
@@ -142,13 +189,47 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
       formDataToSend.append('dueDate', formData.dueDate);
       formDataToSend.append('instructions', formData.instructions);
 
+      // Log the data being sent
+      console.log('📤 Sending assignment data:', {
+        title: formData.title,
+        subject: formData.subject,
+        class: formData.class,
+        section: formData.section,
+        startDate: formData.startDate,
+        dueDate: formData.dueDate,
+        hasInstructions: !!formData.instructions,
+        attachmentsCount: formData.attachments.length
+      });
+
       // Add files
       formData.attachments.forEach(file => {
         formDataToSend.append('attachments', file);
       });
 
+      // Get school code from auth context
+      let schoolCode = '';
+      try {
+        const authData = localStorage.getItem('erp.auth');
+        if (authData) {
+          const parsedAuth = JSON.parse(authData);
+          schoolCode = parsedAuth.user?.schoolCode || '';
+          console.log(`🏫 Using school code for assignment: "${schoolCode}"`);
+        }
+      } catch (err) {
+        console.error('Error parsing auth data:', err);
+      }
+      
+      // Add school code to form data
+      if (schoolCode) {
+        formDataToSend.append('schoolCode', schoolCode);
+        console.log('📤 Added schoolCode to request:', schoolCode);
+      } else {
+        console.warn('⚠️ No school code found in auth context');
+      }
+
       const response = await assignmentAPI.createAssignmentWithFiles(formDataToSend);
       
+      console.log('✅ Assignment created successfully:', response);
       setSuccessMessage(response.message || `Assignment created for ${formData.class} • Section ${formData.section}`);
       
       // Show success for 2 seconds then close
@@ -163,6 +244,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
       }, 2000);
 
     } catch (error: any) {
+      console.error('❌ Error creating assignment:', error);
+      console.error('Error response:', error.response?.data || error.message);
+      
       setErrors({ submit: error.response?.data?.message || 'Failed to create assignment' });
     } finally {
       setLoading(false);
@@ -225,7 +309,9 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
                 >
                   <option value="">Select Class</option>
                   {classes.map(cls => (
-                    <option key={cls} value={cls}>{cls}</option>
+                    <option key={cls} value={cls}>
+                      {cls === 'LKG' ? 'LKG' : cls === 'UKG' ? 'UKG' : `Class ${cls}`}
+                    </option>
                   ))}
                 </select>
                 {errors.class && <p className="text-red-500 text-xs mt-1">{errors.class}</p>}

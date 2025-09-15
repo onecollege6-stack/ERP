@@ -7,54 +7,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/institute
   useUnifiedTopology: true,
 });
 
-const generateSequentialUserId = async (schoolCode, role) => {
-  try {
-    const roleMappings = {
-      'admin': 'A',
-      'teacher': 'T', 
-      'student': 'S',
-      'parent': 'P'
-    };
-
-    const roleCode = roleMappings[role];
-    if (!roleCode) {
-      throw new Error(`Invalid role: ${role}`);
-    }
-
-    const ModelFactory = require('./utils/modelFactory');
-    const SchoolUser = await ModelFactory.getUserModel(schoolCode);
-
-    const pattern = `${schoolCode.toUpperCase()}-${roleCode}-`;
-    
-    const existingUsers = await SchoolUser.find({
-      userId: { $regex: `^${pattern}\\d{4}$`, $options: 'i' }
-    }).select('userId').lean();
-
-    let maxNumber = 0;
-
-    existingUsers.forEach(user => {
-      const match = user.userId.match(new RegExp(`^${pattern}(\\d{4})$`, 'i'));
-      if (match) {
-        const number = parseInt(match[1], 10);
-        if (number > maxNumber) {
-          maxNumber = number;
-        }
-      }
-    });
-
-    const nextNumber = maxNumber + 1;
-    const formattedNumber = nextNumber.toString().padStart(4, '0');
-    const newUserId = `${schoolCode.toUpperCase()}-${roleCode}-${formattedNumber}`;
-
-    console.log(`✅ Next ID for ${role}: ${newUserId} (existing: ${existingUsers.length}, max: ${maxNumber})`);
-    
-    return newUserId;
-
-  } catch (error) {
-    console.error('❌ Error generating sequential user ID:', error);
-    throw error;
-  }
-};
+const { generateSequentialUserId } = require('./controllers/userController');
 
 async function createTestUsers() {
   console.log('🚀 Creating Test Users to Verify Sequential ID Generation');

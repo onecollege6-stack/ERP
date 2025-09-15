@@ -72,7 +72,16 @@ class DatabaseManager {
     if (!this.connections.has(databaseName)) {
       try {
         const baseUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-        const connectionUri = `${baseUri.replace(/\/[^\/]*$/, '')}/${databaseName}`;
+        
+        // Handle both local and Atlas connection strings properly
+        let connectionUri;
+        if (baseUri.includes('mongodb+srv://')) {
+          // Atlas connection - replace database name in the connection string
+          connectionUri = baseUri.replace(/\/[^\/]*\?/, `/${databaseName}?`);
+        } else {
+          // Local MongoDB - append database name to base URI
+          connectionUri = `${baseUri.replace(/\/[^\/]*$/, '')}/${databaseName}`;
+        }
 
         console.log(`🔍 Attempting to connect to database: ${databaseName}`);
         console.log(`🔗 Connection URI: ${connectionUri}`);

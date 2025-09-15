@@ -1,6 +1,6 @@
 const TestDetails = require('../models/TestDetails');
 
-// Get test details for a school
+// Get test details for a school (supports both old and new structure)
 exports.getTestDetails = async (req, res) => {
   try {
     const schoolCode = req.user.schoolCode;
@@ -35,6 +35,100 @@ exports.getTestDetails = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching test details',
+      error: error.message
+    });
+  }
+};
+
+// Get test details for a specific class
+exports.getClassTestTypes = async (req, res) => {
+  try {
+    const { className } = req.params;
+    const schoolCode = req.user.schoolCode;
+    const academicYear = req.query.academicYear || '2024-25';
+
+    const testDetails = await TestDetails.findOne({
+      schoolCode,
+      academicYear
+    });
+
+    if (!testDetails) {
+      return res.status(404).json({
+        success: false,
+        message: 'Test details not found'
+      });
+    }
+
+    const classTestTypes = testDetails.classTestTypes?.get(className) || [];
+
+    res.json({
+      success: true,
+      data: {
+        className,
+        testTypes: classTestTypes,
+        academicYear
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching class test types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching class test types',
+      error: error.message
+    });
+  }
+};
+
+// Update test types for a specific class
+exports.updateClassTestTypes = async (req, res) => {
+  try {
+    const { className } = req.params;
+    const { testTypes } = req.body;
+    const schoolCode = req.user.schoolCode;
+    const academicYear = req.body.academicYear || '2024-25';
+
+    if (!testTypes || !Array.isArray(testTypes)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Test types must be an array'
+      });
+    }
+
+    const testDetails = await TestDetails.findOne({
+      schoolCode,
+      academicYear
+    });
+
+    if (!testDetails) {
+      return res.status(404).json({
+        success: false,
+        message: 'Test details not found'
+      });
+    }
+
+    // Update the test types for the specific class
+    if (!testDetails.classTestTypes) {
+      testDetails.classTestTypes = new Map();
+    }
+    testDetails.classTestTypes.set(className, testTypes);
+    testDetails.updatedBy = req.user._id;
+
+    await testDetails.save();
+
+    res.json({
+      success: true,
+      data: {
+        className,
+        testTypes: testTypes,
+        academicYear
+      },
+      message: `Test types updated successfully for class ${className}`
+    });
+  } catch (error) {
+    console.error('Error updating class test types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating class test types',
       error: error.message
     });
   }

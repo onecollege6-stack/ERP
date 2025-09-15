@@ -39,13 +39,13 @@ const upload = multer({
   }
 });
 
-// Enhanced ID Generation Function
+// Enhanced ID Generation Function - Always scans for maximum existing ID
 const generateSequentialUserId = async (schoolCode, role) => {
   try {
     // Role mappings
     const roleMappings = {
       'admin': 'A',
-      'teacher': 'T', 
+      'teacher': 'T',
       'student': 'S',
       'parent': 'P'
     };
@@ -55,52 +55,84 @@ const generateSequentialUserId = async (schoolCode, role) => {
       throw new Error(`Invalid role: ${role}`);
     }
 
+    console.log(`🔄 Generating sequential user ID for ${schoolCode}-${role} by scanning all existing IDs`);
+
     // Use school-specific database connection directly
     const SchoolDatabaseManager = require('../utils/databaseManager');
     const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
+
+    // Access the native MongoDB database from the Mongoose connection
+    const db = connection.db;
+
     // Get the correct collection based on role
-    const collectionName = role === 'admin' ? 'admins' : 
+    const collectionName = role === 'admin' ? 'admins' :
                           role === 'teacher' ? 'teachers' :
                           role === 'student' ? 'students' : 'parents';
-    
-    const collection = connection.collection(collectionName);
 
-    // Create the pattern to search for IDs in the format: SCHOOLCODE-ROLE-XXXX
-    const pattern = `${schoolCode.toUpperCase()}-${roleCode}-`;
-    
-    console.log(`🔍 Searching for existing IDs with pattern: ${pattern}`);
+    console.log(`📋 Using collection: ${collectionName} in database: ${db.databaseName}`);
 
-    // Find all users with IDs matching this pattern
-    const existingUsers = await collection.find({
-      userId: { $regex: `^${pattern}\\d{4}$`, $options: 'i' }
-    }, { projection: { userId: 1 } }).toArray();
+    const usersColl = db.collection(collectionName);
+    const prefix = `${schoolCode.toUpperCase()}-${roleCode}-`;
 
-    console.log(`📊 Found ${existingUsers.length} existing users with pattern ${pattern}`);
+    console.log(`� Scanning ALL existing users with pattern ${prefix}`);
 
-    let maxNumber = 0;
-
-    // Extract numbers from existing user IDs
-    existingUsers.forEach(user => {
-      const match = user.userId.match(new RegExp(`^${pattern}(\\d{4})$`, 'i'));
-      if (match) {
-        const number = parseInt(match[1], 10);
-        if (number > maxNumber) {
-          maxNumber = number;
+    // Always scan all existing users to find the maximum ID number
+    const aggregationResult = await usersColl.aggregate([
+      {
+        $match: {
+          userId: { $regex: `^${prefix}\\d{4}$`, $options: 'i' }
+        }
+      },
+      {
+        $addFields: {
+          numericPart: {
+            $toInt: {
+              $substr: ["$userId", prefix.length, 4] // Extract numeric part after prefix
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          maxId: { $max: "$numericPart" },
+          count: { $sum: 1 }
         }
       }
-    });
+    ]).toArray();
 
-    // If no users exist for this role, start from 1
-    // If users exist, continue from the highest number + 1
-    const nextNumber = existingUsers.length === 0 ? 1 : maxNumber + 1;
-    const formattedNumber = nextNumber.toString().padStart(4, '0');
-    const newUserId = `${schoolCode.toUpperCase()}-${roleCode}-${formattedNumber}`;
+    let maxNumber = 0;
+    if (aggregationResult.length > 0) {
+      maxNumber = aggregationResult[0].maxId || 0;
+      console.log(`📋 Found ${aggregationResult[0].count} existing users with pattern ${prefix}, max ID number: ${maxNumber}`);
+    } else {
+      console.log(`� No existing users found with pattern ${prefix}, starting from 1`);
+    }
 
-    console.log(`✅ Generated new user ID: ${newUserId} (existing users: ${existingUsers.length}, max: ${maxNumber}, next: ${nextNumber})`);
-    console.log(`📋 Existing user IDs found:`, existingUsers.map(u => u.userId));
-    
-    return newUserId;
+    // Start with maxNumber + 1
+    let candidateNumber = maxNumber + 1;
+    let candidateId = `${schoolCode.toUpperCase()}-${roleCode}-${candidateNumber.toString().padStart(4, '0')}`;
+
+    // Check if this ID already exists (race condition protection)
+    // Keep incrementing until we find an available ID
+    let attempts = 0;
+    const maxAttempts = 100; // Prevent infinite loops
+
+    while (attempts < maxAttempts) {
+      const existingUser = await usersColl.findOne({ userId: candidateId });
+      if (!existingUser) {
+        // ID is available
+        console.log(`✅ Generated unique user ID: ${candidateId} (after ${attempts} collision checks)`);
+        return candidateId;
+      }
+
+      console.log(`⚠️ ID ${candidateId} already exists, trying next number...`);
+      candidateNumber++;
+      candidateId = `${schoolCode.toUpperCase()}-${roleCode}-${candidateNumber.toString().padStart(4, '0')}`;
+      attempts++;
+    }
+
+    throw new Error(`Could not find an available user ID after ${maxAttempts} attempts`);
 
   } catch (error) {
     console.error('❌ Error generating sequential user ID:', error);
@@ -108,18 +140,26 @@ const generateSequentialUserId = async (schoolCode, role) => {
   }
 };
 
+// Export helper for tests and other modules
+exports.generateSequentialUserId = generateSequentialUserId;
+
 // Get next available user ID for preview
 exports.getNextUserId = async (req, res) => {
   try {
     const { role } = req.params;
     
+    console.log(`🔍 Getting next user ID for role: ${role}`);
+    console.log(`👤 Request user:`, { id: req.user.id, role: req.user.role });
+    
     // Validate caller
     if (!['admin', 'superadmin'].includes(req.user.role)) {
+      console.log(`❌ Access denied for role: ${req.user.role}`);
       return res.status(403).json({ message: 'Access denied' });
     }
 
     // Validate role
     if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
+      console.log(`❌ Invalid role requested: ${role}`);
       return res.status(400).json({ message: 'Invalid role' });
     }
 
@@ -128,28 +168,41 @@ exports.getNextUserId = async (req, res) => {
     
     if (req.school && req.schoolCode) {
       schoolCode = req.schoolCode;
+      console.log(`🏫 Using school code from middleware: ${schoolCode}`);
     } else {
+      console.log(`🔄 Falling back to user's school ID: ${req.user.schoolId}`);
       // Fallback to user's school
       const school = await School.findById(req.user.schoolId);
       if (!school) {
+        console.log(`❌ School not found for ID: ${req.user.schoolId}`);
         return res.status(404).json({ message: 'School not found' });
       }
       schoolCode = school.code;
+      console.log(`🏫 Retrieved school code: ${schoolCode}`);
     }
+
+    console.log(`🏫 Using school code: ${schoolCode} for role: ${role}`);
 
     // Generate the next sequential user ID
     const nextUserId = await generateSequentialUserId(schoolCode, role);
+    
+    console.log(`✅ Generated next user ID: ${nextUserId}`);
 
     res.json({
       success: true,
       nextUserId,
       role,
-      schoolCode: schoolCode.toUpperCase()
+      schoolCode: schoolCode.toUpperCase(),
+      message: `Next available ID for ${role} role`
     });
 
   } catch (error) {
-    console.error('Error getting next user ID:', error);
-    res.status(500).json({ message: 'Error getting next user ID', error: error.message });
+    console.error('❌ Error getting next user ID:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error getting next user ID', 
+      error: error.message 
+    });
   }
 };
 

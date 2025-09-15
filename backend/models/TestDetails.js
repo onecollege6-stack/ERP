@@ -30,6 +30,7 @@ const testTypeSchema = new mongoose.Schema({
   }
 });
 
+
 const testDetailsSchema = new mongoose.Schema({
   schoolId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -46,7 +47,12 @@ const testDetailsSchema = new mongoose.Schema({
     required: true,
     default: '2024-25'
   },
-  testTypes: [testTypeSchema],
+  // Map of class name to array of test types
+  classTestTypes: {
+    type: Map,
+    of: [testTypeSchema],
+    default: {}
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -72,25 +78,27 @@ testDetailsSchema.pre('save', function(next) {
 });
 
 // Create default test types for new schools
+
 testDetailsSchema.statics.createDefaultTestTypes = function(schoolId, schoolCode, createdBy) {
   const defaultTestTypes = [
-    { name: 'Formative Assessment 1', code: 'FA-1', description: 'First Formative Assessment', maxMarks: 20, weightage: 0.1 },
-    { name: 'Formative Assessment 2', code: 'FA-2', description: 'Second Formative Assessment', maxMarks: 20, weightage: 0.1 },
-    { name: 'Formative Assessment 3', code: 'FA-3', description: 'Third Formative Assessment', maxMarks: 20, weightage: 0.1 },
-    { name: 'Formative Assessment 4', code: 'FA-4', description: 'Fourth Formative Assessment', maxMarks: 20, weightage: 0.1 },
-    { name: 'Summative Assessment 1', code: 'SA-1', description: 'First Summative Assessment', maxMarks: 80, weightage: 0.3 },
-    { name: 'Summative Assessment 2', code: 'SA-2', description: 'Second Summative Assessment', maxMarks: 80, weightage: 0.3 },
-    { name: 'Final Examination', code: 'FINAL', description: 'Final Examination', maxMarks: 100, weightage: 1.0 },
-    { name: 'Unit Test 1', code: 'UT-1', description: 'First Unit Test', maxMarks: 25, weightage: 0.15 },
-    { name: 'Unit Test 2', code: 'UT-2', description: 'Second Unit Test', maxMarks: 25, weightage: 0.15 },
-    { name: 'Half Yearly', code: 'HY', description: 'Half Yearly Examination', maxMarks: 100, weightage: 0.5 },
-    { name: 'Annual Examination', code: 'ANNUAL', description: 'Annual Examination', maxMarks: 100, weightage: 0.5 }
+    { name: 'Formative Assessment 1', code: 'FA-1', description: 'First Formative Assessment', maxMarks: 20, weightage: 0.1, isActive: true },
+    { name: 'Formative Assessment 2', code: 'FA-2', description: 'Second Formative Assessment', maxMarks: 20, weightage: 0.1, isActive: true },
+    { name: 'Midterm Examination', code: 'MIDTERM', description: 'Midterm Examination', maxMarks: 80, weightage: 0.3, isActive: true },
+    { name: 'Summative Assessment 1', code: 'SA-1', description: 'First Summative Assessment', maxMarks: 80, weightage: 0.3, isActive: true },
+    { name: 'Summative Assessment 2', code: 'SA-2', description: 'Second Summative Assessment', maxMarks: 80, weightage: 0.3, isActive: true }
   ];
+
+  // All classes: LKG, UKG, 1-12
+  const classes = ['LKG', 'UKG', ...Array.from({length: 12}, (_, i) => (i+1).toString())];
+  const classTestTypes = {};
+  classes.forEach(cls => {
+    classTestTypes[cls] = [...defaultTestTypes]; // Create a copy for each class
+  });
 
   return this.create({
     schoolId,
     schoolCode,
-    testTypes: defaultTestTypes,
+    classTestTypes,
     createdBy
   });
 };

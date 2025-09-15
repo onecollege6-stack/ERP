@@ -60,11 +60,65 @@ const StudentAssignments: React.FC = () => {
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      const data = await assignmentAPI.fetchAssignments();
+      setError('');
+      console.log('🔍 Student: Fetching assignments...');
+      
+      let data;
+      try {
+        // Try the regular endpoint first
+        data = await assignmentAPI.fetchAssignments();
+        console.log('✅ Student: Assignments fetched from regular endpoint:', data);
+      } catch (regularError) {
+        console.error('❌ Student: Error with regular endpoint:', regularError);
+        
+        // If the regular endpoint fails, try the direct endpoint
+        console.log('🔍 Student: Trying direct test endpoint...');
+        
+        // Get the user's school code from the auth context
+        let userSchoolCode = '';
+        try {
+          const authData = localStorage.getItem('erp.auth');
+          if (authData) {
+            const parsedAuth = JSON.parse(authData);
+            userSchoolCode = parsedAuth.user?.schoolCode || '';
+            console.log(`🏫 Student: Using school code from auth: "${userSchoolCode}"`);
+          }
+        } catch (err) {
+          console.error('Student: Error parsing auth data:', err);
+        }
+        
+        // Try direct endpoint with the user's school code
+        const response = await fetch(`/api/direct-test/assignments?schoolCode=${userSchoolCode}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-School-Code': userSchoolCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Direct endpoint failed with status: ${response.status}`);
+        }
+        
+        data = await response.json();
+        console.log('✅ Student: Assignments fetched from direct endpoint:', data);
+      }
+      
+      // Extract assignments array from response object
       const assignmentsArray = data.assignments || data || [];
-      setAssignments(assignmentsArray);
+      
+      // Validate each assignment has required fields
+      const validAssignments = assignmentsArray.filter((assignment: any) => 
+        assignment && typeof assignment === 'object'
+      );
+      
+      console.log(`✅ Student: Processed ${validAssignments.length} valid assignments`);
+      setAssignments(validAssignments);
     } catch (err: any) {
-      setError('Failed to fetch assignments');
+      console.error('❌ Student: Error fetching assignments:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to fetch assignments');
+      // Set empty array to prevent filtering errors
+      setAssignments([]);
     } finally {
       setLoading(false);
     }
@@ -149,6 +203,9 @@ const StudentAssignments: React.FC = () => {
   };
 
   const filteredAssignments = assignments.filter(assignment => {
+    // Make sure assignment is valid
+    if (!assignment) return false;
+    
     // This would typically filter based on submission status
     // For now, showing all assignments in pending
     return true;
@@ -211,16 +268,19 @@ const StudentAssignments: React.FC = () => {
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 mb-1">{assignment.subject}</h3>
-                <p className="text-sm text-gray-600">{assignment.class} • Section {assignment.section}</p>
+                <h3 className="font-semibold text-gray-900 mb-1">{assignment.subject || 'Unknown Subject'}</h3>
+                <p className="text-sm text-gray-600">
+                  {assignment.class || 'Unknown Class'} • 
+                  Section {assignment.section || 'A'}
+                </p>
               </div>
-              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(assignment.priority)}`}>
-                {assignment.priority}
+              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(assignment.priority || 'medium')}`}>
+                {assignment.priority || 'medium'}
               </span>
             </div>
 
             <p className="text-gray-700 mb-4 line-clamp-2">
-              {assignment.instructions || assignment.title}
+              {assignment.instructions || assignment.title || 'No description available'}
             </p>
 
             <div className="space-y-2 mb-4">
@@ -292,12 +352,14 @@ const StudentAssignments: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">Assignment Instructions</h3>
                   <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-gray-700 whitespace-pre-wrap">{selectedAssignment.instructions}</p>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {selectedAssignment.instructions || 'No detailed instructions provided.'}
+                    </p>
                   </div>
                 </div>
 
                 {/* Assignment Attachments */}
-                {selectedAssignment.attachments.length > 0 && (
+                {selectedAssignment.attachments && selectedAssignment.attachments.length > 0 && (
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Assignment Files</h3>
                     <div className="space-y-2">
@@ -306,8 +368,8 @@ const StudentAssignments: React.FC = () => {
                           <div className="flex items-center">
                             <FileText className="w-5 h-5 text-gray-400 mr-3" />
                             <div>
-                              <p className="text-sm font-medium text-gray-900">{file.originalName}</p>
-                              <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                              <p className="text-sm font-medium text-gray-900">{file.originalName || `File ${index + 1}`}</p>
+                              <p className="text-xs text-gray-500">{formatFileSize(file.size || 0)}</p>
                             </div>
                           </div>
                           <button className="text-blue-600 hover:text-blue-700">

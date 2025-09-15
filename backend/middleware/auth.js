@@ -84,13 +84,18 @@ const auth = async (req, res, next) => {
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
+      console.error('[AUTHORIZE ERROR] No user on request');
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
+    console.log(`[AUTHORIZE DEBUG] Checking if role "${req.user.role}" is in allowed roles:`, roles);
+    
     if (!roles.includes(req.user.role)) {
+      console.error(`[AUTHORIZE ERROR] User role "${req.user.role}" not in allowed roles:`, roles);
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
+    console.log(`[AUTHORIZE SUCCESS] User role "${req.user.role}" is authorized`);
     next();
   };
 };

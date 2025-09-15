@@ -8,37 +8,13 @@ class UserGenerator {
    * Generate a unique user ID based on school code and role
    * Format: SCHOOL-ROLE-####
    * Example: NPS-A-0001, NPS-T-0023, NPS-S-0156
+   * Uses the same atomic counter system as the main generateSequentialUserId
    */
   static async generateUserId(schoolCode, role) {
     try {
-      const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-      const sequenceCollection = connection.collection('id_sequences');
-      
-      // Map roles to sequence names and prefixes
-      const roleMap = {
-        'admin': { sequence: 'admin_sequence', prefix: 'A' },
-        'teacher': { sequence: 'teacher_sequence', prefix: 'T' },
-        'student': { sequence: 'student_sequence', prefix: 'S' },
-        'parent': { sequence: 'parent_sequence', prefix: 'P' }
-      };
-      
-      const roleInfo = roleMap[role.toLowerCase()];
-      if (!roleInfo) {
-        throw new Error(`Invalid role: ${role}`);
-      }
-      
-      // Get next sequence number
-      const sequenceDoc = await sequenceCollection.findOneAndUpdate(
-        { _id: roleInfo.sequence },
-        { $inc: { sequence_value: 1 } },
-        { returnDocument: 'after', upsert: true }
-      );
-      
-      const sequenceNumber = sequenceDoc.sequence_value;
-      const paddedNumber = sequenceNumber.toString().padStart(4, '0');
-      
-      return `${schoolCode.toUpperCase()}-${roleInfo.prefix}-${paddedNumber}`;
-      
+      // Use the same atomic counter system from userController
+      const userController = require('../controllers/userController');
+      return await userController.generateSequentialUserId(schoolCode, role);
     } catch (error) {
       console.error('Error generating user ID:', error);
       throw error;

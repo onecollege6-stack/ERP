@@ -557,18 +557,45 @@ const updateTeacherSubjectAssignment = async (req, res) => {
 // Get all subjects for academic details management
 const getAllSubjects = async (req, res) => {
   try {
-    const schoolCode = req.user.schoolCode;
+    const schoolCode = req.schoolCode || req.user.schoolCode;
     const schoolId = req.user.schoolId;
 
-    const subjects = await Subject.find({
+    console.log(`📚 Getting all subjects for school: ${schoolCode}`);
+
+    // Use school-specific database
+    const ModelFactory = require('../utils/modelFactory');
+    const SchoolSubject = await ModelFactory.getSubjectModel(schoolCode);
+
+    const subjects = await SchoolSubject.find({
       schoolCode,
       academicYear: req.query.academicYear || '2024-25'
-    }).select('subjectName subjectCode className description isActive');
+    }).select('_id subjectName subjectCode className description isActive createdAt updatedAt');
 
-    res.json({ subjects });
+    // Transform to frontend expected format
+    const transformedSubjects = subjects.map(subject => ({
+      _id: subject._id,
+      name: subject.subjectName,
+      code: subject.subjectCode,
+      className: subject.className,
+      description: subject.description,
+      isActive: subject.isActive,
+      createdAt: subject.createdAt,
+      updatedAt: subject.updatedAt
+    }));
+
+    console.log(`✅ Found ${transformedSubjects.length} subjects for school ${schoolCode}`);
+
+    res.json({
+      success: true,
+      subjects: transformedSubjects
+    });
   } catch (error) {
-    console.error('Error fetching all subjects:', error);
-    res.status(500).json({ message: 'Error fetching subjects', error: error.message });
+    console.error('❌ Error fetching all subjects:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching subjects',
+      error: error.message
+    });
   }
 };
 
@@ -576,28 +603,67 @@ const getAllSubjects = async (req, res) => {
 const bulkSaveSubjects = async (req, res) => {
   try {
     const { subjects } = req.body;
-    const schoolCode = req.user.schoolCode;
+    const schoolCode = req.schoolCode || req.user.schoolCode;
     const schoolId = req.user.schoolId;
     const academicYear = req.body.academicYear || '2024-25';
 
-    if (!subjects || !Array.isArray(subjects)) {
-      return res.status(400).json({ message: 'Subjects array is required' });
+    console.log('💾 Bulk save request:', { 
+      schoolCode, 
+      subjectsCount: subjects?.length,
+      userInfo: {
+        userId: req.user.userId,
+        userObjectId: req.user._id,
+        schoolId: req.user.schoolId,
+        schoolCode: req.user.schoolCode
+      }
+    });
+
+    if (!schoolCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'School context required'
+      });
     }
 
+    if (!subjects || !Array.isArray(subjects)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Subjects array is required'
+      });
+    }
+
+    // Validate subjects data
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i];
+      if (!subject.name || !subject.code || !subject.className) {
+        return res.status(400).json({
+          success: false,
+          message: `Subject at index ${i} is missing required fields (name, code, className)`
+        });
+      }
+    }
+
+    // Use school-specific database
+    const ModelFactory = require('../utils/modelFactory');
+    const SchoolSubject = await ModelFactory.getSubjectModel(schoolCode);
+
     // Clear existing subjects for this school and academic year
-    await Subject.deleteMany({
+    await SchoolSubject.deleteMany({
       schoolCode,
       academicYear
     });
 
     // Prepare subjects for bulk insert
     const subjectsToInsert = subjects.map(subject => ({
-      ...subject,
-      schoolCode,
-      schoolId,
-      academicYear,
-      subjectCode: subject.code || subject.subjectCode,
-      subjectName: subject.name || subject.subjectName,
+      subjectId: `${schoolCode}-${subject.code}-${academicYear}`,
+      subjectName: subject.name.trim(),
+      subjectCode: subject.code.trim().toUpperCase(),
+      className: subject.className,
+      description: subject.description || '',
+      isActive: subject.isActive !== false, // Default to true
+      schoolId: req.user.schoolId || req.user._id, // Use proper schoolId or fallback to user ID
+      schoolCode: schoolCode,
+      academicYear: academicYear,
       subjectType: 'academic',
       category: 'core',
       applicableGrades: [{
@@ -606,21 +672,36 @@ const bulkSaveSubjects = async (req, res) => {
         maxMarks: 100,
         passMarks: 40
       }],
-      createdBy: req.user.userId,
-      updatedBy: req.user.userId
+      createdBy: req.user._id, // Use ObjectId instead of userId string
+      updatedBy: req.user._id  // Use ObjectId instead of userId string
     }));
 
     // Insert new subjects
-    const insertedSubjects = await Subject.insertMany(subjectsToInsert);
+    const insertedSubjects = await SchoolSubject.insertMany(subjectsToInsert);
 
-    res.json({ 
-      message: 'Subjects saved successfully',
-      subjects: insertedSubjects,
-      count: insertedSubjects.length
+    // Transform back to frontend format
+    const transformedSubjects = insertedSubjects.map(subject => ({
+      name: subject.subjectName,
+      code: subject.subjectCode,
+      className: subject.className,
+      description: subject.description,
+      isActive: subject.isActive
+    }));
+
+    console.log(`✅ Successfully saved ${transformedSubjects.length} subjects for school ${schoolCode}`);
+
+    res.json({
+      success: true,
+      message: `Successfully saved ${transformedSubjects.length} subjects`,
+      subjects: transformedSubjects
     });
   } catch (error) {
-    console.error('Error bulk saving subjects:', error);
-    res.status(500).json({ message: 'Error saving subjects', error: error.message });
+    console.error('❌ Error bulk saving subjects:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error saving subjects',
+      error: error.message
+    });
   }
 };
 

@@ -305,6 +305,11 @@ const ManageUsers: React.FC = () => {
       // Use school name if available, otherwise fall back to school code
       const schoolIdentifier = user?.schoolName || user?.schoolCode;
       
+      if (!schoolIdentifier) {
+        toast.error('School information not available. Please contact administrator.');
+        return;
+      }
+      
       const response = await schoolUserAPI.getAllUsers(schoolIdentifier, token);
       
       // Handle both flat array and grouped object responses

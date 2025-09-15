@@ -43,14 +43,63 @@ const Assignments: React.FC = () => {
       setLoading(true);
       setError('');
       console.log('🔍 Fetching assignments...');
-      const data = await assignmentAPI.fetchAssignments();
-      console.log('✅ Assignments fetched:', data);
+      
+      let data;
+      try {
+        // Try the regular endpoint first
+        data = await assignmentAPI.fetchAssignments();
+        console.log('✅ Assignments fetched from regular endpoint:', data);
+      } catch (regularError) {
+        console.error('❌ Error with regular endpoint:', regularError);
+        
+        // If the regular endpoint fails, try the direct endpoint
+        console.log('🔍 Trying direct test endpoint...');
+        
+        // Get the user's school code from the auth context
+        let userSchoolCode = '';
+        try {
+          const authData = localStorage.getItem('erp.auth');
+          if (authData) {
+            const parsedAuth = JSON.parse(authData);
+            userSchoolCode = parsedAuth.user?.schoolCode || '';
+            console.log(`🏫 Using school code from auth: "${userSchoolCode}"`);
+          }
+        } catch (err) {
+          console.error('Error parsing auth data:', err);
+        }
+        
+        // Try direct endpoint with the user's school code
+        const response = await fetch(`/api/direct-test/assignments?schoolCode=${userSchoolCode}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-School-Code': userSchoolCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Direct endpoint failed with status: ${response.status}`);
+        }
+        
+        data = await response.json();
+        console.log('✅ Assignments fetched from direct endpoint:', data);
+      }
+      
       // Extract assignments array from response object
       const assignmentsArray = data.assignments || data || [];
-      setAssignments(assignmentsArray);
+      
+      // Validate each assignment has required fields
+      const validAssignments = assignmentsArray.filter((assignment: any) => 
+        assignment && typeof assignment === 'object'
+      );
+      
+      console.log(`✅ Processed ${validAssignments.length} valid assignments`);
+      setAssignments(validAssignments);
     } catch (err: any) {
       console.error('❌ Error fetching assignments:', err);
       setError(err.response?.data?.message || err.message || 'Failed to fetch assignments');
+      // Set empty array to prevent filtering errors
+      setAssignments([]);
     } finally {
       setLoading(false);
     }
@@ -94,9 +143,14 @@ const Assignments: React.FC = () => {
   };
 
   const filteredAssignments = assignments.filter(assignment => {
-    const matchesSearch = assignment.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.subject.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || assignment.status === selectedFilter;
+    // Add null checks to prevent "Cannot read properties of undefined" errors
+    const title = assignment?.title || '';
+    const subject = assignment?.subject || '';
+    const status = assignment?.status || '';
+    
+    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      subject.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = selectedFilter === 'all' || status === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
@@ -234,41 +288,44 @@ const Assignments: React.FC = () => {
                 <tr key={assignment._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{assignment.title}</div>
-                      <div className="text-sm text-gray-500">{assignment.teacher}</div>
+                      <div className="text-sm font-medium text-gray-900">{assignment.title || 'Untitled Assignment'}</div>
+                      <div className="text-sm text-gray-500">{assignment.teacher || 'Unknown Teacher'}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{assignment.class}</div>
-                      <div className="text-sm text-gray-500">{assignment.subject}</div>
+                      <div className="text-sm font-medium text-gray-900">{assignment.class || 'Unknown Class'}</div>
+                      <div className="text-sm text-gray-500">{assignment.subject || 'Unknown Subject'}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 mr-1 text-gray-400" />
-                      {new Date(assignment.dueDate).toLocaleDateString()}
+                      {assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : 'No due date'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(assignment.priority)}`}>
-                      {assignment.priority.charAt(0).toUpperCase() + assignment.priority.slice(1)}
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(assignment.priority || 'medium')}`}>
+                      {assignment.priority ? (assignment.priority.charAt(0).toUpperCase() + assignment.priority.slice(1)) : 'Medium'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {assignment.submissions}/{assignment.totalStudents}
+                      {(assignment.submissions || 0)}/{(assignment.totalStudents || 0)}
                       <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                         <div 
                           className="bg-blue-600 h-1.5 rounded-full" 
-                          style={{ width: `${(assignment.submissions / assignment.totalStudents) * 100}%` }}
+                          style={{ width: `${(assignment.submissions && assignment.totalStudents) ? 
+                            (assignment.submissions / assignment.totalStudents) * 100 : 0}%` }}
                         ></div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(assignment.status)}`}>
-                      {assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(assignment.status || 'active')}`}>
+                      {assignment.status ? 
+                        (assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)) : 
+                        'Active'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

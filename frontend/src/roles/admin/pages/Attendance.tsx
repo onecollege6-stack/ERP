@@ -206,7 +206,7 @@ const Attendance: React.FC = () => {
         class: selectedClass,
         section: selectedSection,
         records: attendanceRecords,
-        markedBy: user?.userId || user?.email,
+        markedBy: user?.id || user?.email,
         timestamp: new Date().toISOString()
       };
 
