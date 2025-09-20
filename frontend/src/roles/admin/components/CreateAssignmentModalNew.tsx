@@ -47,7 +47,7 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     'LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'
   ];
 
-  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
   useEffect(() => {
     if (isOpen && formData.class) {

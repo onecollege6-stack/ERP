@@ -1897,6 +1897,7 @@ exports.getUsersByRole = async (req, res) => {
     console.log('🔍 Getting users by role:', req.params.role);
     const { role } = req.params;
     const { schoolCode, schoolDb } = req; // From school context middleware
+    const { class: className, section } = req.query; // Get class and section from query params
     
     if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
       return res.status(400).json({ 
@@ -1906,6 +1907,7 @@ exports.getUsersByRole = async (req, res) => {
     }
     
     console.log('🏫 School context:', { schoolCode, schoolName: req.school?.name });
+    console.log('📋 Filter params:', { className, section });
     
     // Use UserGenerator to get users from role-specific collections (like dashboard does)
     const UserGenerator = require('../utils/userGenerator');
@@ -1913,7 +1915,23 @@ exports.getUsersByRole = async (req, res) => {
     console.log('📋 Querying users with role:', role);
     
     // Get users from role-specific collection (students, teachers, etc.)
-    const users = await UserGenerator.getUsersByRole(schoolCode, role);
+    let users = await UserGenerator.getUsersByRole(schoolCode, role);
+    
+    // Filter by class and section if provided (for students)
+    if (role === 'student' && (className || section)) {
+      users = users.filter(user => {
+        const academicInfo = user.academicInfo || {};
+        const userClass = academicInfo.class;
+        const userSection = academicInfo.section;
+        
+        const classMatch = !className || userClass === className;
+        const sectionMatch = !section || userSection === section;
+        
+        return classMatch && sectionMatch;
+      });
+      
+      console.log(`📊 Filtered to ${users.length} students for class: ${className}, section: ${section}`);
+    }
     
     console.log(`✅ Found ${users.length} ${role}s in school ${schoolCode}`);
     

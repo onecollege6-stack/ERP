@@ -2494,3 +2494,199 @@ const schoolCodeSystem = {
 ```
 
 This implementation guide provides a comprehensive roadmap for building a scalable, secure, and feature-rich school management system with proper data isolation, multi-user support, enhanced tracking, and intelligent automation features.
+
+## MERN Stack Implementation Details
+
+### Backend Architecture
+
+#### Multi-Tenant Database Design
+The system implements a true multi-tenant architecture using dynamically created MongoDB databases for each school:
+
+```javascript
+// Dynamic model creation for school-specific databases
+const getModelForConnection = (connection, modelName, schema) => {
+  return connection.model(modelName, schema);
+};
+
+// Example from AssignmentMultiTenant.js
+const AssignmentMultiTenant = {
+  getModelForConnection: (connection) => {
+    return getModelForConnection(connection, 'Assignment', AssignmentSchema);
+  }
+};
+```
+
+#### School Context Middleware
+The middleware captures and validates the school context for all API requests:
+
+```javascript
+const schoolContext = async (req, res, next) => {
+  try {
+    // Extract school code from authenticated user or request
+    const schoolCode = req.user.schoolCode || req.query.schoolCode || req.body.schoolCode;
+    
+    if (!schoolCode) {
+      return res.status(400).json({ message: "School code is required" });
+    }
+    
+    // Store school context in request object
+    req.schoolContext = { schoolCode };
+    next();
+  } catch (error) {
+    console.error("School context error:", error);
+    res.status(500).json({ message: "Server error in school context" });
+  }
+};
+```
+
+#### API Controllers with Multi-Tenant Support
+Controllers handle data operations with school-specific database connections:
+
+```javascript
+// Example from assignmentController.js
+const createAssignment = async (req, res) => {
+  try {
+    const { title, description, classId, subjectId, dueDate, schoolCode } = req.body;
+    
+    // Get school-specific database connection
+    const school = await School.findOne({ code: schoolCode });
+    if (!school) {
+      return res.status(404).json({ message: "School not found" });
+    }
+    
+    // Get or create school database connection
+    const connection = await DatabaseManager.getConnection(schoolCode);
+    const AssignmentModel = AssignmentMultiTenant.getModelForConnection(connection);
+    
+    // Create record in school-specific database
+    const assignment = new AssignmentModel({
+      title, description, class: classId, subject: subjectId, dueDate
+    });
+    await assignment.save();
+    
+    res.status(201).json(assignment);
+  } catch (error) {
+    console.error("Error creating assignment:", error);
+    res.status(500).json({ message: "Server error creating assignment" });
+  }
+};
+```
+
+### Frontend Implementation
+
+#### Authentication with School Context
+The frontend maintains school context in the authentication state:
+
+```typescript
+// Auth Context Provider
+const AuthProvider: React.FC = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [schoolCode, setSchoolCode] = useState<string | null>(null);
+  
+  const login = async (credentials: LoginCredentials) => {
+    try {
+      const response = await api.post('/auth/login', credentials);
+      const { token, user } = response.data;
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('schoolCode', user.schoolCode);
+      
+      setUser(user);
+      setSchoolCode(user.schoolCode);
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  };
+  
+  // Context value
+  const contextValue = {
+    user,
+    schoolCode,
+    login,
+    logout,
+    // ...other auth methods
+  };
+  
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+```
+
+#### Component Integration with School Context
+Components pass school context in API requests:
+
+```typescript
+// CreateAssignmentModal.tsx example
+const CreateAssignmentModal: React.FC<Props> = ({ isOpen, onClose }) => {
+  const { schoolCode } = useAuth();
+  
+  const handleSubmit = async (values: FormValues) => {
+    try {
+      // Include schoolCode in API request
+      await api.post('/api/assignments', {
+        ...values,
+        schoolCode
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error creating assignment:', error);
+    }
+  };
+  
+  return (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <Form onSubmit={handleSubmit}>
+        {/* Form fields */}
+      </Form>
+    </Modal>
+  );
+};
+```
+
+### Error Handling and Fallback Mechanisms
+
+The system implements robust error handling with fallback mechanisms:
+
+```javascript
+// Fallback to main database if school connection fails
+try {
+  // Try to use school-specific database
+  const schoolConnection = await DatabaseManager.getConnection(schoolCode);
+  const SchoolModel = ModelMultiTenant.getModelForConnection(schoolConnection);
+  return await SchoolModel.find(query);
+} catch (error) {
+  console.error(`Error using school database: ${error.message}`);
+  
+  // Fallback to main database with school filtering
+  return await MainModel.find({ ...query, schoolCode });
+}
+```
+
+### Direct Test Endpoints
+
+For testing and debugging, direct test endpoints bypass authentication:
+
+```javascript
+// server.js - Direct test endpoint example
+if (process.env.NODE_ENV === 'development') {
+  app.post('/test/assignment/create', async (req, res) => {
+    try {
+      const { schoolCode } = req.body;
+      const connection = await DatabaseManager.getConnection(schoolCode);
+      const AssignmentModel = AssignmentMultiTenant.getModelForConnection(connection);
+      
+      const assignment = new AssignmentModel(req.body);
+      await assignment.save();
+      
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error("Test endpoint error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+}
+```

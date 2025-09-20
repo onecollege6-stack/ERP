@@ -80,7 +80,11 @@ class DatabaseManager {
           connectionUri = baseUri.replace(/\/[^\/]*\?/, `/${databaseName}?`);
         } else {
           // Local MongoDB - append database name to base URI
-          connectionUri = `${baseUri.replace(/\/[^\/]*$/, '')}/${databaseName}`;
+          if (baseUri.endsWith('/')) {
+            connectionUri = baseUri + databaseName;
+          } else {
+            connectionUri = baseUri + '/' + databaseName;
+          }
         }
 
         console.log(`🔍 Attempting to connect to database: ${databaseName}`);
@@ -153,26 +157,7 @@ class DatabaseManager {
       }
       
       const collections = [
-        'users',
-        'classes', 
-        'subjects',
-        'timetables',
-        'attendances',
-        'assignments',
-        'submissions',
-        'exams',
-        'results',
-        'messages',
-        'notifications',
-        'admissions',
-        'fees',
-        'library',
-        'transport',
-        'events',
-        'announcements',
-        'audit_logs',
-        'sessions',
-        'id_sequences'
+        'testdetails'  // Only create testdetails collection for school databases
       ];
       
       // Create collections with initial document
@@ -216,105 +201,14 @@ class DatabaseManager {
       
       // Create indexes based on collection type
       const indexMappings = {
-      users: [
-        { email: 1 },
-        { userId: 1 },
-        { role: 1 },
-        { "schoolAccess.status": 1 },
-        { "studentDetails.academic.currentClass": 1, "studentDetails.academic.currentSection": 1 },
-        { "teacherDetails.subjects.subjectCode": 1 },
-        { "identity.aadharNumber": 1 },
-        { "identity.panNumber": 1 },
-        { lastLogin: -1 },
-        { createdAt: -1 },
-        { email: 1, role: 1 },
-        { role: 1, "schoolAccess.status": 1 }
-      ],
-      admissions: [
-        { studentId: 1 },
-        { classId: 1 },
-        { admissionDate: -1 },
-        { status: 1 },
-        { admissionNumber: 1 },
-        { academicYear: 1 },
-        { createdAt: -1 }
-      ],
-      assignments: [
-        { classId: 1 },
-        { subjectId: 1 },
-        { teacherId: 1 },
-        { dueDate: -1 },
-        { status: 1 },
-        { assignmentType: 1 },
-        { academicYear: 1 },
-        { createdAt: -1 }
-      ],
-      attendances: [
-        { studentId: 1 },
-        { classId: 1 },
-        { date: -1 },
-        { status: 1 },
-        { teacherId: 1 },
-        { subjectId: 1 },
-        { "studentId": 1, "date": -1 },
-        { "classId": 1, "date": -1 },
-        { academicYear: 1 },
-        { createdAt: -1 }
-      ],
-      classes: [
-        { className: 1 },
-        { section: 1 },
-        { classTeacherId: 1 },
-        { academicYear: 1 },
-        { status: 1 },
-        { "className": 1, "section": 1, "academicYear": 1 },
-        { createdAt: -1 }
-      ],
-      subjects: [
-        { subjectName: 1 },
-        { subjectCode: 1 },
-        { applicableGrades: 1 },
-        { teacherAssignments: 1 },
-        { status: 1 },
-        { academicYear: 1 },
-        { createdAt: -1 }
-      ],
-      timetables: [
-        { classId: 1 },
-        { dayOfWeek: 1 },
-        { period: 1 },
-        { subjectId: 1 },
-        { teacherId: 1 },
-        { academicYear: 1 },
-        { "classId": 1, "dayOfWeek": 1 },
-        { createdAt: -1 }
-      ],
-      results: [
-        { studentId: 1 },
-        { examId: 1 },
-        { subjectId: 1 },
-        { academicYear: 1 },
-        { classId: 1 },
-        { "studentId": 1, "examId": 1 },
-        { createdAt: -1 }
-      ],
-      messages: [
-        { senderId: 1 },
-        { recipientId: 1 },
-        { messageType: 1 },
-        { sentAt: -1 },
-        { status: 1 },
-        { createdAt: -1 }
-      ],
-      audit_logs: [
-        { userId: 1 },
-        { action: 1 },
-        { timestamp: -1 },
-        { entityType: 1 },
-        { entityId: 1 },
-        { createdAt: -1 }
-      ]
-    };
+        testdetails: [
+          { testType: 1 },
+          { classes: 1 },
+          { createdAt: -1 },
+          { updatedAt: -1 },
+          { status: 1 }
+        ]
+      };
     
     const indexes = indexMappings[collectionName] || [{ createdAt: -1 }];
     
@@ -340,19 +234,7 @@ class DatabaseManager {
     
     const sequences = {
       _id: 'sequences',
-      admin: 0,
-      teacher: 0,
-      student: 0,
-      parent: 0,
-      class: 0,
-      subject: 0,
-      assignment: 0,
-      exam: 0,
-      admission: 0,
-      attendance: 0,
-      timetable: 0,
-      result: 0,
-      message: 0,
+      testdetails: 0,
       schoolCode: schoolCode,
       updated: new Date()
     };
@@ -371,7 +253,7 @@ class DatabaseManager {
    * Get next sequence number for a school
    */
   async getNextSequence(schoolCode, entityType) {
-    const connection = this.getSchoolConnection(schoolCode);
+    const connection = await this.getSchoolConnection(schoolCode);
     await this.ensureConnectionReady(connection);
     const sequenceCollection = connection.db.collection('id_sequences');
 
@@ -420,6 +302,14 @@ class DatabaseManager {
     return doc[entityType];
   }
   
+  /**
+   * Generate test ID for a school
+   */
+  async generateTestId(schoolCode) {
+    const sequence = await this.getNextSequence(schoolCode, 'testdetails');
+    return `${schoolCode}_TEST${String(sequence).padStart(3, '0')}`;
+  }
+
   /**
    * Generate user ID for a school
    */

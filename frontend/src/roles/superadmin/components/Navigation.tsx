@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Plus, LogOut, School, Users, MessageSquare, Clock } from 'lucide-react';
+import { Home, Plus, LogOut, School, Users, MessageSquare, Clock, Award } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export function Navigation() {
@@ -8,6 +8,7 @@ export function Navigation() {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'add-school', label: 'Add New School', icon: Plus },
+    { id: 'academic-test-config', label: 'Test Configuration', icon: Award },
   ];
 
   return (

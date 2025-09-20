@@ -49,7 +49,7 @@ const CreateAssignmentModal: React.FC<CreateAssignmentModalProps> = ({
     'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
   ];
 
-  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
   useEffect(() => {
     if (isOpen && formData.class) {

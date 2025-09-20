@@ -9,6 +9,18 @@ router.post('/create',
   resultController.createOrUpdateResult
 );
 
+// Save results (simple endpoint for Results page)
+router.post('/save', 
+  authMiddleware.auth, 
+  resultController.saveResults
+);
+
+// Get existing results for a class and section
+router.get('/', 
+  authMiddleware.auth, 
+  resultController.getResults
+);
+
 // Get student result history
 router.get('/student/:studentId/history', 
   authMiddleware.auth, 

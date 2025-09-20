@@ -7,6 +7,7 @@ import { ViewAccess } from './components/ViewAccess';
 import { AccountDetails } from './components/AccountDetails';
 import SchoolDetails from './components/SchoolDetails';
 import SchoolEditDetails from './components/SchoolEditDetails';
+import AcademicTestConfiguration from './components/AcademicTestConfiguration';
 import { SchoolLogin } from '../../pages/SchoolLogin';
 
 function AppContent() {
@@ -26,6 +27,8 @@ function AppContent() {
         return <SchoolDetails />;
       case 'edit-school':
         return <SchoolEditDetails />;
+      case 'academic-test-config':
+        return <AcademicTestConfiguration />;
       case 'school-login':
         return (
           <SchoolLogin 

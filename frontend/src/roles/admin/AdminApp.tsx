@@ -7,11 +7,10 @@ import SchoolSettings from './pages/SchoolSettings'
 import AcademicDetails from './pages/AcademicDetails'
 import AcademicDetailsSimple from './pages/AcademicDetailsSimple'
 import MarkAttendance from './pages/MarkAttendance'
-import ViewAttendance from './pages/ViewAttendance'
 import Assignments from './pages/Assignments'
 import Results from './pages/Results'
-import Messages from './pages/Messages'
-import Reports from './pages/Reports'
+import TestComponent from './pages/TestComponent'
+import AcademicResultsEntry from './pages/AcademicResultsEntry'
 import ErrorBoundary from '../../components/ErrorBoundary'
 
 export function AdminApp() {
@@ -29,15 +28,17 @@ export function AdminApp() {
           </ErrorBoundary>
         } />
         <Route path="attendance/mark" element={<MarkAttendance />} />
-        <Route path="attendance/view" element={<ViewAttendance />} />
         <Route path="assignments" element={
           <ErrorBoundary>
             <Assignments />
           </ErrorBoundary>
         } />
         <Route path="results" element={<Results />} />
-        <Route path="messages" element={<Messages />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="results/entry" element={
+          <ErrorBoundary>
+            <AcademicResultsEntry />
+          </ErrorBoundary>
+        } />
         <Route path="*" element={<Navigate to="/admin" />} />
       </Routes>
     </AdminLayout>

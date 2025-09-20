@@ -41,7 +41,7 @@ const Attendance: React.FC = () => {
 
   // Available classes and sections
   const classes = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-  const sections = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
   // Fetch students when class and section are selected
   useEffect(() => {

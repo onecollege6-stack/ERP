@@ -77,7 +77,7 @@ const GradeManagement: React.FC = () => {
     { grade: '12', level: 'higher_secondary', streams: ['Science', 'Commerce', 'Arts'] }
   ];
 
-  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const sections = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
 
   useEffect(() => {
     fetchClasses();

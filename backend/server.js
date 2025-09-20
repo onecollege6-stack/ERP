@@ -33,6 +33,8 @@ const timetableRoutes = require('./routes/timetables');
 const resultRoutes = require('./routes/results');
 const configRoutes = require('./routes/config');
 const testDetailsRoutes = require('./routes/testDetails');
+const superadminAcademicRoutes = require('./routes/superadminAcademic');
+const superadminSubjectRoutes = require('./routes/superadminSubject');
 
 // Serve uploads statically
 app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
@@ -214,6 +216,8 @@ app.use('/api/timetables', timetableRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/test-details', testDetailsRoutes);
+app.use('/api/superadmin/academic', superadminAcademicRoutes);
+app.use('/api/superadmin/subjects', superadminSubjectRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

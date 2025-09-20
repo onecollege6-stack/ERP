@@ -6,6 +6,59 @@ const schoolSchema = new mongoose.Schema({
   logoUrl: { type: String },
   principalName: { type: String },
   principalEmail: { type: String },
+  
+  // Academic settings for school types and configurations
+  academicSettings: {
+    schoolTypes: [{ 
+      type: String, 
+      enum: ['Kindergarten', 'Primary', 'Middle', 'Secondary', 'Higher Secondary', 'K-12'] 
+    }],
+    customGradeNames: { 
+      type: Map, 
+      of: String,
+      default: () => {
+        const map = new Map();
+        map.set('LKG', 'Lower Kindergarten');
+        map.set('UKG', 'Upper Kindergarten');
+        return map;
+      }
+    },
+    gradeLevels: {
+      type: Map,
+      of: new mongoose.Schema({
+        displayName: String,
+        description: String,
+        gradingSystem: {
+          type: { type: String, enum: ['percentage', 'grade', 'gpa'] },
+          passingScore: Number,
+          maxScore: Number
+        }
+      }, { _id: false }),
+      default: () => {
+        const map = new Map();
+        map.set('kindergarten', { 
+          displayName: 'Kindergarten', 
+          description: 'Pre-primary education (LKG-UKG)',
+          gradingSystem: { 
+            type: 'grade', 
+            passingScore: 0, 
+            maxScore: 0 
+          }
+        });
+        map.set('primary', { 
+          displayName: 'Primary', 
+          description: 'Primary education (Classes 1-5)',
+          gradingSystem: { 
+            type: 'percentage', 
+            passingScore: 33, 
+            maxScore: 100 
+          }
+        });
+        return map;
+      }
+    }
+  },
+  
   address: {
     street: String,
     city: String,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Users, UserCheck, BookOpen, MessageSquare, TrendingUp, Calendar, Clock, AlertCircle, Building, Phone, Mail, MapPin, RefreshCw, Bug, LogOut } from 'lucide-react';
+import { Users, UserCheck, BookOpen, TrendingUp, Calendar, Clock, AlertCircle, Building, Phone, Mail, MapPin, RefreshCw, Bug, LogOut } from 'lucide-react';
 import { schoolAPI } from '../../../services/api';
 import { schoolUserAPI } from '../../../api/schoolUsers';
 import { useAuth } from '../../../auth/AuthContext';
@@ -216,7 +216,6 @@ const Dashboard: React.FC = () => {
     { name: 'Total Students', value: school?.stats?.totalStudents?.toString() || '0', icon: Users, color: 'bg-blue-500' },
     { name: 'Attendance Rate', value: '94.2%', icon: UserCheck, color: 'bg-green-500' },
     { name: 'Active Assignments', value: '23', icon: BookOpen, color: 'bg-yellow-500' },
-    { name: 'Messages Today', value: '67', icon: MessageSquare, color: 'bg-purple-500' },
   ];
 
   const attendanceData = [
@@ -539,7 +538,7 @@ const Dashboard: React.FC = () => {
           {/* Quick Actions */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Link to="/admin/users" className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
                 <Users className="h-5 w-5 text-blue-600 mr-2" />
                 <span className="text-sm font-medium text-blue-700">Manage Users</span>
@@ -551,10 +550,6 @@ const Dashboard: React.FC = () => {
               <Link to="/admin/assignments" className="flex items-center justify-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors">
                 <BookOpen className="h-5 w-5 text-yellow-600 mr-2" />
                 <span className="text-sm font-medium text-yellow-700">Assignments</span>
-              </Link>
-              <Link to="/admin/messages" className="flex items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-                <MessageSquare className="h-5 w-5 text-purple-600 mr-2" />
-                <span className="text-sm font-medium text-purple-700">Messages</span>
               </Link>
             </div>
           </div>

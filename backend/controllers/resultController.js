@@ -485,8 +485,147 @@ const generateGradeDistribution = (results) => {
   return distribution;
 };
 
+// Simple save results endpoint for the Results page
+exports.saveResults = async (req, res) => {
+  try {
+    const {
+      schoolCode,
+      class: className,
+      section,
+      testType,
+      maxMarks,
+      academicYear,
+      results
+    } = req.body;
+
+    console.log('💾 Saving results:', { schoolCode, className, section, testType, maxMarks, resultsCount: results?.length });
+
+    if (!schoolCode || !className || !section || !testType || !results || !Array.isArray(results)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: schoolCode, class, section, testType, and results array'
+      });
+    }
+
+    // Get school-specific database connection
+    const DatabaseManager = require('../utils/databaseManager');
+    const schoolConn = await DatabaseManager.getSchoolConnection(schoolCode);
+    const resultsCollection = schoolConn.collection('results');
+
+    // Prepare results data for storage
+    const resultsToSave = results.map((result, index) => ({
+      schoolCode: schoolCode.toUpperCase(),
+      className,
+      section,
+      testType,
+      maxMarks: parseInt(maxMarks),
+      academicYear: academicYear || '2024-25',
+      studentId: result.studentId,
+      studentName: result.studentName,
+      userId: result.userId,
+      obtainedMarks: parseInt(result.obtainedMarks),
+      totalMarks: parseInt(result.totalMarks),
+      grade: result.grade,
+      percentage: result.totalMarks > 0 ? Math.round((result.obtainedMarks / result.totalMarks) * 100 * 100) / 100 : 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdBy: req.user?._id || null
+    }));
+
+    // Insert results into school-specific collection
+    const insertResult = await resultsCollection.insertMany(resultsToSave);
+
+    console.log(`✅ Saved ${insertResult.insertedCount} results to school_${schoolCode.toLowerCase()}.results`);
+
+    res.json({
+      success: true,
+      message: `Successfully saved ${insertResult.insertedCount} results`,
+      data: {
+        schoolCode,
+        className,
+        section,
+        testType,
+        savedCount: insertResult.insertedCount,
+        results: resultsToSave.map(r => ({
+          studentName: r.studentName,
+          userId: r.userId,
+          obtainedMarks: r.obtainedMarks,
+          totalMarks: r.totalMarks,
+          grade: r.grade,
+          percentage: r.percentage
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Error saving results:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error saving results',
+      error: error.message
+    });
+  }
+};
+
+// Get existing results for a class and section
+exports.getResults = async (req, res) => {
+  try {
+    const { schoolCode, class: className, section, testType, academicYear } = req.query;
+
+    console.log('🔍 Fetching results:', { schoolCode, className, section, testType, academicYear });
+
+    if (!schoolCode || !className || !section) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: schoolCode, class, and section'
+      });
+    }
+
+    // Get school-specific database connection
+    const DatabaseManager = require('../utils/databaseManager');
+    const schoolConn = await DatabaseManager.getSchoolConnection(schoolCode);
+    const resultsCollection = schoolConn.collection('results');
+
+    // Build query
+    const query = {
+      schoolCode: schoolCode.toUpperCase(),
+      className,
+      section
+    };
+
+    if (testType) {
+      query.testType = testType;
+    }
+
+    if (academicYear) {
+      query.academicYear = academicYear;
+    }
+
+    // Fetch results from school-specific collection
+    const results = await resultsCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+    console.log(`✅ Found ${results.length} results for ${className}-${section}`);
+
+    res.json({
+      success: true,
+      message: `Found ${results.length} results`,
+      data: results
+    });
+
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching results',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createOrUpdateResult: exports.createOrUpdateResult,
   getStudentResultHistory: exports.getStudentResultHistory,
-  generateClassPerformanceReport: exports.generateClassPerformanceReport
+  generateClassPerformanceReport: exports.generateClassPerformanceReport,
+  saveResults: exports.saveResults,
+  getResults: exports.getResults
 };

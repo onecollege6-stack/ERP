@@ -10,8 +10,6 @@ import {
   UserCheck,
   BookOpen,
   BarChart3,
-  MessageSquare,
-  FileText,
   Bell,
   User,
   LogOut,
@@ -31,14 +29,17 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       name: 'Attendance',
       icon: UserCheck,
       children: [
-        { name: 'Mark Attendance', href: '/admin/attendance/mark' },
-        { name: 'View Attendance', href: '/admin/attendance/view' }
+        { name: 'Mark Attendance', href: '/admin/attendance/mark' }
       ]
     },
     { name: 'Assignments', href: '/admin/assignments', icon: BookOpen },
-    { name: 'Results', href: '/admin/results', icon: BarChart3 },
-    { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
-    { name: 'Reports', href: '/admin/reports', icon: FileText },
+    {
+      name: 'Results',
+      icon: BarChart3,
+      children: [
+        { name: 'View Results', href: '/admin/results' }
+      ]
+    },
   ];
 
   const isActive = (href: string) => location.pathname === href;

@@ -147,6 +147,32 @@ export const attendanceAPI = {
   getStudentAttendanceReport: (params) => api.get('/attendance/student-report', { params }),
 };
 
+// Academic Results APIs
+export const resultsAPI = {
+  // Get students for a specific class and section
+  getStudents: (schoolCode, params) => api.get('/users/role/student', { 
+    params,
+    headers: {
+      'X-School-Code': schoolCode
+    }
+  }),
+  
+  // Save student results for a test
+  saveResults: (resultsData) => api.post('/results/save', resultsData),
+  
+  // Get existing results for a test
+  getResults: (params) => api.get('/results', { params }),
+  
+  // Update a specific result
+  updateResult: (resultId, updateData) => api.put(`/results/${resultId}`, updateData),
+  
+  // Delete a result
+  deleteResult: (resultId) => api.delete(`/results/${resultId}`),
+  
+  // Get results statistics
+  getResultsStats: (params) => api.get('/results/stats', { params }),
+};
+
 // Utility functions
 export const apiUtils = {
   // Handle API errors

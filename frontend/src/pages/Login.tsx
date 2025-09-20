@@ -143,8 +143,8 @@ export default function Login() {
           <div className="grid md:grid-cols-2 gap-10 items-center">
             {/* Left: Brand / Greeting */}
             <div className="space-y-4">
-              <div className="w-20 h-20 rounded-2xl bg-violet-100 flex items-center justify-center text-violet-700 text-4xl">
-                🎓
+              <div className="w-40 h-40 rounded-3xl bg-violet-100 flex items-center justify-center overflow-hidden shadow-lg">
+                <img src="/logo.png" alt="School Logo" className="w-36 h-36 object-contain" />
               </div>
               <h1 className="text-3xl md:text-4xl font-extrabold">
                 <span className="text-slate-800">School </span>

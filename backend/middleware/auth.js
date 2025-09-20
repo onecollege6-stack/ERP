@@ -60,10 +60,32 @@ const auth = async (req, res, next) => {
       const UserGenerator = require('../utils/userGenerator');
       user = await UserGenerator.getUserByIdOrEmail(decoded.schoolCode, userId);
       console.log(`[AUTH DEBUG] Found user:`, user ? { id: user._id, userId: user.userId, name: user.name } : 'null');
+      
+      // For school users, we need to add the schoolId from the School collection
+      if (user) {
+        const School = require('../models/School');
+        const school = await School.findOne({ code: decoded.schoolCode });
+        if (school) {
+          user.schoolId = school._id;
+          user.schoolCode = decoded.schoolCode;
+        } else {
+          console.error('[AUTH ERROR] School not found for code:', decoded.schoolCode);
+          return res.status(401).json({ success: false, message: 'School not found' });
+        }
+      }
     } else {
       // For global users, check the main users collection
       console.log(`[AUTH DEBUG] Looking for user ID: ${userId} in main database`);
       user = await User.findById(userId);
+      
+      // For global users that have a schoolCode, populate schoolId
+      if (user && user.schoolCode) {
+        const School = require('../models/School');
+        const school = await School.findOne({ code: user.schoolCode });
+        if (school) {
+          user.schoolId = school._id;
+        }
+      }
     }
     
     if (!user) {

@@ -31,6 +31,22 @@ router.put(
   testDetailsController.updateSchoolTestDetails
 );
 
+// Add test type to a specific class for a school (superadmin)
+router.post(
+  '/school/:schoolCode/class/:className/test-type',
+  setMainDbContext,
+  requireSuperAdmin,
+  testDetailsController.addTestTypeToClass
+);
+
+// Remove test type from a specific class for a school (superadmin)
+router.delete(
+  '/school/:schoolCode/class/:className/test-type/:testCode',
+  setMainDbContext,
+  requireSuperAdmin,
+  testDetailsController.removeTestTypeFromClass
+);
+
 // Routes for admin/teacher access (school-specific)
 router.use(setSchoolContext);
 
