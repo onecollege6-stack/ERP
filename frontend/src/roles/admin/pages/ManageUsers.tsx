@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, Download, Filter, UserCheck, UserX, Eye, Lock, Unlock, Building, RotateCcw } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Download, Upload, Filter, UserCheck, UserX, Eye, Lock, Unlock, Building, RotateCcw, FileText, AlertTriangle, Check } from 'lucide-react';
 import { schoolUserAPI } from '../../../api/schoolUsers';
+import { exportImportAPI } from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
 
@@ -35,185 +36,376 @@ interface User {
 }
 
 interface AddUserFormData {
-  // Generated Information
-  userId: string;
-  generatedPassword: string;
+  // Core Fields
+  role: 'admin' | 'teacher' | 'student';
   
-  // Basic Information
-  role: 'student' | 'teacher' | 'admin';
-  email: string;
-  
-  // Name Information
+  // Enhanced Name Structure (matching backend)
   firstName: string;
+  middleName?: string;
   lastName: string;
   
-  // Contact Information
-  primaryPhone: string;
-  address: string;
-  
-  // Student-specific fields
-  class: string;
-  section: string;
-  rollNumber: string;
-  admissionDate: string;
-  
-  // Teacher-specific fields
-  subjects: string;
-  employeeId: string;
-  qualification: string;
-  experience: number;
-  
-  // Personal Information
-  gender: 'male' | 'female' | 'other';
-  dateOfBirth: string;
-  nationality: string;
-  
-  // Family Information (Student)
-  fatherName: string;
-  motherName: string;
-  
-  // Family Information (Teacher)
-  spouseName: string;
-  
-  // Additional form fields that exist but may not be used in backend
-  mediumOfInstruction: string;
-  motherTongue: string;
-  motherTongueOther: string;
-  
-  // Student Details (SATS Standard)
-  name: string; // Student Name (English) - mandatory
-  studentNameKannada: string; // Student Name (Kannada)
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string; // mandatory
-  ageYears: number;
-  ageMonths: number;
-  gender: 'male' | 'female' | 'other'; // mandatory
-  
-  // Family Details (SATS Standard)
-  fatherName: string; // Father Name (English) - mandatory
-  fatherNameKannada: string; // Father Name (Kannada)
-  fatherAadhaar: string; // Father Aadhaar No - 12 digits
-  motherName: string; // Mother Name (English) - mandatory
-  motherNameKannada: string; // Mother Name (Kannada)
-  motherAadhaar: string; // Mother Aadhaar No - 12 digits
-  
-  // Identity Documents (SATS Standard)
-  studentAadhaar: string; // Aadhaar/KPR No - 12 digits
-  studentCasteCertNo: string; // Student Caste Certificate No
-  fatherCasteCertNo: string; // Father Caste Certificate No
-  motherCasteCertNo: string; // Mother Caste Certificate No
-  
-  // Caste and Category (SATS Standard)
-  studentCaste: string; // Student Caste
-  studentCasteOther: string; // Student Caste Other Details
-  fatherCaste: string; // Father Caste
-  fatherCasteOther: string; // Father Caste Other Details
-  motherCaste: string; // Mother Caste
-  motherCasteOther: string; // Mother Caste Other Details
-  socialCategory: string; // General/SC/ST/OBC etc
-  socialCategoryOther: string; // Social Category Other Details
-  religion: string; // Hindu/Muslim/Christian etc
-  religionOther: string; // Religion Other Details
-  specialCategory: string; // None/Destitute/Orphan/HIV case etc
-  specialCategoryOther: string; // Special Category Other Details
-  
-  // Economic Status (SATS Standard)
-  belongingToBPL: string; // Yes/No
-  bplCardNo: string; // BPL Card No
-  bhagyalakshmiBondNo: string; // Bhagyalakshmi Bond No
-  
-  // Special Needs (SATS Standard)
-  disability: string; // Not Applicable or select condition
-  disabilityOther: string; // Disability Other Details
-  
-  // Address Information (SATS Standard)
-  address: string; // mandatory
-  cityVillageTown: string; // City/Village/Town - mandatory
-  locality: string; // Locality
-  taluka: string; // Taluka/Taluk - mandatory
-  district: string; // District - mandatory
-  pinCode: string; // Pin Code - 6 digits, mandatory
-  state: string;
-  
-  // Communication Details (SATS Standard)
-  studentMobile: string; // Student Mobile No - 10 digits
-  studentEmail: string; // Student Email ID
-  fatherMobile: string; // Father Mobile No - 10 digits
-  fatherEmail: string; // Father Email ID
-  motherMobile: string; // Mother Mobile No - 10 digits
-  motherEmail: string; // Mother Email ID
-  
-  // School and Banking (SATS Standard)
-  schoolAdmissionDate: string; // School Admission Date
-  bankName: string; // Bank Name
-  bankAccountNo: string; // Bank Account No
-  bankIFSC: string; // Bank IFSC Code - 11 character format
-  
-  // Legacy Compatibility Fields
+  // Basic Contact (legacy compatibility)
   email: string;
   phone: string;
-  city: string;
-  nationality: string;
-  bloodGroup?: string;
   
-  // Family Information (Legacy)
-  fatherPhone: string;
-  fatherOccupation: string;
-  motherPhone: string;
-  motherOccupation: string;
+  // Enhanced Contact Information (matching backend)
+  primaryPhone: string;
+  secondaryPhone?: string;
+  whatsappNumber?: string;
+  emergencyContactName?: string;
+  emergencyContactRelation?: string;
+  emergencyContactPhone?: string;
+  
+  // Enhanced Address Information (matching backend)
+  permanentStreet: string;
+  permanentArea?: string;
+  permanentCity: string;
+  permanentState: string;
+  permanentCountry: string;
+  permanentPincode: string;
+  permanentLandmark?: string;
+  
+  currentStreet?: string;
+  currentArea?: string;
+  currentCity?: string;
+  currentState?: string;
+  currentCountry?: string;
+  currentPincode?: string;
+  currentLandmark?: string;
+  sameAsPermanent: boolean;
+  
+  // Identity Information (matching backend)
+  aadharNumber?: string;
+  panNumber?: string;
+  voterIdNumber?: string;
+  drivingLicenseNumber?: string;
+  passportNumber?: string;
+  
+  // Student Specific Fields (comprehensive Karnataka SATS)
+  studentDetails?: {
+    // Academic Information
+    currentClass: string;
+    currentSection: string;
+    academicYear: string;
+    admissionDate?: string;
+    admissionClass?: string;
+    rollNumber?: string;
+    admissionNumber?: string;
+    enrollmentNo?: string;
+    tcNo?: string;
+    
+    // Previous School
+    previousSchoolName?: string;
+    previousBoard?: string;
+    lastClass?: string;
+    tcNumber?: string;
+    tcDate?: string;
+    reasonForTransfer?: string;
+    
+    // Personal Information - Karnataka SATS
+    dateOfBirth: string;
+    placeOfBirth?: string;
+    gender: string;
+    bloodGroup?: string;
+    nationality: string;
+    religion?: string;
+    religionOther?: string;
+    caste?: string;
+    casteOther?: string;
+    category?: string;
+    categoryOther?: string;
+    motherTongue?: string;
+    motherTongueOther?: string;
+    
+    // Karnataka SATS Specific
+    studentNameKannada?: string;
+    ageYears: number;
+    ageMonths: number;
+    socialCategory?: string;
+    socialCategoryOther?: string;
+    studentCaste?: string;
+    studentCasteOther?: string;
+    studentAadhaar?: string;
+    studentCasteCertNo?: string;
+    specialCategory?: string;
+    specialCategoryOther?: string;
+    
+    // Economic Status
+    belongingToBPL: string;
+    bplCardNo?: string;
+    bhagyalakshmiBondNo?: string;
+    
+    // Special Needs
+    disability: string;
+    disabilityOther?: string;
+    
+    // RTE (Right to Education) Status
+    isRTECandidate: string;
+    
+    // Family Information - Father
+    fatherName: string;
+    fatherNameKannada?: string;
+    fatherOccupation?: string;
+    fatherQualification?: string;
+    fatherPhone?: string;
+    fatherEmail?: string;
+    fatherAadhaar?: string;
+    fatherCaste?: string;
+    fatherCasteOther?: string;
+    fatherCasteCertNo?: string;
+    fatherWorkAddress?: string;
+    fatherAnnualIncome?: number;
+    
+    // Family Information - Mother
+    motherName: string;
+    motherNameKannada?: string;
+    motherOccupation?: string;
+    motherQualification?: string;
+    motherPhone?: string;
+    motherEmail?: string;
+    motherAadhaar?: string;
+    motherCaste?: string;
+    motherCasteOther?: string;
+    motherCasteCertNo?: string;
+    motherWorkAddress?: string;
+    motherAnnualIncome?: number;
+    
+    // Guardian Information
+    guardianName?: string;
+    guardianRelationship?: string;
+    guardianPhone?: string;
+    guardianEmail?: string;
+    guardianAddress?: string;
+    isEmergencyContact?: boolean;
+    
+    // Transportation
+    transportMode?: string;
+    busRoute?: string;
+    pickupPoint?: string;
+    dropPoint?: string;
+    pickupTime?: string;
+    dropTime?: string;
+    
+    // Financial Information
+    feeCategory?: string;
+    concessionType?: string;
+    concessionPercentage?: number;
+    scholarshipName?: string;
+    scholarshipAmount?: number;
+    scholarshipProvider?: string;
+    
+    // Banking Information
+    bankName?: string;
+    bankAccountNo?: string;
+    bankIFSC?: string;
+    bankAccountHolderName?: string;
+    
+    // Medical Information
+    allergies?: string[];
+    chronicConditions?: string[];
+    medications?: string[];
+    doctorName?: string;
+    hospitalName?: string;
+    doctorPhone?: string;
+    lastMedicalCheckup?: string;
+  };
+  
+  // Teacher Specific Fields (comprehensive)
+  teacherDetails?: {
+    employeeId?: string;
+    joiningDate?: string;
+    
+    // Qualification
+    highestQualification: string;
+    specialization?: string;
+    university?: string;
+    graduationYear?: number;
+    
+    // Experience
+    totalExperience: number;
+    experienceAtCurrentSchool?: number;
+    
+    // Previous Experience
+    previousSchools?: Array<{
+      schoolName: string;
+      duration: string;
+      position: string;
+      reasonForLeaving?: string;
+    }>;
+    
+    // Subjects and Responsibilities
+    subjects: string[];
+    primarySubjects?: string[];
+    classTeacherOf?: string;
+    responsibilities?: string[];
+    department?: string;
+    
+    // Work Schedule
+    workingDays?: string[];
+    workingHoursStart?: string;
+    workingHoursEnd?: string;
+    maxPeriodsPerDay?: number;
+    maxPeriodsPerWeek?: number;
+    
+    // Salary Information
+    basicSalary?: number;
+    allowances?: Array<{
+      type: string;
+      amount: number;
+    }>;
+    
+    // Banking Information
+    bankAccountNumber?: string;
+    bankIFSC?: string;
+    bankName?: string;
+    bankBranchName?: string;
+  };
+  
+  // Admin Specific Fields (comprehensive)
+  adminDetails?: {
+    adminType: string;
+    employeeId?: string;
+    joiningDate?: string;
+    designation?: string;
+    department?: string;
+    
+    // Permissions
+    userManagement: boolean;
+    academicManagement: boolean;
+    feeManagement: boolean;
+    reportGeneration: boolean;
+    systemSettings: boolean;
+    schoolSettings: boolean;
+    dataExport: boolean;
+    auditLogs: boolean;
+    
+    // Work Schedule
+    workingDays?: string[];
+    workingHoursStart?: string;
+    workingHoursEnd?: string;
+    
+    // Salary Information
+    basicSalary?: number;
+    allowances?: Array<{
+      type: string;
+      amount: number;
+    }>;
+    
+    // Banking Information
+    bankAccountNumber?: string;
+    bankIFSC?: string;
+    bankName?: string;
+    bankBranchName?: string;
+    bankAccountHolderName?: string;
+  };
+  
+  // Legacy Compatibility Fields (for backward compatibility and existing forms)
+  name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  fatherName?: string;
+  motherName?: string;
+  class?: string;
+  section?: string;
+  rollNumber?: string;
+  qualification?: string;
+  experience?: string;
+  subjects?: string[];
+  adminLevel?: string;
+  accessLevel?: string;
+  
+  // Generated Information
+  userId?: string;
+  generatedPassword?: string;
+  
+  // Additional SATS fields for backward compatibility
+  studentNameKannada?: string;
+  ageYears?: number;
+  ageMonths?: number;
+  socialCategory?: string;
+  socialCategoryOther?: string;
+  studentCaste?: string;
+  studentCasteOther?: string;
+  studentAadhaar?: string;
+  studentCasteCertNo?: string;
+  fatherNameKannada?: string;
+  fatherAadhaar?: string;
+  fatherCaste?: string;
+  fatherCasteOther?: string;
+  fatherCasteCertNo?: string;
+  motherNameKannada?: string;
+  motherAadhaar?: string;
+  motherCaste?: string;
+  motherCasteOther?: string;
+  motherCasteCertNo?: string;
+  religion?: string;
+  religionOther?: string;
+  specialCategory?: string;
+  specialCategoryOther?: string;
+  belongingToBPL?: string;
+  bplCardNo?: string;
+  bhagyalakshmiBondNo?: string;
+  disability?: string;
+  disabilityOther?: string;
+  cityVillageTown?: string;
+  locality?: string;
+  taluka?: string;
+  district?: string;
+  pinCode?: string;
+  studentMobile?: string;
+  studentEmail?: string;
+  fatherMobile?: string;
+  fatherEmail?: string;
+  motherMobile?: string;
+  motherEmail?: string;
+  schoolAdmissionDate?: string;
+  bankName?: string;
+  bankAccountNo?: string;
+  bankIFSC?: string;
+  nationality?: string;
+  bloodGroup?: string;
+  fatherPhone?: string;
+  fatherOccupation?: string;
+  motherPhone?: string;
+  motherOccupation?: string;
   guardianName?: string;
   guardianRelation?: string;
   fatherEducation?: string;
   motherEducation?: string;
   familyIncome?: string;
-  
-  // Emergency Contact
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  emergencyContactRelation: string;
   alternatePhone?: string;
   parentEmail?: string;
-  
-  // Academic Information (Legacy)
-  rollNumber?: string;
   admissionNumber?: string;
   admissionDate?: string;
   previousSchool?: string;
   previousClass?: string;
   tcNumber?: string;
   migrationCertificate?: string;
-  
-  // Legacy Identity Documents
   aadhaarNumber?: string;
   birthCertificateNumber?: string;
   rationCardNumber?: string;
-  voterIdNumber?: string;
-  passportNumber?: string;
-  
-  // Legacy Caste and Category
   caste?: string;
   casteOther?: string;
   category?: string;
   categoryOther?: string;
   subCaste?: string;
-  
-  // Economic Status (Legacy)
   economicStatus?: string;
   bplCardNumber?: string;
   scholarshipDetails?: string;
-  
-  // Special Needs (Legacy) 
   specialNeeds?: string;
   disabilityType?: string;
   disabilityCertificate?: string;
   medicalConditions?: string;
-  
-  // Address Information (Additional)
   permanentAddress?: string;
   currentAddress?: string;
   village?: string;
-  
+  motherTongue?: string;
+  motherTongueOther?: string;
+  mediumOfInstruction?: string;
+  spouseName?: string;
 }
 
 const ManageUsers: React.FC = () => {
@@ -296,19 +488,204 @@ const ManageUsers: React.FC = () => {
     const errors: string[] = [];
 
     // Common required fields
-    if (!formData.firstName || formData.firstName.trim() === '') errors.push('First name is required');
-    if (!formData.lastName || formData.lastName.trim() === '') errors.push('Last name is required');
-    if (!formData.email || !formData.email.includes('@')) errors.push('A valid email is required');
-    if (!formData.phone || formData.phone.replace(/\D/g, '').length < 10) errors.push('A valid 10-digit phone number is required');
-    if (!formData.dateOfBirth) errors.push('Date of birth is required');
-    if (!formData.gender) errors.push('Gender is required');
-    if (!formData.address || formData.address.trim() === '') errors.push('Address is required');
+    if (!formData.firstName || formData.firstName.trim() === '') {
+      errors.push('First name is required');
+    }
+    if (!formData.lastName || formData.lastName.trim() === '') {
+      errors.push('Last name is required');
+    }
+    if (!formData.email || !formData.email.includes('@')) {
+      errors.push('A valid email is required');
+    }
+    
+    // Phone validation - check both primaryPhone and legacy phone field
+    const phoneToValidate = formData.primaryPhone || formData.phone;
+    if (!phoneToValidate || phoneToValidate.replace(/\D/g, '').length < 10) {
+      errors.push('A valid 10-digit phone number is required');
+    }
+    
+    // Address validation - check both new structure and legacy fields
+    const streetToValidate = formData.permanentStreet || formData.address;
+    const cityToValidate = formData.permanentCity || formData.city;
+    const stateToValidate = formData.permanentState || formData.state;
+    const pincodeToValidate = formData.permanentPincode || formData.pinCode;
+    
+    if (!streetToValidate || streetToValidate.trim() === '') {
+      errors.push('Address/Street is required');
+    }
+    if (!cityToValidate || cityToValidate.trim() === '') {
+      errors.push('City is required');
+    }
+    if (!stateToValidate || stateToValidate.trim() === '') {
+      errors.push('State is required');
+    }
+    if (!pincodeToValidate || !/^\d{6}$/.test(pincodeToValidate)) {
+      errors.push('A valid 6-digit PIN code is required');
+    }
 
-    // Role-specific checks
+    // Role-specific validation
     if (formData.role === 'student') {
-      if (!formData.class || formData.class === '') errors.push('Class selection is required for students');
-      if (!formData.fatherName || formData.fatherName.trim() === '') errors.push("Father's name is required for students");
-      if (!formData.motherName || formData.motherName.trim() === '') errors.push("Mother's name is required for students");
+      // Check nested studentDetails or fallback to legacy fields
+      const studentDetails = formData.studentDetails;
+      
+      // Academic Information
+      const classValue = studentDetails?.currentClass || formData.class;
+      const sectionValue = studentDetails?.currentSection || formData.section;
+      const dobValue = studentDetails?.dateOfBirth || formData.dateOfBirth;
+      const genderValue = studentDetails?.gender || formData.gender;
+      
+      if (!classValue || classValue === '') {
+        errors.push('Class selection is required for students');
+      }
+      if (!sectionValue || sectionValue === '') {
+        errors.push('Section selection is required for students');
+      }
+      if (!dobValue) {
+        errors.push('Date of birth is required for students');
+      }
+      if (!genderValue) {
+        errors.push('Gender is required for students');
+      }
+      
+      // Family Information - Karnataka SATS Standards
+      const fatherName = studentDetails?.fatherName || formData.fatherName;
+      const motherName = studentDetails?.motherName || formData.motherName;
+      
+      if (!fatherName || fatherName.trim() === '') {
+        errors.push("Father's name is required for students");
+      }
+      if (!motherName || motherName.trim() === '') {
+        errors.push("Mother's name is required for students");
+      }
+      
+      // Karnataka SATS Specific Validations
+      const ageYears = studentDetails?.ageYears || formData.ageYears;
+      const socialCategory = studentDetails?.socialCategory || formData.socialCategory;
+      const belongingToBPL = studentDetails?.belongingToBPL || formData.belongingToBPL;
+      const disability = studentDetails?.disability || formData.disability;
+      
+      if (ageYears && (ageYears < 3 || ageYears > 25)) {
+        errors.push('Student age must be between 3 and 25 years');
+      }
+      
+      // Aadhaar validation for Karnataka SATS
+      const studentAadhaar = studentDetails?.studentAadhaar || formData.studentAadhaar;
+      const fatherAadhaar = studentDetails?.fatherAadhaar || formData.fatherAadhaar;
+      const motherAadhaar = studentDetails?.motherAadhaar || formData.motherAadhaar;
+      
+      if (studentAadhaar && !/^\d{12}$/.test(studentAadhaar)) {
+        errors.push('Student Aadhaar number must be 12 digits');
+      }
+      if (fatherAadhaar && !/^\d{12}$/.test(fatherAadhaar)) {
+        errors.push('Father Aadhaar number must be 12 digits');
+      }
+      if (motherAadhaar && !/^\d{12}$/.test(motherAadhaar)) {
+        errors.push('Mother Aadhaar number must be 12 digits');
+      }
+      
+      // Phone number validation for family
+      const fatherPhone = studentDetails?.fatherPhone || formData.fatherPhone || formData.fatherMobile;
+      const motherPhone = studentDetails?.motherPhone || formData.motherPhone || formData.motherMobile;
+      
+      if (fatherPhone && !/^[6-9]\d{9}$/.test(fatherPhone)) {
+        errors.push('Father phone number must be a valid 10-digit mobile number');
+      }
+      if (motherPhone && !/^[6-9]\d{9}$/.test(motherPhone)) {
+        errors.push('Mother phone number must be a valid 10-digit mobile number');
+      }
+      
+      // IFSC Code validation for banking
+      const bankIFSC = studentDetails?.bankIFSC || formData.bankIFSC;
+      if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
+        errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
+      }
+      
+    } else if (formData.role === 'teacher') {
+      // Teacher-specific validation
+      const teacherDetails = formData.teacherDetails;
+      
+      const qualification = teacherDetails?.highestQualification || formData.qualification;
+      const experience = teacherDetails?.totalExperience || Number(formData.experience);
+      const subjects = teacherDetails?.subjects || (typeof formData.subjects === 'string' ? formData.subjects.split(',') : formData.subjects);
+      
+      if (!qualification || qualification.trim() === '') {
+        errors.push('Highest qualification is required for teachers');
+      }
+      if (experience === undefined || experience < 0) {
+        errors.push('Total experience is required for teachers (minimum 0 years)');
+      }
+      if (!subjects || subjects.length === 0 || (Array.isArray(subjects) && subjects.filter(s => s.trim()).length === 0)) {
+        errors.push('At least one subject is required for teachers');
+      }
+      
+      // Employee ID validation if provided
+      const employeeId = teacherDetails?.employeeId || formData.employeeId;
+      if (employeeId && employeeId.trim() === '') {
+        errors.push('Employee ID cannot be empty if provided');
+      }
+      
+      // IFSC validation for teacher banking
+      const bankIFSC = teacherDetails?.bankIFSC || formData.bankIFSC;
+      if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
+        errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
+      }
+      
+    } else if (formData.role === 'admin') {
+      // Admin-specific validation
+      const adminDetails = formData.adminDetails;
+      
+      const adminType = adminDetails?.adminType || formData.adminLevel;
+      const designation = adminDetails?.designation || '';
+      
+      if (!adminType || adminType.trim() === '') {
+        errors.push('Admin type/level is required for administrators');
+      }
+      
+      // Employee ID validation if provided
+      const employeeId = adminDetails?.employeeId || formData.employeeId;
+      if (employeeId && employeeId.trim() === '') {
+        errors.push('Employee ID cannot be empty if provided');
+      }
+      
+      // At least one permission should be granted
+      if (adminDetails) {
+        const hasAnyPermission = Object.values({
+          userManagement: adminDetails.userManagement,
+          academicManagement: adminDetails.academicManagement,
+          feeManagement: adminDetails.feeManagement,
+          reportGeneration: adminDetails.reportGeneration,
+          systemSettings: adminDetails.systemSettings,
+          schoolSettings: adminDetails.schoolSettings,
+          dataExport: adminDetails.dataExport,
+          auditLogs: adminDetails.auditLogs
+        }).some(permission => permission === true);
+        
+        if (!hasAnyPermission) {
+          errors.push('At least one permission must be granted to admin users');
+        }
+      }
+      
+      // IFSC validation for admin banking
+      const bankIFSC = adminDetails?.bankIFSC || formData.bankIFSC;
+      if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
+        errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
+      }
+    }
+    
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.email && !emailRegex.test(formData.email)) {
+      errors.push('Please enter a valid email address');
+    }
+    
+    // PAN validation if provided
+    if (formData.panNumber && !/^[A-Z]{5}\d{4}[A-Z]$/.test(formData.panNumber)) {
+      errors.push('PAN number must be in valid format (e.g., ABCDE1234F)');
+    }
+    
+    // Aadhaar validation for identity section
+    if (formData.aadharNumber && !/^\d{12}$/.test(formData.aadharNumber)) {
+      errors.push('Aadhaar number must be 12 digits');
     }
 
     return errors;
@@ -317,7 +694,10 @@ const ManageUsers: React.FC = () => {
   // Function to handle role change and auto-generate password and ID
   const handleRoleChange = async (role: 'student' | 'teacher' | 'admin') => {
     console.log(`🔄 Role changed to: ${role}`);
-    const password = generatePassword();
+    
+    // For students, don't generate password until DOB is entered
+    // For other roles, generate random password
+    const password = role === 'student' ? '' : generatePassword();
     
     // Auto-fetch next ID for the selected role
     setFormData(prev => ({
@@ -346,11 +726,61 @@ const ManageUsers: React.FC = () => {
       toast.error(`Role set to ${role.charAt(0).toUpperCase() + role.slice(1)}, but failed to fetch ID. Please try again.`);
     }
   };
+
+  // Function to handle DOB change and auto-generate password for students
+  const handleDOBChange = (dob: string) => {
+    setFormData(prev => {
+      const newFormData = { ...prev, dateOfBirth: dob };
+      
+      // Auto-generate DOB-based password for students in DDMMYYYY format
+      if (prev.role === 'student' && dob) {
+        // Always parse the date to ensure DDMMYYYY format
+        const date = new Date(dob);
+        if (!isNaN(date.getTime())) {
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          newFormData.generatedPassword = `${day}${month}${year}`;
+        }
+      }
+      
+      return newFormData;
+    });
+  };
+
+  // Enhanced DOB change handler that also updates studentDetails
+  const handleDOBChangeWithStudentDetails = (dob: string) => {
+    setFormData(prev => {
+      const newFormData = {
+        ...prev, 
+        dateOfBirth: dob,
+        studentDetails: {
+          ...prev.studentDetails,
+          dateOfBirth: dob
+        }
+      };
+      
+      // Auto-generate DOB-based password for students in DDMMYYYY format
+      if (prev.role === 'student' && dob) {
+        // Always parse the date to ensure DDMMYYYY format
+        const date = new Date(dob);
+        if (!isNaN(date.getTime())) {
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          newFormData.generatedPassword = `${day}${month}${year}`;
+        }
+      }
+      
+      return newFormData;
+    });
+  };
   const [users, setUsers] = useState<User[]>([]);
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
+
   const [showCredentials, setShowCredentials] = useState<{userId: string, password: string, email: string, role: string} | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -365,102 +795,337 @@ const ManageUsers: React.FC = () => {
   // New state for hierarchical student display
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'table' | 'hierarchy'>('table');
+  
+  // Import functionality state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{
+    success: Array<{userId: string, email: string, password: string, role: string}>,
+    errors: Array<{row: number, error: string, data: any}>
+  } | null>(null);
+  
   const [formData, setFormData] = useState<AddUserFormData>({
+    // Core Fields
+    role: 'student',
+    
+    // Enhanced Name Structure (matching backend)
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    
+    // Basic Contact (legacy compatibility)
+    email: '',
+    phone: '',
+    
+    // Enhanced Contact Information (matching backend)
+    primaryPhone: '',
+    secondaryPhone: '',
+    whatsappNumber: '',
+    emergencyContactName: '',
+    emergencyContactRelation: '',
+    emergencyContactPhone: '',
+    
+    // Enhanced Address Information (matching backend)
+    permanentStreet: '',
+    permanentArea: '',
+    permanentCity: '',
+    permanentState: 'Karnataka',
+    permanentCountry: 'India',
+    permanentPincode: '',
+    permanentLandmark: '',
+    
+    currentStreet: '',
+    currentArea: '',
+    currentCity: '',
+    currentState: 'Karnataka',
+    currentCountry: 'India',
+    currentPincode: '',
+    currentLandmark: '',
+    sameAsPermanent: true,
+    
+    // Identity Information (matching backend)
+    aadharNumber: '',
+    panNumber: '',
+    voterIdNumber: '',
+    drivingLicenseNumber: '',
+    passportNumber: '',
+    
+    // Student Specific Fields (comprehensive Karnataka SATS)
+    studentDetails: {
+      // Academic Information
+      currentClass: '',
+      currentSection: '',
+      academicYear: '2024-25',
+      admissionDate: '',
+      admissionClass: '',
+      rollNumber: '',
+      admissionNumber: '',
+      enrollmentNo: '',
+      tcNo: '',
+      
+      // Previous School
+      previousSchoolName: '',
+      previousBoard: '',
+      lastClass: '',
+      tcNumber: '',
+      tcDate: '',
+      reasonForTransfer: '',
+      
+      // Personal Information - Karnataka SATS
+      dateOfBirth: '',
+      placeOfBirth: '',
+      gender: 'male',
+      bloodGroup: '',
+      nationality: 'Indian',
+      religion: '',
+      religionOther: '',
+      caste: '',
+      casteOther: '',
+      category: '',
+      categoryOther: '',
+      motherTongue: '',
+      motherTongueOther: '',
+      
+      // Karnataka SATS Specific
+      studentNameKannada: '',
+      ageYears: 0,
+      ageMonths: 0,
+      socialCategory: '',
+      socialCategoryOther: '',
+      studentCaste: '',
+      studentCasteOther: '',
+      studentAadhaar: '',
+      studentCasteCertNo: '',
+      specialCategory: '',
+      specialCategoryOther: '',
+      
+      // Economic Status
+      belongingToBPL: 'No',
+      bplCardNo: '',
+      bhagyalakshmiBondNo: '',
+      
+      // Special Needs
+      disability: 'Not Applicable',
+      disabilityOther: '',
+      isRTECandidate: 'No',
+      
+      // Family Information - Father
+      fatherName: '',
+      fatherNameKannada: '',
+      fatherOccupation: '',
+      fatherQualification: '',
+      fatherPhone: '',
+      fatherEmail: '',
+      fatherAadhaar: '',
+      fatherCaste: '',
+      fatherCasteOther: '',
+      fatherCasteCertNo: '',
+      fatherWorkAddress: '',
+      fatherAnnualIncome: 0,
+      
+      // Family Information - Mother
+      motherName: '',
+      motherNameKannada: '',
+      motherOccupation: '',
+      motherQualification: '',
+      motherPhone: '',
+      motherEmail: '',
+      motherAadhaar: '',
+      motherCaste: '',
+      motherCasteOther: '',
+      motherCasteCertNo: '',
+      motherWorkAddress: '',
+      motherAnnualIncome: 0,
+      
+      // Guardian Information
+      guardianName: '',
+      guardianRelationship: '',
+      guardianPhone: '',
+      guardianEmail: '',
+      guardianAddress: '',
+      isEmergencyContact: false,
+      
+      // Transportation
+      transportMode: '',
+      busRoute: '',
+      pickupPoint: '',
+      dropPoint: '',
+      pickupTime: '',
+      dropTime: '',
+      
+      // Financial Information
+      feeCategory: '',
+      concessionType: '',
+      concessionPercentage: 0,
+      scholarshipName: '',
+      scholarshipAmount: 0,
+      scholarshipProvider: '',
+      
+      // Banking Information
+      bankName: '',
+      bankAccountNo: '',
+      bankIFSC: '',
+      bankAccountHolderName: '',
+      
+      // Medical Information
+      allergies: [],
+      chronicConditions: [],
+      medications: [],
+      doctorName: '',
+      hospitalName: '',
+      doctorPhone: '',
+      lastMedicalCheckup: '',
+    },
+    
+    // Teacher Specific Fields (comprehensive)
+    teacherDetails: {
+      employeeId: '',
+      joiningDate: '',
+      
+      // Qualification
+      highestQualification: '',
+      specialization: '',
+      university: '',
+      graduationYear: 0,
+      
+      // Experience
+      totalExperience: 0,
+      experienceAtCurrentSchool: 0,
+      
+      // Previous Experience
+      previousSchools: [],
+      
+      // Subjects and Responsibilities
+      subjects: [],
+      primarySubjects: [],
+      classTeacherOf: '',
+      responsibilities: [],
+      department: '',
+      
+      // Work Schedule
+      workingDays: [],
+      workingHoursStart: '',
+      workingHoursEnd: '',
+      maxPeriodsPerDay: 0,
+      maxPeriodsPerWeek: 0,
+      
+      // Salary Information
+      basicSalary: 0,
+      allowances: [],
+      
+      // Banking Information
+      bankAccountNumber: '',
+      bankIFSC: '',
+      bankName: '',
+      bankBranchName: '',
+    },
+    
+    // Admin Specific Fields (comprehensive)
+    adminDetails: {
+      adminType: '',
+      employeeId: '',
+      joiningDate: '',
+      designation: '',
+      department: '',
+      
+      // Permissions
+      userManagement: false,
+      academicManagement: false,
+      feeManagement: false,
+      reportGeneration: false,
+      systemSettings: false,
+      schoolSettings: false,
+      dataExport: false,
+      auditLogs: false,
+      
+      // Work Schedule
+      workingDays: [],
+      workingHoursStart: '',
+      workingHoursEnd: '',
+      
+      // Salary Information
+      basicSalary: 0,
+      allowances: [],
+      
+      // Banking Information
+      bankAccountNumber: '',
+      bankIFSC: '',
+      bankName: '',
+      bankBranchName: '',
+      bankAccountHolderName: '',
+    },
+    
+    // Legacy Compatibility Fields (for backward compatibility)
+    name: '',
+    address: '',
+    city: '',
+    state: 'Karnataka',
+    dateOfBirth: '',
+    gender: 'male',
+    fatherName: '',
+    motherName: '',
+    class: '',
+    section: '',
+    rollNumber: '',
+    qualification: '',
+    experience: '',
+    subjects: [],
+    adminLevel: '',
+    accessLevel: '',
+    
     // Generated Information
     userId: '',
     generatedPassword: '',
     
-    // Basic Information (SATS Standard)
-    enrollmentNo: '',
-    tcNo: '',
-    role: 'student',
-    
-    // Admission Details (SATS Standard)
-    class: '',
-    academicYear: '2024-2025',
-    section: '',
-    mediumOfInstruction: 'English',
-    motherTongue: '',
-    motherTongueOther: '',
-    
-    // Student Details (SATS Standard)
-    name: '', // Student Name (English) - mandatory
-    studentNameKannada: '', // Student Name (Kannada)
-    firstName: '',
-    lastName: '',
-    dateOfBirth: '', // mandatory
+    // Additional SATS fields for backward compatibility
+    studentNameKannada: '',
     ageYears: 0,
     ageMonths: 0,
-    gender: 'male', // mandatory
-    
-    // Family Details (SATS Standard)
-    fatherName: '', // Father Name (English) - mandatory
-    fatherNameKannada: '', // Father Name (Kannada)
-    fatherAadhaar: '', // Father Aadhaar No - 12 digits
-    motherName: '', // Mother Name (English) - mandatory
-    motherNameKannada: '', // Mother Name (Kannada)
-    motherAadhaar: '', // Mother Aadhaar No - 12 digits
-    
-    // Identity Documents (SATS Standard)
-    studentAadhaar: '', // Aadhaar/KPR No - 12 digits
-    studentCasteCertNo: '', // Student Caste Certificate No
-    fatherCasteCertNo: '', // Father Caste Certificate No
-    motherCasteCertNo: '', // Mother Caste Certificate No
-    
-    // Caste and Category (SATS Standard)
-    studentCaste: '', // Student Caste
-    studentCasteOther: '',
-    fatherCaste: '', // Father Caste
-    fatherCasteOther: '',
-    motherCaste: '', // Mother Caste
-    motherCasteOther: '',
-    socialCategory: '', // General/SC/ST/OBC etc
+    socialCategory: '',
     socialCategoryOther: '',
-    religion: '', // Hindu/Muslim/Christian etc
+    studentCaste: '',
+    studentCasteOther: '',
+    studentAadhaar: '',
+    studentCasteCertNo: '',
+    fatherNameKannada: '',
+    fatherAadhaar: '',
+    fatherCaste: '',
+    fatherCasteOther: '',
+    fatherCasteCertNo: '',
+    motherNameKannada: '',
+    motherAadhaar: '',
+    motherCaste: '',
+    motherCasteOther: '',
+    motherCasteCertNo: '',
+    religion: '',
     religionOther: '',
-    specialCategory: '', // None/Destitute/Orphan/HIV case etc
+    specialCategory: '',
     specialCategoryOther: '',
-    
-    // Economic Status (SATS Standard)
-    belongingToBPL: 'No', // Yes/No
-    bplCardNo: '', // BPL Card No
-    bhagyalakshmiBondNo: '', // Bhagyalakshmi Bond No
-    
-    // Special Needs (SATS Standard)
-    disability: 'Not Applicable', // Not Applicable or select condition
+    belongingToBPL: 'No',
+    bplCardNo: '',
+    bhagyalakshmiBondNo: '',
+    disability: 'Not Applicable',
     disabilityOther: '',
-    
-    // Address Information (SATS Standard)
-    address: '', // mandatory
-    cityVillageTown: '', // City/Village/Town - mandatory
-    locality: '', // Locality
-    taluka: '', // Taluka/Taluk - mandatory
-    district: '', // District - mandatory
-    pinCode: '', // Pin Code - 6 digits, mandatory
-    state: '',
-    
-    // Communication Details (SATS Standard)
-    studentMobile: '', // Student Mobile No - 10 digits
-    studentEmail: '', // Student Email ID
-    fatherMobile: '', // Father Mobile No - 10 digits
-    fatherEmail: '', // Father Email ID
-    motherMobile: '', // Mother Mobile No - 10 digits
-    motherEmail: '', // Mother Email ID
-    
-    // School and Banking (SATS Standard)
-    schoolAdmissionDate: '', // School Admission Date
-    bankName: '', // Bank Name
-    bankAccountNo: '', // Bank Account No
-    bankIFSC: '', // Bank IFSC Code - 11 character format
-    
-    // Legacy Compatibility Fields
-    email: '',
-    phone: '',
-    city: '',
+    cityVillageTown: '',
+    locality: '',
+    taluka: '',
+    district: '',
+    pinCode: '',
+    studentMobile: '',
+    studentEmail: '',
+    fatherMobile: '',
+    fatherEmail: '',
+    motherMobile: '',
+    motherEmail: '',
+    schoolAdmissionDate: '',
+    bankName: '',
+    bankAccountNo: '',
+    bankIFSC: '',
     nationality: 'Indian',
     bloodGroup: '',
-    
-    // Family Information (Legacy)
     fatherPhone: '',
     fatherOccupation: '',
     motherPhone: '',
@@ -470,168 +1135,358 @@ const ManageUsers: React.FC = () => {
     fatherEducation: '',
     motherEducation: '',
     familyIncome: '',
-    
-    // Emergency Contact
-    emergencyContactName: '',
-    emergencyContactPhone: '',
-    emergencyContactRelation: '',
     alternatePhone: '',
     parentEmail: '',
-    
-    // Academic Information (Legacy)
-    rollNumber: '',
     admissionNumber: '',
     admissionDate: '',
     previousSchool: '',
     previousClass: '',
     tcNumber: '',
     migrationCertificate: '',
-    
-    // Legacy Identity Documents
     aadhaarNumber: '',
     birthCertificateNumber: '',
     rationCardNumber: '',
-    voterIdNumber: '',
-    passportNumber: '',
-    
-    // Legacy Caste and Category
     caste: '',
     casteOther: '',
     category: '',
     categoryOther: '',
     subCaste: '',
-    
-    // Economic Status (Legacy)
     economicStatus: '',
     bplCardNumber: '',
     scholarshipDetails: '',
-    
-    // Special Needs (Legacy)
     specialNeeds: '',
     disabilityType: '',
     disabilityCertificate: '',
     medicalConditions: '',
-    
-    // Address Information (Additional)
     permanentAddress: '',
     currentAddress: '',
     village: '',
-    
-    // Banking Information (Legacy)
-    bankAccountNumber: '',
-    ifscCode: '',
-    accountHolderName: '',
-    
-    // Teacher Information
-    employeeId: '',
-    subjects: '',
-    qualification: '',
-    experience: 0,
-    joiningDate: '',
-    department: '',
-    
-    // Admin Information
-    adminLevel: '',
-    accessLevel: ''
+    motherTongue: '',
+    motherTongueOther: '',
+    mediumOfInstruction: '',
+    spouseName: '',
   });
 
   const resetForm = () => {
     setFormData({
+      // Core Fields
+      role: 'student',
+      
+      // Enhanced Name Structure (matching backend)
+      firstName: '',
+      middleName: '',
+      lastName: '',
+      
+      // Basic Contact (legacy compatibility)
+      email: '',
+      phone: '',
+      
+      // Enhanced Contact Information (matching backend)
+      primaryPhone: '',
+      secondaryPhone: '',
+      whatsappNumber: '',
+      emergencyContactName: '',
+      emergencyContactRelation: '',
+      emergencyContactPhone: '',
+      
+      // Enhanced Address Information (matching backend)
+      permanentStreet: '',
+      permanentArea: '',
+      permanentCity: '',
+      permanentState: '',
+      permanentCountry: 'India',
+      permanentPincode: '',
+      permanentLandmark: '',
+      
+      currentStreet: '',
+      currentArea: '',
+      currentCity: '',
+      currentState: '',
+      currentCountry: 'India',
+      currentPincode: '',
+      currentLandmark: '',
+      sameAsPermanent: true,
+      
+      // Identity Information (matching backend)
+      aadharNumber: '',
+      panNumber: '',
+      voterIdNumber: '',
+      drivingLicenseNumber: '',
+      passportNumber: '',
+      
+      // Student Specific Fields (comprehensive Karnataka SATS)
+      studentDetails: {
+        // Academic Information
+        currentClass: '',
+        currentSection: '',
+        academicYear: '2024-25',
+        admissionDate: '',
+        admissionClass: '',
+        rollNumber: '',
+        admissionNumber: '',
+        enrollmentNo: '',
+        tcNo: '',
+        
+        // Previous School
+        previousSchoolName: '',
+        previousBoard: '',
+        lastClass: '',
+        tcNumber: '',
+        tcDate: '',
+        reasonForTransfer: '',
+        
+        // Personal Information - Karnataka SATS
+        dateOfBirth: '',
+        placeOfBirth: '',
+        gender: 'male',
+        bloodGroup: '',
+        nationality: 'Indian',
+        religion: '',
+        religionOther: '',
+        caste: '',
+        casteOther: '',
+        category: '',
+        categoryOther: '',
+        motherTongue: '',
+        motherTongueOther: '',
+        
+        // Karnataka SATS Specific
+        studentNameKannada: '',
+        ageYears: 0,
+        ageMonths: 0,
+        socialCategory: '',
+        socialCategoryOther: '',
+        studentCaste: '',
+        studentCasteOther: '',
+        studentAadhaar: '',
+        studentCasteCertNo: '',
+        specialCategory: '',
+        specialCategoryOther: '',
+        
+        // Economic Status
+        belongingToBPL: 'No',
+        bplCardNo: '',
+        bhagyalakshmiBondNo: '',
+        
+        // Special Needs
+        disability: 'Not Applicable',
+        disabilityOther: '',
+        isRTECandidate: 'No',
+        
+        // Family Information - Father
+        fatherName: '',
+        fatherNameKannada: '',
+        fatherOccupation: '',
+        fatherQualification: '',
+        fatherPhone: '',
+        fatherEmail: '',
+        fatherAadhaar: '',
+        fatherCaste: '',
+        fatherCasteOther: '',
+        fatherCasteCertNo: '',
+        fatherWorkAddress: '',
+        fatherAnnualIncome: 0,
+        
+        // Family Information - Mother
+        motherName: '',
+        motherNameKannada: '',
+        motherOccupation: '',
+        motherQualification: '',
+        motherPhone: '',
+        motherEmail: '',
+        motherAadhaar: '',
+        motherCaste: '',
+        motherCasteOther: '',
+        motherCasteCertNo: '',
+        motherWorkAddress: '',
+        motherAnnualIncome: 0,
+        
+        // Guardian Information
+        guardianName: '',
+        guardianRelationship: '',
+        guardianPhone: '',
+        guardianEmail: '',
+        guardianAddress: '',
+        isEmergencyContact: false,
+        
+        // Transportation
+        transportMode: '',
+        busRoute: '',
+        pickupPoint: '',
+        dropPoint: '',
+        pickupTime: '',
+        dropTime: '',
+        
+        // Financial Information
+        feeCategory: '',
+        concessionType: '',
+        concessionPercentage: 0,
+        scholarshipName: '',
+        scholarshipAmount: 0,
+        scholarshipProvider: '',
+        
+        // Banking Information
+        bankName: '',
+        bankAccountNo: '',
+        bankIFSC: '',
+        bankAccountHolderName: '',
+        
+        // Medical Information
+        allergies: [],
+        chronicConditions: [],
+        medications: [],
+        doctorName: '',
+        hospitalName: '',
+        doctorPhone: '',
+        lastMedicalCheckup: '',
+      },
+      
+      // Teacher Specific Fields (comprehensive)
+      teacherDetails: {
+        employeeId: '',
+        joiningDate: '',
+        
+        // Qualification
+        highestQualification: '',
+        specialization: '',
+        university: '',
+        graduationYear: 0,
+        
+        // Experience
+        totalExperience: 0,
+        experienceAtCurrentSchool: 0,
+        
+        // Previous Experience
+        previousSchools: [],
+        
+        // Subjects and Responsibilities
+        subjects: [],
+        primarySubjects: [],
+        classTeacherOf: '',
+        responsibilities: [],
+        department: '',
+        
+        // Work Schedule
+        workingDays: [],
+        workingHoursStart: '',
+        workingHoursEnd: '',
+        maxPeriodsPerDay: 0,
+        maxPeriodsPerWeek: 0,
+        
+        // Salary Information
+        basicSalary: 0,
+        allowances: [],
+        
+        // Banking Information
+        bankAccountNumber: '',
+        bankIFSC: '',
+        bankName: '',
+        bankBranchName: '',
+      },
+      
+      // Admin Specific Fields (comprehensive)
+      adminDetails: {
+        adminType: '',
+        employeeId: '',
+        joiningDate: '',
+        designation: '',
+        department: '',
+        
+        // Permissions
+        userManagement: false,
+        academicManagement: false,
+        feeManagement: false,
+        reportGeneration: false,
+        systemSettings: false,
+        schoolSettings: false,
+        dataExport: false,
+        auditLogs: false,
+        
+        // Work Schedule
+        workingDays: [],
+        workingHoursStart: '',
+        workingHoursEnd: '',
+        
+        // Salary Information
+        basicSalary: 0,
+        allowances: [],
+        
+        // Banking Information
+        bankAccountNumber: '',
+        bankIFSC: '',
+        bankName: '',
+        bankBranchName: '',
+        bankAccountHolderName: '',
+      },
+      
+      // Legacy Compatibility Fields (for backward compatibility)
+      name: '',
+      address: '',
+      city: '',
+      state: '',
+      dateOfBirth: '',
+      gender: 'male',
+      fatherName: '',
+      motherName: '',
+      class: '',
+      section: '',
+      rollNumber: '',
+      qualification: '',
+      experience: '',
+      subjects: [],
+      adminLevel: '',
+      accessLevel: '',
+      
       // Generated Information
       userId: '',
       generatedPassword: '',
       
-      // Basic Information (SATS Standard)
-      enrollmentNo: '',
-      tcNo: '',
-      role: 'student',
-      
-      // Admission Details (SATS Standard)
-      class: '',
-      academicYear: '2024-2025',
-      section: '',
-      mediumOfInstruction: 'English',
-      motherTongue: '',
-      motherTongueOther: '',
-      
-      // Student Details (SATS Standard)
-      name: '',
+      // Additional SATS fields for backward compatibility
       studentNameKannada: '',
-      firstName: '',
-      lastName: '',
-      dateOfBirth: '',
       ageYears: 0,
       ageMonths: 0,
-      gender: 'male',
-      
-      // Family Details (SATS Standard)
-      fatherName: '',
-      fatherNameKannada: '',
-      fatherAadhaar: '',
-      motherName: '',
-      motherNameKannada: '',
-      motherAadhaar: '',
-      
-      // Identity Documents (SATS Standard)
-      studentAadhaar: '',
-      studentCasteCertNo: '',
-      fatherCasteCertNo: '',
-      motherCasteCertNo: '',
-      
-      // Caste and Category (SATS Standard)
-      studentCaste: '',
-      studentCasteOther: '',
-      fatherCaste: '',
-      fatherCasteOther: '',
-      motherCaste: '',
-      motherCasteOther: '',
       socialCategory: '',
       socialCategoryOther: '',
+      studentCaste: '',
+      studentCasteOther: '',
+      studentAadhaar: '',
+      studentCasteCertNo: '',
+      fatherNameKannada: '',
+      fatherAadhaar: '',
+      fatherCaste: '',
+      fatherCasteOther: '',
+      fatherCasteCertNo: '',
+      motherNameKannada: '',
+      motherAadhaar: '',
+      motherCaste: '',
+      motherCasteOther: '',
+      motherCasteCertNo: '',
       religion: '',
       religionOther: '',
       specialCategory: '',
       specialCategoryOther: '',
-      
-      // Economic Status (SATS Standard)
       belongingToBPL: 'No',
       bplCardNo: '',
       bhagyalakshmiBondNo: '',
-      
-      // Special Needs (SATS Standard)
       disability: 'Not Applicable',
       disabilityOther: '',
-      
-      // Address Information (SATS Standard)
-      address: '',
       cityVillageTown: '',
       locality: '',
       taluka: '',
       district: '',
       pinCode: '',
-      state: '',
-      
-      // Communication Details (SATS Standard)
       studentMobile: '',
       studentEmail: '',
       fatherMobile: '',
       fatherEmail: '',
       motherMobile: '',
       motherEmail: '',
-      
-      // School and Banking (SATS Standard)
       schoolAdmissionDate: '',
       bankName: '',
       bankAccountNo: '',
       bankIFSC: '',
-      
-      // Legacy Compatibility Fields
-      email: '',
-      phone: '',
-      city: '',
       nationality: 'Indian',
       bloodGroup: '',
-      
-      // Family Information (Legacy)
       fatherPhone: '',
       fatherOccupation: '',
       motherPhone: '',
@@ -641,69 +1496,36 @@ const ManageUsers: React.FC = () => {
       fatherEducation: '',
       motherEducation: '',
       familyIncome: '',
-      
-      // Emergency Contact
-      emergencyContactName: '',
-      emergencyContactPhone: '',
-      emergencyContactRelation: '',
       alternatePhone: '',
       parentEmail: '',
-      
-      // Academic Information (Legacy)
-      rollNumber: '',
       admissionNumber: '',
       admissionDate: '',
       previousSchool: '',
       previousClass: '',
       tcNumber: '',
       migrationCertificate: '',
-      
-      // Legacy Identity Documents
       aadhaarNumber: '',
       birthCertificateNumber: '',
       rationCardNumber: '',
-      voterIdNumber: '',
-      passportNumber: '',
-      
-      // Legacy Caste and Category
       caste: '',
       casteOther: '',
       category: '',
       categoryOther: '',
       subCaste: '',
-      
-      // Economic Status (Legacy)
       economicStatus: '',
       bplCardNumber: '',
       scholarshipDetails: '',
-      
-      // Special Needs (Legacy)
       specialNeeds: '',
       disabilityType: '',
       disabilityCertificate: '',
       medicalConditions: '',
-      
-      // Address Information (Additional)
       permanentAddress: '',
       currentAddress: '',
       village: '',
-      
-      // Banking Information (Legacy)
-      bankAccountNumber: '',
-      ifscCode: '',
-      accountHolderName: '',
-      
-      // Teacher Information
-      employeeId: '',
-      subjects: '',
-      qualification: '',
-      experience: 0,
-      joiningDate: '',
-      department: '',
-      
-      // Admin Information
-      adminLevel: '',
-      accessLevel: ''
+      motherTongue: '',
+      motherTongueOther: '',
+      mediumOfInstruction: '',
+      spouseName: '',
     });
   };
 
@@ -1130,7 +1952,6 @@ const ManageUsers: React.FC = () => {
       const clientErrors = validateFormBeforeSubmit();
       if (clientErrors.length > 0) {
         clientErrors.slice(0, 3).forEach(err => toast.error(err));
-        // ensure default Enter does not trigger generation of next ID
         return;
       }
 
@@ -1146,43 +1967,6 @@ const ManageUsers: React.FC = () => {
         return;
       }
       
-      // Build request data based on role
-      const userData: any = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        role: formData.role,
-        address: formData.address
-      };
-
-      // Add role-specific fields
-      if (formData.role === 'student') {
-        userData.studentDetails = {
-          class: formData.class,
-          section: formData.section,
-          rollNumber: formData.rollNumber,
-          dateOfBirth: formData.dateOfBirth,
-          gender: formData.gender,
-          fatherName: formData.fatherName,
-          motherName: formData.motherName
-        };
-      } else if (formData.role === 'teacher') {
-        userData.teacherDetails = {
-          qualification: formData.qualification,
-          experience: formData.experience,
-          subjects: formData.subjects,
-          department: formData.department,
-          employeeId: formData.employeeId
-        };
-      } else if (formData.role === 'admin') {
-        userData.adminDetails = {
-          adminLevel: formData.adminLevel,
-          department: formData.department,
-          employeeId: formData.employeeId,
-          accessLevel: formData.accessLevel
-        };
-      }
-
       // Use the same token retrieval method as Dashboard
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
@@ -1193,142 +1977,365 @@ const ManageUsers: React.FC = () => {
         return;
       }
 
-      // Build request data based on role
-      const newUserData: any = {
-        userId: formData.userId,
-        password: formData.generatedPassword,
+      // Generate password based on role
+      const generatedPassword = formData.role === 'student' && formData.dateOfBirth 
+        ? (() => {
+            const dobDate = new Date(formData.dateOfBirth);
+            return `${dobDate.getDate().toString().padStart(2, '0')}${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${dobDate.getFullYear()}`;
+          })()
+        : formData.generatedPassword || 'defaultPassword123';
+
+      // Build comprehensive request data based on backend User model structure
+      const userData: any = {
+        // Core Fields (Backend Required - Flat Structure)
+        role: formData.role,
+        email: formData.email,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        role: formData.role,
-        address: formData.address
+        phone: formData.primaryPhone || formData.phone,
+        password: generatedPassword,
+        
+        // Additional flat fields that might be expected
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        address: formData.address,
+        city: formData.cityVillageTown || formData.city,
+        state: formData.state,
+        pinCode: formData.pinCode,
+        
+        // Enhanced Name Structure (matching backend)
+        name: {
+          firstName: formData.firstName,
+          middleName: formData.middleName || '',
+          lastName: formData.lastName,
+          displayName: `${formData.firstName} ${formData.lastName}`.trim()
+        },
+        
+        // Basic Contact
+        temporaryPassword: generatedPassword,
+        passwordChangeRequired: true,
+        
+        // Enhanced Contact Information (matching backend)
+        contact: {
+          primaryPhone: formData.primaryPhone || formData.phone,
+          secondaryPhone: formData.secondaryPhone || '',
+          whatsappNumber: formData.whatsappNumber || '',
+          emergencyContact: {
+            name: formData.emergencyContactName || '',
+            relationship: formData.emergencyContactRelation || '',
+            phone: formData.emergencyContactPhone || ''
+          }
+        },
+        
+        // Enhanced Address Information (matching backend)
+        addressDetails: {
+          permanent: {
+            street: formData.permanentStreet || formData.address || '',
+            area: formData.permanentArea || '',
+            city: formData.permanentCity || formData.city || '',
+            state: formData.permanentState || formData.state || '',
+            country: formData.permanentCountry || 'India',
+            pincode: formData.permanentPincode || formData.pinCode || '',
+            landmark: formData.permanentLandmark || ''
+          },
+          current: {
+            street: formData.sameAsPermanent ? (formData.permanentStreet || formData.address || '') : (formData.currentStreet || ''),
+            area: formData.sameAsPermanent ? (formData.permanentArea || '') : (formData.currentArea || ''),
+            city: formData.sameAsPermanent ? (formData.permanentCity || formData.city || '') : (formData.currentCity || ''),
+            state: formData.sameAsPermanent ? (formData.permanentState || formData.state || '') : (formData.currentState || ''),
+            country: formData.sameAsPermanent ? (formData.permanentCountry || 'India') : (formData.currentCountry || 'India'),
+            pincode: formData.sameAsPermanent ? (formData.permanentPincode || formData.pinCode || '') : (formData.currentPincode || ''),
+            landmark: formData.sameAsPermanent ? (formData.permanentLandmark || '') : (formData.currentLandmark || ''),
+            sameAsPermanent: formData.sameAsPermanent
+          }
+        },
+        
+        // Identity Information (matching backend)
+        identity: {
+          aadharNumber: formData.aadharNumber || formData.studentAadhaar || formData.aadhaarNumber || '',
+          panNumber: formData.panNumber || '',
+          voterIdNumber: formData.voterIdNumber || '',
+          drivingLicenseNumber: formData.drivingLicenseNumber || '',
+          passportNumber: formData.passportNumber || ''
+        },
+        
+        // System Fields
+        isActive: true,
+        isVerified: false,
+        schoolCode: schoolCode,
+        schoolAccess: {
+          joinedDate: new Date(),
+          status: 'active',
+          accessLevel: 'standard'
+        }
       };
 
-      // Add role-specific fields
+      // Add role-specific fields based on comprehensive backend structure
       if (formData.role === 'student') {
-        // Basic Academic Information
-        newUserData.class = formData.class;
-        newUserData.section = formData.section;
-        newUserData.rollNumber = formData.rollNumber;
-        newUserData.dateOfBirth = formData.dateOfBirth;
-        newUserData.gender = formData.gender;
-        
-        // Karnataka SATS Fields - Admission Details
-        newUserData.motherTongue = formData.motherTongue;
-        newUserData.motherTongueOther = formData.motherTongueOther;
-        
-        // Karnataka SATS Fields - Family Details
-        newUserData.fatherName = formData.fatherName;
-        newUserData.motherName = formData.motherName;
-        newUserData.guardianName = formData.guardianName;
-        newUserData.guardianRelation = formData.guardianRelation;
-        newUserData.fatherOccupation = formData.fatherOccupation;
-        newUserData.motherOccupation = formData.motherOccupation;
-        newUserData.fatherEducation = formData.fatherEducation;
-        newUserData.motherEducation = formData.motherEducation;
-        newUserData.familyIncome = formData.familyIncome;
-        
-        // Karnataka SATS Fields - Caste and Category
-        newUserData.studentCaste = formData.studentCaste;
-        newUserData.studentCasteOther = formData.studentCasteOther;
-        newUserData.fatherCaste = formData.fatherCaste;
-        newUserData.fatherCasteOther = formData.fatherCasteOther;
-        newUserData.motherCaste = formData.motherCaste;
-        newUserData.motherCasteOther = formData.motherCasteOther;
-        newUserData.socialCategory = formData.socialCategory;
-        newUserData.socialCategoryOther = formData.socialCategoryOther;
-        newUserData.religion = formData.religion;
-        newUserData.religionOther = formData.religionOther;
-        newUserData.specialCategory = formData.specialCategory;
-        newUserData.specialCategoryOther = formData.specialCategoryOther;
-        
-        // Karnataka SATS Fields - Special Needs
-        newUserData.disability = formData.disability;
-        newUserData.disabilityOther = formData.disabilityOther;
-        
-        // Admission Details
-        newUserData.admissionDate = formData.admissionDate;
-        newUserData.admissionNumber = formData.admissionNumber;
-        newUserData.previousSchool = formData.previousSchool;
-        newUserData.previousClass = formData.previousClass;
-        newUserData.tcNumber = formData.tcNumber;
-        newUserData.migrationCertificate = formData.migrationCertificate;
-        
-        // Identity Documents
-        newUserData.aadhaarNumber = formData.aadhaarNumber;
-        newUserData.birthCertificateNumber = formData.birthCertificateNumber;
-        newUserData.rationCardNumber = formData.rationCardNumber;
-        newUserData.voterIdNumber = formData.voterIdNumber;
-        newUserData.passportNumber = formData.passportNumber;
-        
-        // Caste and Category
-        newUserData.caste = formData.caste;
-        newUserData.category = formData.category;
-        newUserData.subCaste = formData.subCaste;
-        newUserData.religion = formData.religion;
-        
-        // Economic Status
-        newUserData.economicStatus = formData.economicStatus;
-        newUserData.bplCardNumber = formData.bplCardNumber;
-        newUserData.scholarshipDetails = formData.scholarshipDetails;
-        
-        // Special Needs
-        newUserData.specialNeeds = formData.specialNeeds;
-        newUserData.disabilityType = formData.disabilityType;
-        newUserData.disabilityCertificate = formData.disabilityCertificate;
-        newUserData.medicalConditions = formData.medicalConditions;
-        
-        // Address Information
-        newUserData.permanentAddress = formData.permanentAddress;
-        newUserData.currentAddress = formData.currentAddress;
-        newUserData.pinCode = formData.pinCode;
-        newUserData.district = formData.district;
-        newUserData.state = formData.state;
-        newUserData.taluka = formData.taluka;
-        newUserData.village = formData.village;
-        
-        // Communication
-        newUserData.emergencyContactPhone = formData.emergencyContactPhone;
-        newUserData.alternatePhone = formData.alternatePhone;
-        newUserData.parentEmail = formData.parentEmail;
-        
-        // Banking Information
-        newUserData.bankAccountNumber = formData.bankAccountNumber;
-        newUserData.bankName = formData.bankName;
-        newUserData.ifscCode = formData.ifscCode;
-        newUserData.accountHolderName = formData.accountHolderName;
+        userData.studentDetails = {
+          // Academic Information - Karnataka SATS Standard
+          academic: {
+            currentClass: formData.studentDetails?.currentClass || formData.class || '',
+            currentSection: formData.studentDetails?.currentSection || formData.section || '',
+            academicYear: formData.studentDetails?.academicYear || '2024-25',
+            admissionDate: formData.studentDetails?.admissionDate ? new Date(formData.studentDetails.admissionDate) : undefined,
+            admissionClass: formData.studentDetails?.admissionClass || '',
+            rollNumber: formData.studentDetails?.rollNumber || formData.rollNumber || '',
+            admissionNumber: formData.studentDetails?.admissionNumber || formData.admissionNumber || '',
+            enrollmentNo: formData.studentDetails?.enrollmentNo || '',
+            tcNo: formData.studentDetails?.tcNo || '',
+            
+            previousSchool: {
+              name: formData.studentDetails?.previousSchoolName || formData.previousSchool || '',
+              board: formData.studentDetails?.previousBoard || '',
+              lastClass: formData.studentDetails?.lastClass || formData.previousClass || '',
+              tcNumber: formData.studentDetails?.tcNumber || formData.tcNumber || '',
+              tcDate: formData.studentDetails?.tcDate ? new Date(formData.studentDetails.tcDate) : undefined,
+              reasonForTransfer: formData.studentDetails?.reasonForTransfer || ''
+            }
+          },
+          
+          // Personal Information - Karnataka SATS Standard
+          personal: {
+            dateOfBirth: formData.studentDetails?.dateOfBirth ? new Date(formData.studentDetails.dateOfBirth) : 
+                           (formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined),
+            placeOfBirth: formData.studentDetails?.placeOfBirth || '',
+            gender: formData.studentDetails?.gender || formData.gender || 'male',
+            bloodGroup: formData.studentDetails?.bloodGroup || formData.bloodGroup || '',
+            nationality: formData.studentDetails?.nationality || formData.nationality || 'Indian',
+            religion: formData.studentDetails?.religion || formData.religion || '',
+            religionOther: formData.studentDetails?.religionOther || formData.religionOther || '',
+            caste: formData.studentDetails?.caste || formData.caste || '',
+            casteOther: formData.studentDetails?.casteOther || formData.casteOther || '',
+            category: formData.studentDetails?.category || formData.category || '',
+            categoryOther: formData.studentDetails?.categoryOther || formData.categoryOther || '',
+            motherTongue: formData.studentDetails?.motherTongue || formData.motherTongue || '',
+            motherTongueOther: formData.studentDetails?.motherTongueOther || formData.motherTongueOther || '',
+            
+            // Karnataka SATS Specific Fields
+            studentNameKannada: formData.studentDetails?.studentNameKannada || formData.studentNameKannada || '',
+            ageYears: formData.studentDetails?.ageYears || formData.ageYears || 0,
+            ageMonths: formData.studentDetails?.ageMonths || formData.ageMonths || 0,
+            socialCategory: formData.studentDetails?.socialCategory || formData.socialCategory || '',
+            socialCategoryOther: formData.studentDetails?.socialCategoryOther || formData.socialCategoryOther || '',
+            studentCaste: formData.studentDetails?.studentCaste || formData.studentCaste || '',
+            studentCasteOther: formData.studentDetails?.studentCasteOther || formData.studentCasteOther || '',
+            studentAadhaar: formData.studentDetails?.studentAadhaar || formData.studentAadhaar || '',
+            studentCasteCertNo: formData.studentDetails?.studentCasteCertNo || formData.studentCasteCertNo || '',
+            specialCategory: formData.studentDetails?.specialCategory || formData.specialCategory || '',
+            specialCategoryOther: formData.studentDetails?.specialCategoryOther || formData.specialCategoryOther || '',
+            
+            // Economic Status
+            belongingToBPL: formData.studentDetails?.belongingToBPL || formData.belongingToBPL || 'No',
+            bplCardNo: formData.studentDetails?.bplCardNo || formData.bplCardNo || '',
+            bhagyalakshmiBondNo: formData.studentDetails?.bhagyalakshmiBondNo || formData.bhagyalakshmiBondNo || '',
+            
+            // Special Needs
+            disability: formData.studentDetails?.disability || formData.disability || 'Not Applicable',
+            disabilityOther: formData.studentDetails?.disabilityOther || formData.disabilityOther || '',
+            isRTECandidate: formData.studentDetails?.isRTECandidate || formData.isRTECandidate || 'No'
+          },
+          
+          // Family Information - Karnataka SATS Standard
+          family: {
+            father: {
+              name: formData.studentDetails?.fatherName || formData.fatherName || '',
+              nameKannada: formData.studentDetails?.fatherNameKannada || formData.fatherNameKannada || '',
+              occupation: formData.studentDetails?.fatherOccupation || formData.fatherOccupation || '',
+              qualification: formData.studentDetails?.fatherQualification || formData.fatherEducation || '',
+              phone: formData.studentDetails?.fatherPhone || formData.fatherPhone || formData.fatherMobile || '',
+              email: formData.studentDetails?.fatherEmail || formData.fatherEmail || '',
+              aadhaar: formData.studentDetails?.fatherAadhaar || formData.fatherAadhaar || '',
+              caste: formData.studentDetails?.fatherCaste || formData.fatherCaste || '',
+              casteOther: formData.studentDetails?.fatherCasteOther || formData.fatherCasteOther || '',
+              casteCertNo: formData.studentDetails?.fatherCasteCertNo || formData.fatherCasteCertNo || '',
+              workAddress: formData.studentDetails?.fatherWorkAddress || '',
+              annualIncome: formData.studentDetails?.fatherAnnualIncome || 0
+            },
+            mother: {
+              name: formData.studentDetails?.motherName || formData.motherName || '',
+              nameKannada: formData.studentDetails?.motherNameKannada || formData.motherNameKannada || '',
+              occupation: formData.studentDetails?.motherOccupation || formData.motherOccupation || '',
+              qualification: formData.studentDetails?.motherQualification || formData.motherEducation || '',
+              phone: formData.studentDetails?.motherPhone || formData.motherPhone || formData.motherMobile || '',
+              email: formData.studentDetails?.motherEmail || formData.motherEmail || '',
+              aadhaar: formData.studentDetails?.motherAadhaar || formData.motherAadhaar || '',
+              caste: formData.studentDetails?.motherCaste || formData.motherCaste || '',
+              casteOther: formData.studentDetails?.motherCasteOther || formData.motherCasteOther || '',
+              casteCertNo: formData.studentDetails?.motherCasteCertNo || formData.motherCasteCertNo || '',
+              workAddress: formData.studentDetails?.motherWorkAddress || '',
+              annualIncome: formData.studentDetails?.motherAnnualIncome || 0
+            },
+            guardian: formData.studentDetails?.guardianName ? {
+              name: formData.studentDetails.guardianName,
+              relationship: formData.studentDetails.guardianRelationship || formData.guardianRelation || '',
+              phone: formData.studentDetails.guardianPhone || '',
+              email: formData.studentDetails.guardianEmail || '',
+              address: formData.studentDetails.guardianAddress || '',
+              isEmergencyContact: formData.studentDetails.isEmergencyContact || false
+            } : undefined
+          },
+          
+          // Transportation
+          transport: {
+            mode: formData.studentDetails?.transportMode || '',
+            busRoute: formData.studentDetails?.busRoute || '',
+            pickupPoint: formData.studentDetails?.pickupPoint || '',
+            dropPoint: formData.studentDetails?.dropPoint || '',
+            pickupTime: formData.studentDetails?.pickupTime || '',
+            dropTime: formData.studentDetails?.dropTime || ''
+          },
+          
+          // Financial Information - Karnataka SATS Standard
+          financial: {
+            feeCategory: formData.studentDetails?.feeCategory || '',
+            concessionType: formData.studentDetails?.concessionType || '',
+            concessionPercentage: formData.studentDetails?.concessionPercentage || 0,
+            scholarshipDetails: formData.studentDetails?.scholarshipName ? {
+              name: formData.studentDetails.scholarshipName,
+              amount: formData.studentDetails.scholarshipAmount || 0,
+              provider: formData.studentDetails.scholarshipProvider || ''
+            } : undefined,
+            
+            // Karnataka SATS Banking Information
+            bankDetails: {
+              bankName: formData.studentDetails?.bankName || formData.bankName || '',
+              accountNumber: formData.studentDetails?.bankAccountNo || formData.bankAccountNo || '',
+              ifscCode: formData.studentDetails?.bankIFSC || formData.bankIFSC || '',
+              accountHolderName: formData.studentDetails?.bankAccountHolderName || ''
+            }
+          },
+          
+          // Medical Information
+          medical: formData.studentDetails?.allergies?.length ? {
+            allergies: formData.studentDetails.allergies,
+            chronicConditions: formData.studentDetails.chronicConditions || [],
+            medications: formData.studentDetails.medications || [],
+            emergencyMedicalContact: {
+              doctorName: formData.studentDetails.doctorName || '',
+              hospitalName: formData.studentDetails.hospitalName || '',
+              phone: formData.studentDetails.doctorPhone || ''
+            },
+            lastMedicalCheckup: formData.studentDetails.lastMedicalCheckup ? new Date(formData.studentDetails.lastMedicalCheckup) : undefined
+          } : undefined
+        };
       } else if (formData.role === 'teacher') {
-        newUserData.qualification = formData.qualification;
-        newUserData.experience = formData.experience;
-        newUserData.subjects = formData.subjects;
-        newUserData.department = formData.department;
-        newUserData.employeeId = formData.employeeId;
+        userData.teacherDetails = {
+          employeeId: formData.teacherDetails?.employeeId || formData.employeeId || '',
+          joiningDate: formData.teacherDetails?.joiningDate ? new Date(formData.teacherDetails.joiningDate) : undefined,
+          
+          qualification: {
+            highest: formData.teacherDetails?.highestQualification || formData.qualification || '',
+            specialization: formData.teacherDetails?.specialization || '',
+            university: formData.teacherDetails?.university || '',
+            year: formData.teacherDetails?.graduationYear || 0
+          },
+          
+          experience: {
+            total: formData.teacherDetails?.totalExperience || Number(formData.experience) || 0,
+            atCurrentSchool: formData.teacherDetails?.experienceAtCurrentSchool || 0,
+            previousSchools: formData.teacherDetails?.previousSchools || []
+          },
+          
+          subjects: formData.teacherDetails?.subjects?.map(subject => ({
+            subjectCode: subject,
+            subjectName: subject,
+            classes: [],
+            isPrimary: formData.teacherDetails?.primarySubjects?.includes(subject) || false
+          })) || (typeof formData.subjects === 'string' ? formData.subjects.split(',').map(s => ({
+            subjectCode: s.trim(),
+            subjectName: s.trim(),
+            classes: [],
+            isPrimary: true
+          })) : []),
+          
+          classTeacherOf: formData.teacherDetails?.classTeacherOf || '',
+          responsibilities: formData.teacherDetails?.responsibilities || [],
+          
+          workSchedule: {
+            workingDays: formData.teacherDetails?.workingDays || [],
+            workingHours: {
+              start: formData.teacherDetails?.workingHoursStart || '',
+              end: formData.teacherDetails?.workingHoursEnd || ''
+            },
+            maxPeriodsPerDay: formData.teacherDetails?.maxPeriodsPerDay || 0,
+            maxPeriodsPerWeek: formData.teacherDetails?.maxPeriodsPerWeek || 0
+          },
+          
+          salary: formData.teacherDetails?.basicSalary ? {
+            basic: formData.teacherDetails.basicSalary,
+            allowances: formData.teacherDetails.allowances || [],
+            currency: 'INR'
+          } : undefined,
+          
+          bankDetails: formData.teacherDetails?.bankAccountNumber ? {
+            accountNumber: formData.teacherDetails.bankAccountNumber,
+            ifscCode: formData.teacherDetails.bankIFSC || '',
+            bankName: formData.teacherDetails.bankName || '',
+            branchName: formData.teacherDetails.bankBranchName || ''
+          } : undefined
+        };
       } else if (formData.role === 'admin') {
-        newUserData.adminLevel = formData.adminLevel;
-        newUserData.department = formData.department;
-        newUserData.employeeId = formData.employeeId;
-        newUserData.accessLevel = formData.accessLevel;
+        userData.adminDetails = {
+          adminType: formData.adminDetails?.adminType || formData.adminLevel || '',
+          employeeId: formData.adminDetails?.employeeId || formData.employeeId || '',
+          joiningDate: formData.adminDetails?.joiningDate ? new Date(formData.adminDetails.joiningDate) : undefined,
+          designation: formData.adminDetails?.designation || '',
+          department: formData.adminDetails?.department || formData.department || '',
+          
+          permissions: {
+            userManagement: formData.adminDetails?.userManagement || false,
+            academicManagement: formData.adminDetails?.academicManagement || false,
+            feeManagement: formData.adminDetails?.feeManagement || false,
+            reportGeneration: formData.adminDetails?.reportGeneration || false,
+            systemSettings: formData.adminDetails?.systemSettings || false,
+            schoolSettings: formData.adminDetails?.schoolSettings || false,
+            dataExport: formData.adminDetails?.dataExport || false,
+            auditLogs: formData.adminDetails?.auditLogs || false
+          },
+          
+          workSchedule: {
+            workingDays: formData.adminDetails?.workingDays || [],
+            workingHours: {
+              start: formData.adminDetails?.workingHoursStart || '',
+              end: formData.adminDetails?.workingHoursEnd || ''
+            }
+          },
+          
+          salary: formData.adminDetails?.basicSalary ? {
+            basic: formData.adminDetails.basicSalary,
+            allowances: formData.adminDetails.allowances || [],
+            currency: 'INR'
+          } : undefined,
+          
+          bankDetails: formData.adminDetails?.bankAccountNumber ? {
+            accountNumber: formData.adminDetails.bankAccountNumber,
+            ifscCode: formData.adminDetails.bankIFSC || '',
+            bankName: formData.adminDetails.bankName || '',
+            branchName: formData.adminDetails.bankBranchName || '',
+            accountHolderName: formData.adminDetails.bankAccountHolderName || ''
+          } : undefined
+        };
       }
 
-      console.log('Creating user with data:', newUserData);
+      console.log('Creating user with comprehensive data:', userData);
       
       // Final check: ensure we have a generated userId (if not, fetch one now)
       if (!formData.userId) {
-        // try to fetch a next ID synchronously; if it fails, continue without it
         try {
           await fetchNextUserId(formData.role);
-          newUserData.userId = nextUserId || formData.userId;
+          userData.userId = nextUserId || formData.userId;
         } catch (err) {
-          console.warn('Could not fetch next user ID before create, proceeding with provided ID if any');
+          console.warn('Could not fetch next user ID before create, proceeding with backend generation');
         }
+      } else {
+        userData.userId = formData.userId;
       }
 
-      // Call API and capture server-assigned user info (server may generate userId)
-      const createRes: any = await schoolUserAPI.addUser(schoolCode, newUserData, token);
+      // Call API and capture server-assigned user info
+      const createRes: any = await schoolUserAPI.addUser(schoolCode, userData, token);
 
-      // Show credentials modal using ONLY server response (never frontend fallbacks)
-      // Handle different response formats from different endpoints
+      // Show credentials modal using server response
       const serverUserId = createRes?.data?.user?.userId || createRes?.data?.credentials?.userId || createRes?.user?.userId || createRes?.userId;
       const serverPassword = createRes?.data?.credentials?.password || createRes?.data?.user?.tempPassword || createRes?.user?.tempPassword;
       const serverEmail = createRes?.data?.user?.email || createRes?.user?.email || formData.email;
@@ -1346,7 +2353,7 @@ const ManageUsers: React.FC = () => {
         role: serverRole
       });
       
-      toast.success('User created successfully');
+      toast.success('User created successfully with comprehensive details');
       setShowAddModal(false);
       resetForm();
       fetchUsers();
@@ -1430,6 +2437,7 @@ const ManageUsers: React.FC = () => {
       // Special Needs (SATS Standard)
       disability: userData.disability || userData.specialNeeds || 'Not Applicable',
       disabilityOther: userData.disabilityOther || '',
+      isRTECandidate: userData.isRTECandidate || 'No',
       
       // Address Information (SATS Standard)
       address: userData.address?.permanent?.street || userData.address || '',
@@ -1624,6 +2632,7 @@ const ManageUsers: React.FC = () => {
         // Special Needs
         updateData.disability = formData.disability;
         updateData.disabilityOther = formData.disabilityOther;
+        updateData.isRTECandidate = formData.isRTECandidate;
         
         // Karnataka SATS fields
         updateData.aadhaarNumber = formData.aadhaarNumber;
@@ -1893,19 +2902,1816 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  const exportUsers = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      "Name,Email,Role,Phone,Status,Created Date\n" +
-      filteredUsers.map(user => 
-        `${user.name},${user.email},${user.role},${user.phone || ''},${user.isActive ? 'Active' : 'Inactive'},${new Date(user.createdAt).toLocaleDateString()}`
-      ).join("\n");
+  const exportUsers = async () => {
+    try {
+      const schoolCode = user?.schoolCode || 'P';
+      const response = await exportImportAPI.exportUsers(schoolCode, { 
+        role: activeTab,
+        format: 'csv'
+      });
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+    const currentDate = new Date().toISOString().split('T')[0];
+      link.download = `${activeTab}_users_${currentDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`${filteredUsers.length} ${activeTab} records exported successfully!`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export users. Please try again.');
+    }
+  };
 
+  // CSV Template Generation Functions
+  const generateTemplate = async (role: 'student' | 'teacher' | 'admin') => {
+    try {
+      const schoolCode = user?.schoolCode || 'P';
+      const response = await exportImportAPI.generateTemplate(schoolCode, role);
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const currentDate = new Date().toISOString().split('T')[0];
+      link.download = `${role}_import_template_${currentDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`${role} template downloaded successfully!`);
+    } catch (error) {
+      console.error('Template generation error:', error);
+      toast.error('Failed to generate template. Please try again.');
+    }
+  };
+
+  // Old template generation logic (keeping for reference but not used)
+  const generateTemplateOld = (role: 'student' | 'teacher' | 'admin') => {
+    const currentDate = new Date().toISOString().split('T')[0];
+    const filename = `${role}_import_template_${currentDate}.csv`;
+    
+    let headers: string[] = [];
+    let sampleRow: string[] = [];
+
+    if (role === 'student') {
+      // Comprehensive student export headers - matching template fields
+      headers = [
+        // Basic Information
+        'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
+        
+        // Student Academic Details
+        'Student ID', 'Admission Number', 'Roll Number', 'Class', 'Section', 'Academic Year', 'Admission Date', 'Admission Class',
+        'Stream', 'Electives', 'Enrollment No', 'TC No',
+        
+        // Personal Information - Basic
+        'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Religion Other',
+        'Caste', 'Caste Other', 'Category', 'Category Other', 'Mother Tongue', 'Mother Tongue Other', 'Languages Known',
+        
+        // Karnataka SATS Specific Personal Fields
+        'Student Name Kannada', 'Age Years', 'Age Months', 'Social Category', 'Social Category Other',
+        'Student Caste', 'Student Caste Other', 'Student Aadhaar', 'Student Caste Certificate No',
+        'Special Category', 'Special Category Other', 'Belonging to BPL', 'BPL Card No', 'Bhagyalakshmi Bond No',
+        'Disability', 'Disability Other', 'Is RTE Candidate*',
+        
+        // Address Information - Current
+        'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
+        'Current Taluka', 'Current Urban Rural',
+        
+        // Address Information - Permanent  
+        'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
+        'Permanent Taluka', 'Permanent Urban Rural',
+        
+        // Father Information
+        'Father Name', 'Father Name Kannada', 'Father Occupation', 'Father Qualification', 'Father Phone', 'Father Email',
+        'Father Work Address', 'Father Annual Income', 'Father Aadhaar', 'Father Caste', 'Father Caste Other', 'Father Caste Certificate No',
+        
+        // Mother Information
+        'Mother Name', 'Mother Name Kannada', 'Mother Occupation', 'Mother Qualification', 'Mother Phone', 'Mother Email',
+        'Mother Work Address', 'Mother Annual Income', 'Mother Aadhaar', 'Mother Caste', 'Mother Caste Other', 'Mother Caste Certificate No',
+        
+        // Guardian Information
+        'Guardian Name', 'Guardian Relationship', 'Guardian Phone', 'Guardian Email', 'Guardian Address', 'Guardian Is Emergency Contact',
+        
+        // Siblings Information (up to 3 siblings)
+        'Sibling 1 Name', 'Sibling 1 Age', 'Sibling 1 Relationship', 'Sibling 1 School', 'Sibling 1 Class',
+        'Sibling 2 Name', 'Sibling 2 Age', 'Sibling 2 Relationship', 'Sibling 2 School', 'Sibling 2 Class',
+        'Sibling 3 Name', 'Sibling 3 Age', 'Sibling 3 Relationship', 'Sibling 3 School', 'Sibling 3 Class',
+        
+        // Medical Information
+        'Allergies', 'Chronic Conditions', 'Medications', 'Emergency Doctor Name', 'Emergency Hospital Name', 'Emergency Hospital Phone',
+        'Last Medical Checkup', 'Vaccination Status',
+        
+        // Transportation
+        'Transport Mode', 'Bus Route', 'Pickup Point', 'Drop Point', 'Pickup Time', 'Drop Time',
+        
+        // Financial Information
+        'Fee Category', 'Concession Type', 'Concession Percentage', 'Scholarship Name', 'Scholarship Amount', 'Scholarship Provider',
+        
+        // Banking Information
+        'Bank Name', 'Account Number', 'IFSC Code', 'Account Holder Name',
+        
+        // Previous School Information
+        'Previous School Name', 'Previous School Board', 'Previous School Last Class', 'Previous School TC Number', 'Previous School TC Date', 'Reason for Transfer',
+        
+        // Emergency Contacts (additional)
+        'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address', 'Emergency Contact 1 Is Primary',
+        'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address', 'Emergency Contact 2 Is Primary',
+        
+        // Academic History (current year)
+        'Current Academic Year', 'Current Class Result', 'Current Percentage', 'Current Rank', 'Current Attendance',
+        
+        // System Information
+        'Status', 'Created Date', 'Last Modified', 'Source', 'Import Batch', 'Tags', 'Notes'
+      ];
+
+      csvRows = filteredUsers.map(user => {
+        const userData = user as any;
+        const studentDetails = userData.studentDetails || {};
+        const name = userData.name || {};
+        const address = userData.address || {};
+        const contact = userData.contact || {};
+        const personal = studentDetails.personal || {};
+        const academic = studentDetails.academic || {};
+        const family = studentDetails.family || {};
+        const father = family.father || {};
+        const mother = family.mother || {};
+        const guardian = family.guardian || {};
+        const siblings = family.siblings || [];
+        const medical = studentDetails.medical || {};
+        const transport = studentDetails.transport || {};
+        const financial = studentDetails.financial || {};
+        const bankDetails = financial.bankDetails || {};
+        const previousSchool = academic.previousSchool || {};
+        const academicHistory = studentDetails.academicHistory || [];
+        const currentAcademic = academicHistory[0] || {};
+        
+        return [
+          // Basic Information
+          userData.userId || user._id || '',
+          name.firstName || '',
+          name.middleName || '',
+          name.lastName || '',
+          user.email || '',
+          contact.primaryPhone || contact.phone || user.phone || '',
+          
+          // Student Academic Details
+          studentDetails.studentId || '',
+          studentDetails.admissionNumber || academic.admissionNumber || '',
+          studentDetails.rollNumber || academic.rollNumber || '',
+          academic.currentClass || '',
+          academic.currentSection || '',
+          academic.academicYear || '',
+          academic.admissionDate ? new Date(academic.admissionDate).toISOString().split('T')[0] : '',
+          academic.admissionClass || '',
+          academic.stream || '',
+          Array.isArray(academic.electives) ? academic.electives.join(', ') : '',
+          academic.enrollmentNo || '',
+          academic.tcNo || '',
+          
+          // Personal Information - Basic
+          personal.dateOfBirth ? new Date(personal.dateOfBirth).toISOString().split('T')[0] : '',
+          personal.placeOfBirth || '',
+          personal.gender || '',
+          personal.bloodGroup || '',
+          personal.nationality || '',
+          personal.religion || '',
+          personal.religionOther || '',
+          personal.caste || '',
+          personal.casteOther || '',
+          personal.category || '',
+          personal.categoryOther || '',
+          personal.motherTongue || '',
+          personal.motherTongueOther || '',
+          Array.isArray(personal.languagesKnown) ? personal.languagesKnown.join(', ') : '',
+          
+          // Karnataka SATS Specific Personal Fields
+          personal.studentNameKannada || '',
+          personal.ageYears || '',
+          personal.ageMonths || '',
+          personal.socialCategory || '',
+          personal.socialCategoryOther || '',
+          personal.studentCaste || '',
+          personal.studentCasteOther || '',
+          personal.studentAadhaar || '',
+          personal.studentCasteCertNo || '',
+          personal.specialCategory || '',
+          personal.specialCategoryOther || '',
+          personal.belongingToBPL || '',
+          personal.bplCardNo || '',
+          personal.bhagyalakshmiBondNo || '',
+          personal.disability || '',
+          personal.disabilityOther || '',
+          
+          // Address Information - Current
+          address.current?.addressLine1 || address.addressLine1 || '',
+          address.current?.addressLine2 || address.addressLine2 || '',
+          address.current?.city || address.city || '',
+          address.current?.district || address.district || '',
+          address.current?.state || address.state || '',
+          address.current?.pinCode || address.pinCode || '',
+          address.current?.taluka || address.taluka || '',
+          address.current?.urbanRural || '',
+          
+          // Address Information - Permanent  
+          address.permanent?.addressLine1 || '',
+          address.permanent?.addressLine2 || '',
+          address.permanent?.city || '',
+          address.permanent?.district || '',
+          address.permanent?.state || '',
+          address.permanent?.pinCode || '',
+          address.permanent?.taluka || '',
+          address.permanent?.urbanRural || '',
+          
+          // Father Information
+          father.name || '',
+          father.nameKannada || '',
+          father.occupation || '',
+          father.qualification || '',
+          father.phone || '',
+          father.email || '',
+          father.workAddress || '',
+          father.annualIncome || '',
+          father.aadhaar || '',
+          father.caste || '',
+          father.casteOther || '',
+          father.casteCertNo || '',
+          
+          // Mother Information
+          mother.name || '',
+          mother.nameKannada || '',
+          mother.occupation || '',
+          mother.qualification || '',
+          mother.phone || '',
+          mother.email || '',
+          mother.workAddress || '',
+          mother.annualIncome || '',
+          mother.aadhaar || '',
+          mother.caste || '',
+          mother.casteOther || '',
+          mother.casteCertNo || '',
+          
+          // Guardian Information
+          guardian.name || '',
+          guardian.relationship || '',
+          guardian.phone || '',
+          guardian.email || '',
+          guardian.address || '',
+          guardian.isEmergencyContact || '',
+          
+          // Siblings Information (up to 3 siblings)
+          siblings[0]?.name || '',
+          siblings[0]?.age || '',
+          siblings[0]?.relationship || '',
+          siblings[0]?.school || '',
+          siblings[0]?.class || '',
+          siblings[1]?.name || '',
+          siblings[1]?.age || '',
+          siblings[1]?.relationship || '',
+          siblings[1]?.school || '',
+          siblings[1]?.class || '',
+          siblings[2]?.name || '',
+          siblings[2]?.age || '',
+          siblings[2]?.relationship || '',
+          siblings[2]?.school || '',
+          siblings[2]?.class || '',
+          
+          // Medical Information
+          Array.isArray(medical.allergies) ? medical.allergies.join(', ') : '',
+          Array.isArray(medical.chronicConditions) ? medical.chronicConditions.join(', ') : '',
+          Array.isArray(medical.medications) ? medical.medications.join(', ') : '',
+          medical.emergencyMedicalContact?.doctorName || '',
+          medical.emergencyMedicalContact?.hospitalName || '',
+          medical.emergencyMedicalContact?.phone || '',
+          medical.lastMedicalCheckup ? new Date(medical.lastMedicalCheckup).toISOString().split('T')[0] : '',
+          Array.isArray(medical.vaccinationStatus) ? medical.vaccinationStatus.map((v: any) => v.vaccine).join(', ') : '',
+          
+          // Transportation
+          transport.mode || '',
+          transport.busRoute || '',
+          transport.pickupPoint || '',
+          transport.dropPoint || '',
+          transport.pickupTime || '',
+          transport.dropTime || '',
+          
+          // Financial Information
+          financial.feeCategory || '',
+          financial.concessionType || '',
+          financial.concessionPercentage || '',
+          financial.scholarshipDetails?.name || '',
+          financial.scholarshipDetails?.amount || '',
+          financial.scholarshipDetails?.provider || '',
+          
+          // Banking Information
+          bankDetails.bankName || '',
+          bankDetails.accountNumber || '',
+          bankDetails.ifscCode || '',
+          bankDetails.accountHolderName || '',
+          
+          // Previous School Information
+          previousSchool.name || '',
+          previousSchool.board || '',
+          previousSchool.lastClass || '',
+          previousSchool.tcNumber || '',
+          previousSchool.tcDate ? new Date(previousSchool.tcDate).toISOString().split('T')[0] : '',
+          previousSchool.reasonForTransfer || '',
+          
+          // Emergency Contacts (additional - getting from parentDetails if available)
+          userData.parentDetails?.emergencyContacts?.[0]?.name || '',
+          userData.parentDetails?.emergencyContacts?.[0]?.relationship || '',
+          userData.parentDetails?.emergencyContacts?.[0]?.phone || '',
+          userData.parentDetails?.emergencyContacts?.[0]?.address || '',
+          userData.parentDetails?.emergencyContacts?.[0]?.isPrimary || '',
+          userData.parentDetails?.emergencyContacts?.[1]?.name || '',
+          userData.parentDetails?.emergencyContacts?.[1]?.relationship || '',
+          userData.parentDetails?.emergencyContacts?.[1]?.phone || '',
+          userData.parentDetails?.emergencyContacts?.[1]?.address || '',
+          userData.parentDetails?.emergencyContacts?.[1]?.isPrimary || '',
+          
+          // Academic History (current year)
+          currentAcademic.academicYear || '',
+          currentAcademic.result || '',
+          currentAcademic.percentage || '',
+          currentAcademic.rank || '',
+          currentAcademic.attendance || '',
+          
+          // System Information
+          user.isActive ? 'Active' : 'Inactive',
+          new Date(user.createdAt).toLocaleDateString(),
+          (userData as any).updatedAt ? new Date((userData as any).updatedAt).toLocaleDateString() : '',
+          userData.metadata?.source || '',
+          userData.metadata?.importBatch || '',
+          Array.isArray(userData.metadata?.tags) ? userData.metadata.tags.join(', ') : '',
+          userData.metadata?.notes || ''
+        ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+      });
+
+    } else if (activeTab === 'teacher') {
+      // Comprehensive teacher export headers - matching template fields
+      headers = [
+        // Basic Information
+        'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
+        
+        // Personal Information
+        'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Caste', 'Category',
+        'Mother Tongue', 'Languages Known', 'Marital Status', 'Spouse Name',
+        
+        // Address Information - Current
+        'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
+        
+        // Address Information - Permanent  
+        'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
+        
+        // Identity Documents
+        'Aadhaar Number', 'PAN Number', 'Passport Number', 'Driving License',
+        
+        // Professional Information
+        'Employee ID', 'Joining Date', 'Designation', 'Department',
+        
+        // Qualification Information
+        'Highest Qualification', 'Specialization', 'University', 'Qualification Year', 'Teaching License',
+        
+        // Additional Certificates (up to 3)
+        'Certificate 1 Name', 'Certificate 1 Institution', 'Certificate 1 Year',
+        'Certificate 2 Name', 'Certificate 2 Institution', 'Certificate 2 Year',
+        'Certificate 3 Name', 'Certificate 3 Institution', 'Certificate 3 Year',
+        
+        // Experience Information
+        'Total Experience (Years)', 'Experience at Current School (Years)', 
+        
+        // Previous Schools (up to 3)
+        'Previous School 1 Name', 'Previous School 1 Duration', 'Previous School 1 Position', 'Previous School 1 Reason for Leaving',
+        'Previous School 2 Name', 'Previous School 2 Duration', 'Previous School 2 Position', 'Previous School 2 Reason for Leaving',
+        'Previous School 3 Name', 'Previous School 3 Duration', 'Previous School 3 Position', 'Previous School 3 Reason for Leaving',
+        
+        // Subject and Class Information
+        'Primary Subject 1 Code', 'Primary Subject 1 Name', 'Primary Subject 1 Classes', 'Primary Subject 1 Is Primary',
+        'Secondary Subject 2 Code', 'Secondary Subject 2 Name', 'Secondary Subject 2 Classes', 'Secondary Subject 2 Is Primary',
+        'Secondary Subject 3 Code', 'Secondary Subject 3 Name', 'Secondary Subject 3 Classes', 'Secondary Subject 3 Is Primary',
+        'Class Teacher Of', 'Responsibilities',
+        
+        // Work Schedule
+        'Working Days', 'Working Hours Start', 'Working Hours End', 'Max Periods Per Day', 'Max Periods Per Week',
+        
+        // Performance Review (Latest)
+        'Latest Review Academic Year', 'Latest Review Rating', 'Latest Review Comments',
+        
+        // Salary Information
+        'Basic Salary', 'HRA Allowance', 'Transport Allowance', 'Medical Allowance', 'Other Allowances', 'Currency',
+        
+        // Banking Information
+        'Bank Name', 'Account Number', 'IFSC Code', 'Branch Name', 'Account Holder Name',
+        
+        // Emergency Contact Information
+        'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address',
+        'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address',
+        
+        // Administrative
+        'Assigned By', 'Admin Role Level', 'Permissions', 'Last Login',
+        
+        // System Information
+        'Status', 'Created Date', 'Last Modified', 'Source', 'Import Batch', 'Tags', 'Notes'
+      ];
+
+      csvRows = filteredUsers.map(user => {
+        const userData = user as any;
+        const teacherDetails = userData.teacherDetails || {};
+        const name = userData.name || {};
+        const address = userData.address || {};
+        const contact = userData.contact || {};
+        const personalInfo = userData.personalInfo || {};
+        const identityDocs = userData.identityDocs || {};
+        const qualification = teacherDetails.qualification || {};
+        const certificates = qualification.certificates || [];
+        const experience = teacherDetails.experience || {};
+        const previousSchools = experience.previousSchools || [];
+        const subjects = teacherDetails.subjects || [];
+        const responsibilities = teacherDetails.responsibilities || [];
+        const workSchedule = teacherDetails.workSchedule || {};
+        const performanceReviews = teacherDetails.performanceReviews || [];
+        const latestReview = performanceReviews[0] || {};
+        const salary = teacherDetails.salary || {};
+        const allowances = salary.allowances || [];
+        const bankDetails = teacherDetails.bankDetails || {};
+        const emergencyContacts = userData.emergencyContacts || [];
+        
+        return [
+          // Basic Information
+          userData.userId || user._id || '',
+          name.firstName || '',
+          name.middleName || '',
+          name.lastName || '',
+          user.email || '',
+          contact.primaryPhone || contact.phone || user.phone || '',
+          
+          // Personal Information
+          personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth).toISOString().split('T')[0] : '',
+          personalInfo.placeOfBirth || '',
+          personalInfo.gender || '',
+          personalInfo.bloodGroup || '',
+          personalInfo.nationality || '',
+          personalInfo.religion || '',
+          personalInfo.caste || '',
+          personalInfo.category || '',
+          personalInfo.motherTongue || '',
+          Array.isArray(personalInfo.languagesKnown) ? personalInfo.languagesKnown.join(', ') : '',
+          personalInfo.maritalStatus || '',
+          personalInfo.spouseName || '',
+          
+          // Address Information - Current
+          address.current?.addressLine1 || address.addressLine1 || '',
+          address.current?.addressLine2 || address.addressLine2 || '',
+          address.current?.city || address.city || '',
+          address.current?.district || address.district || '',
+          address.current?.state || address.state || '',
+          address.current?.pinCode || address.pinCode || '',
+          
+          // Address Information - Permanent  
+          address.permanent?.addressLine1 || '',
+          address.permanent?.addressLine2 || '',
+          address.permanent?.city || '',
+          address.permanent?.district || '',
+          address.permanent?.state || '',
+          address.permanent?.pinCode || '',
+          
+          // Identity Documents
+          identityDocs.aadhaarNumber || '',
+          identityDocs.panNumber || '',
+          identityDocs.passportNumber || '',
+          identityDocs.drivingLicense || '',
+          
+          // Professional Information
+          teacherDetails.employeeId || '',
+          teacherDetails.joiningDate ? new Date(teacherDetails.joiningDate).toISOString().split('T')[0] : '',
+          userData.designation || '',
+          userData.department || '',
+          
+          // Qualification Information
+          qualification.highest || '',
+          qualification.specialization || '',
+          qualification.university || '',
+          qualification.year || '',
+          qualification.teachingLicense || '',
+          
+          // Additional Certificates (up to 3)
+          certificates[0]?.name || '',
+          certificates[0]?.institution || '',
+          certificates[0]?.year || '',
+          certificates[1]?.name || '',
+          certificates[1]?.institution || '',
+          certificates[1]?.year || '',
+          certificates[2]?.name || '',
+          certificates[2]?.institution || '',
+          certificates[2]?.year || '',
+          
+          // Experience Information
+          experience.total || '',
+          experience.atCurrentSchool || '',
+          
+          // Previous Schools (up to 3)
+          previousSchools[0]?.schoolName || '',
+          previousSchools[0]?.duration || '',
+          previousSchools[0]?.position || '',
+          previousSchools[0]?.reasonForLeaving || '',
+          previousSchools[1]?.schoolName || '',
+          previousSchools[1]?.duration || '',
+          previousSchools[1]?.position || '',
+          previousSchools[1]?.reasonForLeaving || '',
+          previousSchools[2]?.schoolName || '',
+          previousSchools[2]?.duration || '',
+          previousSchools[2]?.position || '',
+          previousSchools[2]?.reasonForLeaving || '',
+          
+          // Subject and Class Information
+          subjects[0]?.subjectCode || '',
+          subjects[0]?.subjectName || '',
+          Array.isArray(subjects[0]?.classes) ? subjects[0].classes.join(', ') : '',
+          subjects[0]?.isPrimary || '',
+          subjects[1]?.subjectCode || '',
+          subjects[1]?.subjectName || '',
+          Array.isArray(subjects[1]?.classes) ? subjects[1].classes.join(', ') : '',
+          subjects[1]?.isPrimary || '',
+          subjects[2]?.subjectCode || '',
+          subjects[2]?.subjectName || '',
+          Array.isArray(subjects[2]?.classes) ? subjects[2].classes.join(', ') : '',
+          subjects[2]?.isPrimary || '',
+          teacherDetails.classTeacherOf || '',
+          Array.isArray(responsibilities) ? responsibilities.join(', ') : '',
+          
+          // Work Schedule
+          Array.isArray(workSchedule.workingDays) ? workSchedule.workingDays.join(', ') : '',
+          workSchedule.workingHours?.start || '',
+          workSchedule.workingHours?.end || '',
+          workSchedule.maxPeriodsPerDay || '',
+          workSchedule.maxPeriodsPerWeek || '',
+          
+          // Performance Review (Latest)
+          latestReview.academicYear || '',
+          latestReview.rating || '',
+          latestReview.comments || '',
+          
+          // Salary Information
+          salary.basic || '',
+          allowances.find((a: any) => a.type === 'HRA')?.amount || '',
+          allowances.find((a: any) => a.type === 'Transport')?.amount || '',
+          allowances.find((a: any) => a.type === 'Medical')?.amount || '',
+          allowances.filter((a: any) => !['HRA', 'Transport', 'Medical'].includes(a.type)).map((a: any) => `${a.type}: ${a.amount}`).join(', ') || '',
+          salary.currency || '',
+          
+          // Banking Information
+          bankDetails.bankName || '',
+          bankDetails.accountNumber || '',
+          bankDetails.ifscCode || '',
+          bankDetails.branchName || '',
+          bankDetails.accountHolderName || name.firstName && name.lastName ? `${name.firstName} ${name.lastName}` : '',
+          
+          // Emergency Contact Information
+          emergencyContacts[0]?.name || '',
+          emergencyContacts[0]?.relationship || '',
+          emergencyContacts[0]?.phone || '',
+          emergencyContacts[0]?.address || '',
+          emergencyContacts[1]?.name || '',
+          emergencyContacts[1]?.relationship || '',
+          emergencyContacts[1]?.phone || '',
+          emergencyContacts[1]?.address || '',
+          
+          // Administrative
+          teacherDetails.assignedBy || '',
+          userData.adminRole || 'teacher',
+          Array.isArray(userData.permissions) ? userData.permissions.join(', ') : '',
+          userData.lastLogin ? new Date(userData.lastLogin).toLocaleDateString() : '',
+          
+          // System Information
+          user.isActive ? 'Active' : 'Inactive',
+          new Date(user.createdAt).toLocaleDateString(),
+          (userData as any).updatedAt ? new Date((userData as any).updatedAt).toLocaleDateString() : '',
+          userData.metadata?.source || '',
+          userData.metadata?.importBatch || '',
+          Array.isArray(userData.metadata?.tags) ? userData.metadata.tags.join(', ') : '',
+          userData.metadata?.notes || ''
+        ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+      });
+
+    } else if (activeTab === 'admin') {
+      // Comprehensive admin export headers - matching template fields
+      headers = [
+        // Basic Information
+        'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
+        
+        // Personal Information
+        'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Caste', 'Category',
+        'Mother Tongue', 'Languages Known', 'Marital Status', 'Spouse Name',
+        
+        // Address Information - Current
+        'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
+        
+        // Address Information - Permanent  
+        'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
+        
+        // Identity Documents
+        'Aadhaar Number', 'PAN Number', 'Passport Number', 'Driving License',
+        
+        // Administrative Information
+        'Admin ID', 'Admin Level', 'Designation', 'Department', 'Joining Date', 'Reporting Manager',
+        
+        // Permissions and Access
+        'Permissions', 'Access Level', 'Can Manage Users', 'Can Manage Academics', 'Can Manage Finance', 'Can Manage Reports',
+        'Can Manage School Settings', 'Can View All Data', 'Can Export Data', 'Can Import Data',
+        
+        // Responsibilities
+        'Primary Responsibilities', 'Secondary Responsibilities', 'Committees', 'Special Duties',
+        
+        // Professional Background
+        'Highest Qualification', 'Specialization', 'University', 'Qualification Year', 'Total Experience (Years)',
+        'Administrative Experience (Years)', 'Education Sector Experience (Years)',
+        
+        // Previous Experience (up to 3)
+        'Previous Organization 1', 'Previous Position 1', 'Previous Duration 1', 'Previous Responsibilities 1',
+        'Previous Organization 2', 'Previous Position 2', 'Previous Duration 2', 'Previous Responsibilities 2',
+        'Previous Organization 3', 'Previous Position 3', 'Previous Duration 3', 'Previous Responsibilities 3',
+        
+        // Work Schedule and Availability
+        'Working Days', 'Working Hours Start', 'Working Hours End', 'Overtime Eligible', 'On-Call Duties',
+        
+        // Salary Information
+        'Basic Salary', 'HRA Allowance', 'Transport Allowance', 'Medical Allowance', 'Management Allowance', 'Other Allowances', 'Currency',
+        
+        // Banking Information
+        'Bank Name', 'Account Number', 'IFSC Code', 'Branch Name', 'Account Holder Name',
+        
+        // Emergency Contact Information
+        'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address',
+        'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address',
+        
+        // System Access
+        'Login Permissions', 'System Role', 'Multi-School Access', 'API Access', 'Reporting Access',
+        
+        // Performance and Review
+        'Latest Review Date', 'Latest Review Rating', 'Latest Review Comments', 'Goals and Targets',
+        
+        // System Information
+        'Status', 'Created Date', 'Last Modified', 'Last Login', 'Source', 'Import Batch', 'Tags', 'Notes'
+      ];
+
+      csvRows = filteredUsers.map(user => {
+        const userData = user as any;
+        const adminDetails = userData.adminDetails || {};
+        const name = userData.name || {};
+        const address = userData.address || {};
+        const contact = userData.contact || {};
+        const personalInfo = userData.personalInfo || {};
+        const identityDocs = userData.identityDocs || {};
+        const permissions = adminDetails.permissions || {};
+        const responsibilities = adminDetails.responsibilities || {};
+        const qualification = adminDetails.qualification || {};
+        const experience = adminDetails.experience || {};
+        const previousExperience = experience.previousExperience || [];
+        const workSchedule = adminDetails.workSchedule || {};
+        const salary = adminDetails.salary || {};
+        const allowances = salary.allowances || [];
+        const bankDetails = adminDetails.bankDetails || {};
+        const emergencyContacts = userData.emergencyContacts || [];
+        const systemAccess = adminDetails.systemAccess || {};
+        const performanceReview = adminDetails.performanceReview || {};
+        
+        return [
+          // Basic Information
+          userData.userId || user._id || '',
+          name.firstName || '',
+          name.middleName || '',
+          name.lastName || '',
+          user.email || '',
+          contact.primaryPhone || contact.phone || user.phone || '',
+          
+          // Personal Information
+          personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth).toISOString().split('T')[0] : '',
+          personalInfo.placeOfBirth || '',
+          personalInfo.gender || '',
+          personalInfo.bloodGroup || '',
+          personalInfo.nationality || '',
+          personalInfo.religion || '',
+          personalInfo.caste || '',
+          personalInfo.category || '',
+          personalInfo.motherTongue || '',
+          Array.isArray(personalInfo.languagesKnown) ? personalInfo.languagesKnown.join(', ') : '',
+          personalInfo.maritalStatus || '',
+          personalInfo.spouseName || '',
+          
+          // Address Information - Current
+          address.current?.addressLine1 || address.addressLine1 || '',
+          address.current?.addressLine2 || address.addressLine2 || '',
+          address.current?.city || address.city || '',
+          address.current?.district || address.district || '',
+          address.current?.state || address.state || '',
+          address.current?.pinCode || address.pinCode || '',
+          
+          // Address Information - Permanent  
+          address.permanent?.addressLine1 || '',
+          address.permanent?.addressLine2 || '',
+          address.permanent?.city || '',
+          address.permanent?.district || '',
+          address.permanent?.state || '',
+          address.permanent?.pinCode || '',
+          
+          // Identity Documents
+          identityDocs.aadhaarNumber || '',
+          identityDocs.panNumber || '',
+          identityDocs.passportNumber || '',
+          identityDocs.drivingLicense || '',
+          
+          // Administrative Information
+          adminDetails.adminId || '',
+          adminDetails.adminLevel || 'Admin',
+          adminDetails.designation || '',
+          adminDetails.department || '',
+          adminDetails.joiningDate ? new Date(adminDetails.joiningDate).toISOString().split('T')[0] : '',
+          adminDetails.reportingManager || '',
+          
+          // Permissions and Access
+          Array.isArray(permissions.list) ? permissions.list.join(', ') : '',
+          permissions.accessLevel || '',
+          permissions.canManageUsers || '',
+          permissions.canManageAcademics || '',
+          permissions.canManageFinance || '',
+          permissions.canManageReports || '',
+          permissions.canManageSchoolSettings || '',
+          permissions.canViewAllData || '',
+          permissions.canExportData || '',
+          permissions.canImportData || '',
+          
+          // Responsibilities
+          Array.isArray(responsibilities.primary) ? responsibilities.primary.join(', ') : '',
+          Array.isArray(responsibilities.secondary) ? responsibilities.secondary.join(', ') : '',
+          Array.isArray(responsibilities.committees) ? responsibilities.committees.join(', ') : '',
+          Array.isArray(responsibilities.specialDuties) ? responsibilities.specialDuties.join(', ') : '',
+          
+          // Professional Background
+          qualification.highest || '',
+          qualification.specialization || '',
+          qualification.university || '',
+          qualification.year || '',
+          experience.totalYears || '',
+          experience.administrativeYears || '',
+          experience.educationSectorYears || '',
+          
+          // Previous Experience (up to 3)
+          previousExperience[0]?.organization || '',
+          previousExperience[0]?.position || '',
+          previousExperience[0]?.duration || '',
+          previousExperience[0]?.responsibilities || '',
+          previousExperience[1]?.organization || '',
+          previousExperience[1]?.position || '',
+          previousExperience[1]?.duration || '',
+          previousExperience[1]?.responsibilities || '',
+          previousExperience[2]?.organization || '',
+          previousExperience[2]?.position || '',
+          previousExperience[2]?.duration || '',
+          previousExperience[2]?.responsibilities || '',
+          
+          // Work Schedule and Availability
+          Array.isArray(workSchedule.workingDays) ? workSchedule.workingDays.join(', ') : '',
+          workSchedule.workingHours?.start || '',
+          workSchedule.workingHours?.end || '',
+          workSchedule.overtimeEligible || '',
+          Array.isArray(workSchedule.onCallDuties) ? workSchedule.onCallDuties.join(', ') : '',
+          
+          // Salary Information
+          salary.basic || '',
+          allowances.find((a: any) => a.type === 'HRA')?.amount || '',
+          allowances.find((a: any) => a.type === 'Transport')?.amount || '',
+          allowances.find((a: any) => a.type === 'Medical')?.amount || '',
+          allowances.find((a: any) => a.type === 'Management')?.amount || '',
+          allowances.filter((a: any) => !['HRA', 'Transport', 'Medical', 'Management'].includes(a.type)).map((a: any) => `${a.type}: ${a.amount}`).join(', ') || '',
+          salary.currency || '',
+          
+          // Banking Information
+          bankDetails.bankName || '',
+          bankDetails.accountNumber || '',
+          bankDetails.ifscCode || '',
+          bankDetails.branchName || '',
+          bankDetails.accountHolderName || name.firstName && name.lastName ? `${name.firstName} ${name.lastName}` : '',
+          
+          // Emergency Contact Information
+          emergencyContacts[0]?.name || '',
+          emergencyContacts[0]?.relationship || '',
+          emergencyContacts[0]?.phone || '',
+          emergencyContacts[0]?.address || '',
+          emergencyContacts[1]?.name || '',
+          emergencyContacts[1]?.relationship || '',
+          emergencyContacts[1]?.phone || '',
+          emergencyContacts[1]?.address || '',
+          
+          // System Access
+          systemAccess.loginPermissions || '',
+          systemAccess.systemRole || '',
+          systemAccess.multiSchoolAccess || '',
+          systemAccess.apiAccess || '',
+          systemAccess.reportingAccess || '',
+          
+          // Performance and Review
+          performanceReview.latestReviewDate ? new Date(performanceReview.latestReviewDate).toISOString().split('T')[0] : '',
+          performanceReview.latestReviewRating || '',
+          performanceReview.latestReviewComments || '',
+          Array.isArray(performanceReview.goalsAndTargets) ? performanceReview.goalsAndTargets.join(', ') : '',
+          
+          // System Information
+          user.isActive ? 'Active' : 'Inactive',
+          new Date(user.createdAt).toLocaleDateString(),
+          (userData as any).updatedAt ? new Date((userData as any).updatedAt).toLocaleDateString() : '',
+          userData.lastLogin ? new Date(userData.lastLogin).toLocaleDateString() : '',
+          userData.metadata?.source || '',
+          userData.metadata?.importBatch || '',
+          Array.isArray(userData.metadata?.tags) ? userData.metadata.tags.join(', ') : '',
+          userData.metadata?.notes || ''
+        ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+      });
+    }
+
+    // Create CSV content
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      headers.join(',') + '\n' +
+      csvRows.join('\n');
+
+    // Create and trigger download
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", "users.csv");
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    toast.success(`${filteredUsers.length} ${activeTab} records exported successfully!`);
+  };
+
+  // CSV Import Functions
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    setImportFile(file);
+    // For new system, we don't need to parse CSV on frontend
+    // The backend will handle parsing and validation
+    setImportPreview([]); // Clear any previous preview
+    setImportResults(null); // Clear any previous results
+  };
+
+  const parseCSVFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          toast.error('CSV file must have at least a header row and one data row');
+          return;
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+        const dataRows = lines.slice(1);
+        
+        const parsedData = dataRows.map((line, index) => {
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim());
+
+          const rowData: any = { _rowIndex: index + 2 };
+          headers.forEach((header, i) => {
+            rowData[header] = values[i] || '';
+          });
+          return rowData;
+        });
+
+        setImportPreview(parsedData);
+        toast.success(`Parsed ${parsedData.length} rows from CSV file`);
+      } catch (error) {
+        console.error('Error parsing CSV:', error);
+        toast.error('Error parsing CSV file. Please check the format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const validateImportData = (data: any[], role: string) => {
+    const errors: Array<{row: number, error: string, data: any}> = [];
+    
+    data.forEach((row, index) => {
+      const rowErrors: string[] = [];
+      
+      // Common validations
+      if (!row['First Name*']) {
+        rowErrors.push('First Name is required');
+      }
+      if (!row['Last Name*']) {
+        rowErrors.push('Last Name is required');
+      }
+      if (!row['Email*'] || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row['Email*'])) {
+        rowErrors.push('Valid email is required');
+      }
+      if (!row['Phone*'] || !/^[6-9]\d{9}$/.test(row['Phone*'].replace(/\D/g, ''))) {
+        rowErrors.push('Valid 10-digit Indian mobile number is required (starting with 6-9)');
+      }
+      if (!row['Date of Birth* (YYYY-MM-DD)'] || !/^\d{4}-\d{2}-\d{2}$/.test(row['Date of Birth* (YYYY-MM-DD)'])) {
+        rowErrors.push('Date of Birth must be in YYYY-MM-DD format');
+      }
+      if (!row['Gender*'] || !['male', 'female', 'other'].includes(row['Gender*'].toLowerCase())) {
+        rowErrors.push('Gender must be male, female, or other');
+      }
+
+      // Role-specific validations
+      if (role === 'student') {
+        if (!row['Class*']) {
+          rowErrors.push('Class is required for students');
+        }
+        if (!row['Father Name*']) {
+          rowErrors.push('Father Name is required for students');
+        }
+        if (!row['Mother Name*']) {
+          rowErrors.push('Mother Name is required for students');
+        }
+        
+        // Karnataka SATS specific validations
+        if (row['Student Aadhaar'] && !/^\d{12}$/.test(row['Student Aadhaar'])) {
+          rowErrors.push('Student Aadhaar must be 12 digits');
+        }
+        if (row['Father Aadhaar'] && !/^\d{12}$/.test(row['Father Aadhaar'])) {
+          rowErrors.push('Father Aadhaar must be 12 digits');
+        }
+        if (row['Mother Aadhaar'] && !/^\d{12}$/.test(row['Mother Aadhaar'])) {
+          rowErrors.push('Mother Aadhaar must be 12 digits');
+        }
+        if (row['Father Phone'] && !/^[6-9]\d{9}$/.test(row['Father Phone'].replace(/\D/g, ''))) {
+          rowErrors.push('Father Phone must be valid 10-digit Indian mobile number');
+        }
+        if (row['Mother Phone'] && !/^[6-9]\d{9}$/.test(row['Mother Phone'].replace(/\D/g, ''))) {
+          rowErrors.push('Mother Phone must be valid 10-digit Indian mobile number');
+        }
+        if (row['Age Years'] && (isNaN(parseInt(row['Age Years'])) || parseInt(row['Age Years']) < 0 || parseInt(row['Age Years']) > 25)) {
+          rowErrors.push('Age Years must be a number between 0 and 25');
+        }
+        if (row['Age Months'] && (isNaN(parseInt(row['Age Months'])) || parseInt(row['Age Months']) < 0 || parseInt(row['Age Months']) > 11)) {
+          rowErrors.push('Age Months must be a number between 0 and 11');
+        }
+        
+      } else if (role === 'teacher') {
+        if (!row['Highest Qualification*']) {
+          rowErrors.push('Highest Qualification is required for teachers');
+        }
+        if (!row['Total Experience (Years)*']) {
+          rowErrors.push('Total Experience is required for teachers');
+        }
+        if (row['Total Experience (Years)*'] && isNaN(parseInt(row['Total Experience (Years)*']))) {
+          rowErrors.push('Total Experience must be a valid number');
+        }
+        
+        // Teacher specific validations
+        if (row['Employee ID'] && !/^[A-Z]{3}_[A-Z]{3}\d{3}$/.test(row['Employee ID'])) {
+          rowErrors.push('Employee ID should follow format: SCH_TEA001');
+        }
+        if (row['Joining Date (YYYY-MM-DD)'] && !/^\d{4}-\d{2}-\d{2}$/.test(row['Joining Date (YYYY-MM-DD)'])) {
+          rowErrors.push('Joining Date must be in YYYY-MM-DD format');
+        }
+        
+      } else if (role === 'admin') {
+        if (!row['Admin Level*']) {
+          rowErrors.push('Admin Level is required for admins');
+        }
+        if (!row['Designation*']) {
+          rowErrors.push('Designation is required for admins');
+        }
+        if (!row['Department*']) {
+          rowErrors.push('Department is required for admins');
+        }
+        if (!row['Highest Qualification*']) {
+          rowErrors.push('Highest Qualification is required for admins');
+        }
+        
+        // Admin specific validations
+        if (row['Admin ID'] && !/^[A-Z]{3}_[A-Z]{3}\d{3}$/.test(row['Admin ID'])) {
+          rowErrors.push('Admin ID should follow format: SCH_ADM001');
+        }
+        if (row['Joining Date (YYYY-MM-DD)'] && !/^\d{4}-\d{2}-\d{2}$/.test(row['Joining Date (YYYY-MM-DD)'])) {
+          rowErrors.push('Joining Date must be in YYYY-MM-DD format');
+        }
+      }
+
+      // Common address validations
+      if (!row['Current Address Line 1*']) {
+        rowErrors.push('Current Address Line 1 is required');
+      }
+      if (!row['Current City*']) {
+        rowErrors.push('Current City is required');
+      }
+      if (!row['Current State*']) {
+        rowErrors.push('Current State is required');
+      }
+      if (!row['Current Pin Code*'] || !/^\d{6}$/.test(row['Current Pin Code*'])) {
+        rowErrors.push('Valid 6-digit pin code is required for Current Address');
+      }
+
+      // Optional field validations
+      if (row['Aadhaar Number'] && !/^\d{12}$/.test(row['Aadhaar Number'])) {
+        rowErrors.push('Aadhaar Number must be 12 digits');
+      }
+      if (row['PAN Number'] && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(row['PAN Number'])) {
+        rowErrors.push('PAN Number must be in format: ABCDE1234F');
+      }
+      if (row['IFSC Code'] && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(row['IFSC Code'])) {
+        rowErrors.push('IFSC Code must be in format: ABCD0123456');
+      }
+      if (row['Permanent Pin Code'] && row['Permanent Pin Code'] !== '' && !/^\d{6}$/.test(row['Permanent Pin Code'])) {
+        rowErrors.push('Permanent Pin Code must be 6 digits');
+      }
+      
+      // Date validations for optional date fields
+      const dateFields = [
+        'Admission Date (YYYY-MM-DD)', 'Last Medical Checkup (YYYY-MM-DD)', 
+        'Previous School TC Date (YYYY-MM-DD)', 'Joining Date (YYYY-MM-DD)',
+        'Latest Review Date'
+      ];
+      
+      dateFields.forEach(field => {
+        if (row[field] && row[field] !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(row[field])) {
+          rowErrors.push(`${field} must be in YYYY-MM-DD format`);
+        }
+      });
+
+      // Blood group validation
+      const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+      if (row['Blood Group'] && !validBloodGroups.includes(row['Blood Group'])) {
+        rowErrors.push('Blood Group must be one of: A+, A-, B+, B-, AB+, AB-, O+, O-');
+      }
+
+      // Numeric field validations
+      const numericFields = [
+        'Age Years', 'Age Months', 'Father Annual Income', 'Mother Annual Income',
+        'Total Experience (Years)', 'Experience at Current School (Years)',
+        'Qualification Year', 'Administrative Experience (Years)', 'Education Sector Experience (Years)',
+        'Max Periods Per Day', 'Max Periods Per Week', 'Basic Salary',
+        'HRA Allowance', 'Transport Allowance', 'Medical Allowance', 'Management Allowance',
+        'Concession Percentage', 'Scholarship Amount', 'Current Percentage', 'Current Rank',
+        'Current Attendance', 'Latest Review Rating'
+      ];
+      
+      numericFields.forEach(field => {
+        if (row[field] && row[field] !== '' && isNaN(Number(row[field]))) {
+          rowErrors.push(`${field} must be a valid number`);
+        }
+      });
+
+      // Email validations for family members
+      const emailFields = ['Father Email', 'Mother Email', 'Guardian Email'];
+      emailFields.forEach(field => {
+        if (row[field] && row[field] !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row[field])) {
+          rowErrors.push(`${field} must be a valid email address`);
+        }
+      });
+
+      // Phone number validations for family/emergency contacts
+      const phoneFields = [
+        'Father Phone', 'Mother Phone', 'Guardian Phone', 
+        'Emergency Contact 1 Phone', 'Emergency Contact 2 Phone',
+        'Emergency Hospital Phone'
+      ];
+      phoneFields.forEach(field => {
+        if (row[field] && row[field] !== '' && !/^[6-9]\d{9}$/.test(row[field].replace(/\D/g, ''))) {
+          rowErrors.push(`${field} must be a valid 10-digit Indian mobile number`);
+        }
+      });
+
+      // Boolean field validations
+      const booleanFields = [
+        'Guardian Is Emergency Contact', 'Primary Subject 1 Is Primary',
+        'Secondary Subject 2 Is Primary', 'Secondary Subject 3 Is Primary',
+        'Emergency Contact 1 Is Primary', 'Emergency Contact 2 Is Primary',
+        'Overtime Eligible', 'Can Manage Users', 'Can Manage Academics',
+        'Can Manage Finance', 'Can Manage Reports', 'Can Manage School Settings',
+        'Can View All Data', 'Can Export Data', 'Can Import Data',
+        'Multi-School Access', 'API Access'
+      ];
+      booleanFields.forEach(field => {
+        if (row[field] && row[field] !== '' && !['true', 'false', 'yes', 'no', ''].includes(row[field].toLowerCase())) {
+          rowErrors.push(`${field} must be true/false or yes/no`);
+        }
+      });
+
+      if (rowErrors.length > 0) {
+        errors.push({
+          row: row._rowIndex,
+          error: rowErrors.join(', '),
+          data: row
+        });
+      }
+    });
+
+    return errors;
+  };
+
+  const processImport = async () => {
+    if (!importFile) {
+      toast.error('No file selected for import');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(0);
+
+    try {
+      const schoolCode = user?.schoolCode || 'P';
+      const response = await exportImportAPI.importUsers(schoolCode, importFile);
+      
+      setImportProgress(100);
+      setImportResults(response.data.results);
+      
+      if (response.data.results.success.length > 0) {
+        toast.success(`Successfully imported ${response.data.results.success.length} users`);
+        // Refresh the user list
+        fetchUsers();
+      }
+      
+      if (response.data.results.errors.length > 0) {
+        toast.error(`${response.data.results.errors.length} users failed to import`);
+      }
+      
+    } catch (error: any) {
+      console.error('Import error:', error);
+      toast.error(error.response?.data?.message || 'Failed to import users. Please try again.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Old import processing logic (keeping for reference)
+  const processImportOld = async () => {
+    if (!importPreview.length) {
+      toast.error('No data to import');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(0);
+
+    try {
+      // Validate data
+      const validationErrors = validateImportData(importPreview, activeTab);
+      
+      if (validationErrors.length > 0) {
+        setImportResults({
+          success: [],
+          errors: validationErrors
+        });
+        setIsImporting(false);
+        return;
+      }
+
+      const successResults: Array<{userId: string, email: string, password: string, role: string}> = [];
+      const errorResults: Array<{row: number, error: string, data: any}> = [];
+      
+      // Process each row
+      for (let i = 0; i < importPreview.length; i++) {
+        const row = importPreview[i];
+        setImportProgress(((i + 1) / importPreview.length) * 100);
+
+        try {
+          // Generate user ID and password
+          const schoolCode = user?.schoolCode || 'P';
+          const userId = await generateUserId(activeTab, schoolCode);
+          
+          // Use DOB as password (format: DDMMYYYY)
+          const dobStr = row['Date of Birth* (YYYY-MM-DD)'];
+          const dobDate = new Date(dobStr);
+          const dobPassword = `${dobDate.getDate().toString().padStart(2, '0')}${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${dobDate.getFullYear()}`;
+
+          // Create comprehensive user data based on role and all template fields
+          let userData: any = {
+            userId: userId,
+            generatedPassword: dobPassword,
+            role: activeTab,
+            email: row['Email*'],
+            
+            // Name structure
+            name: {
+              firstName: row['First Name*'],
+              middleName: row['Middle Name'] || '',
+              lastName: row['Last Name*'],
+              displayName: `${row['First Name*']} ${row['Last Name*']}`
+            },
+            
+            // Contact information
+            contact: {
+              primaryPhone: row['Phone*'].replace(/\D/g, ''),
+              phone: row['Phone*'].replace(/\D/g, '')
+            },
+            
+            // Personal information
+            personalInfo: {
+              dateOfBirth: row['Date of Birth* (YYYY-MM-DD)'],
+              placeOfBirth: row['Place of Birth'] || '',
+              gender: row['Gender*'].toLowerCase(),
+              bloodGroup: row['Blood Group'] || '',
+              nationality: row['Nationality'] || 'Indian',
+              religion: row['Religion'] || '',
+              religionOther: row['Religion Other'] || '',
+              caste: row['Caste'] || '',
+              casteOther: row['Caste Other'] || '',
+              category: row['Category'] || '',
+              categoryOther: row['Category Other'] || '',
+              motherTongue: row['Mother Tongue'] || '',
+              motherTongueOther: row['Mother Tongue Other'] || '',
+              languagesKnown: row['Languages Known'] ? row['Languages Known'].split(',').map((s: string) => s.trim()) : [],
+              maritalStatus: row['Marital Status'] || '',
+              spouseName: row['Spouse Name'] || ''
+            },
+            
+            // Address information
+            address: {
+              current: {
+                addressLine1: row['Current Address Line 1*'],
+                addressLine2: row['Current Address Line 2'] || '',
+                city: row['Current City*'],
+                district: row['Current District*'],
+                state: row['Current State*'],
+                pinCode: row['Current Pin Code*'],
+                taluka: row['Current Taluka'] || '',
+                urbanRural: row['Current Urban Rural'] || ''
+              },
+              permanent: {
+                addressLine1: row['Permanent Address Line 1'] || '',
+                addressLine2: row['Permanent Address Line 2'] || '',
+                city: row['Permanent City'] || '',
+                district: row['Permanent District'] || '',
+                state: row['Permanent State'] || '',
+                pinCode: row['Permanent Pin Code'] || '',
+                taluka: row['Permanent Taluka'] || '',
+                urbanRural: row['Permanent Urban Rural'] || ''
+              }
+            },
+            
+            // Identity documents
+            identityDocs: {
+              aadhaarNumber: row['Aadhaar Number'] || '',
+              panNumber: row['PAN Number'] || '',
+              passportNumber: row['Passport Number'] || '',
+              drivingLicense: row['Driving License'] || ''
+            },
+            
+            // Emergency contacts
+            emergencyContacts: []
+          };
+
+          // Add emergency contacts if provided
+          if (row['Emergency Contact 1 Name']) {
+            userData.emergencyContacts.push({
+              name: row['Emergency Contact 1 Name'],
+              relationship: row['Emergency Contact 1 Relationship'] || '',
+              phone: row['Emergency Contact 1 Phone'] || '',
+              address: row['Emergency Contact 1 Address'] || '',
+              isPrimary: ['true', 'yes'].includes((row['Emergency Contact 1 Is Primary'] || '').toLowerCase())
+            });
+          }
+          
+          if (row['Emergency Contact 2 Name']) {
+            userData.emergencyContacts.push({
+              name: row['Emergency Contact 2 Name'],
+              relationship: row['Emergency Contact 2 Relationship'] || '',
+              phone: row['Emergency Contact 2 Phone'] || '',
+              address: row['Emergency Contact 2 Address'] || '',
+              isPrimary: ['true', 'yes'].includes((row['Emergency Contact 2 Is Primary'] || '').toLowerCase())
+            });
+          }
+
+          // Metadata
+          userData.metadata = {
+            source: row['Source'] || 'bulk_import',
+            importBatch: row['Import Batch'] || new Date().toISOString().split('T')[0],
+            tags: row['Tags'] ? row['Tags'].split(',').map((s: string) => s.trim()) : [],
+            notes: row['Notes'] || ''
+          };
+
+          if (activeTab === 'student') {
+            // Comprehensive student data mapping
+            userData.studentDetails = {
+              studentId: row['Student ID'] || '',
+              admissionNumber: row['Admission Number'] || '',
+              rollNumber: row['Roll Number'] || '',
+              
+              // Academic information
+              academic: {
+                currentClass: row['Class*'],
+                currentSection: row['Section*'] || 'A',
+                academicYear: row['Academic Year'] || '2024-25',
+                admissionDate: row['Admission Date (YYYY-MM-DD)'] ? new Date(row['Admission Date (YYYY-MM-DD)']) : new Date(),
+                admissionClass: row['Admission Class'] || row['Class*'],
+                stream: row['Stream'] || '',
+                electives: row['Electives'] ? row['Electives'].split(',').map((s: string) => s.trim()) : [],
+                enrollmentNo: row['Enrollment No'] || '',
+                tcNo: row['TC No'] || '',
+                previousSchool: {
+                  name: row['Previous School Name'] || '',
+                  board: row['Previous School Board'] || '',
+                  lastClass: row['Previous School Last Class'] || '',
+                  tcNumber: row['Previous School TC Number'] || '',
+                  tcDate: row['Previous School TC Date (YYYY-MM-DD)'] ? new Date(row['Previous School TC Date (YYYY-MM-DD)']) : null,
+                  reasonForTransfer: row['Reason for Transfer'] || ''
+                }
+              },
+              
+              // Personal information (Karnataka SATS)
+              personal: {
+                ...userData.personalInfo,
+                studentNameKannada: row['Student Name Kannada'] || '',
+                ageYears: row['Age Years'] ? parseInt(row['Age Years']) : null,
+                ageMonths: row['Age Months'] ? parseInt(row['Age Months']) : null,
+                socialCategory: row['Social Category'] || '',
+                socialCategoryOther: row['Social Category Other'] || '',
+                studentCaste: row['Student Caste'] || '',
+                studentCasteOther: row['Student Caste Other'] || '',
+                studentAadhaar: row['Student Aadhaar'] || '',
+                studentCasteCertNo: row['Student Caste Certificate No'] || '',
+                specialCategory: row['Special Category'] || '',
+                specialCategoryOther: row['Special Category Other'] || '',
+                belongingToBPL: row['Belonging to BPL'] || 'No',
+                bplCardNo: row['BPL Card No'] || '',
+                bhagyalakshmiBondNo: row['Bhagyalakshmi Bond No'] || '',
+                disability: row['Disability'] || 'Not Applicable',
+                disabilityOther: row['Disability Other'] || ''
+              },
+              
+              // Family information
+              family: {
+                father: {
+                  name: row['Father Name*'],
+                  nameKannada: row['Father Name Kannada'] || '',
+                  occupation: row['Father Occupation'] || '',
+                  qualification: row['Father Qualification'] || '',
+                  phone: row['Father Phone'] || '',
+                  email: row['Father Email'] || '',
+                  workAddress: row['Father Work Address'] || '',
+                  annualIncome: row['Father Annual Income'] ? parseFloat(row['Father Annual Income']) : null,
+                  aadhaar: row['Father Aadhaar'] || '',
+                  caste: row['Father Caste'] || '',
+                  casteOther: row['Father Caste Other'] || '',
+                  casteCertNo: row['Father Caste Certificate No'] || ''
+                },
+                mother: {
+                  name: row['Mother Name*'],
+                  nameKannada: row['Mother Name Kannada'] || '',
+                  occupation: row['Mother Occupation'] || '',
+                  qualification: row['Mother Qualification'] || '',
+                  phone: row['Mother Phone'] || '',
+                  email: row['Mother Email'] || '',
+                  workAddress: row['Mother Work Address'] || '',
+                  annualIncome: row['Mother Annual Income'] ? parseFloat(row['Mother Annual Income']) : null,
+                  aadhaar: row['Mother Aadhaar'] || '',
+                  caste: row['Mother Caste'] || '',
+                  casteOther: row['Mother Caste Other'] || '',
+                  casteCertNo: row['Mother Caste Certificate No'] || ''
+                },
+                guardian: {
+                  name: row['Guardian Name'] || '',
+                  relationship: row['Guardian Relationship'] || '',
+                  phone: row['Guardian Phone'] || '',
+                  email: row['Guardian Email'] || '',
+                  address: row['Guardian Address'] || '',
+                  isEmergencyContact: ['true', 'yes'].includes((row['Guardian Is Emergency Contact'] || '').toLowerCase())
+                },
+                siblings: []
+              },
+              
+              // Medical information
+              medical: {
+                allergies: row['Allergies'] ? row['Allergies'].split(',').map((s: string) => s.trim()) : [],
+                chronicConditions: row['Chronic Conditions'] ? row['Chronic Conditions'].split(',').map((s: string) => s.trim()) : [],
+                medications: row['Medications'] ? row['Medications'].split(',').map((s: string) => s.trim()) : [],
+                emergencyMedicalContact: {
+                  doctorName: row['Emergency Doctor Name'] || '',
+                  hospitalName: row['Emergency Hospital Name'] || '',
+                  phone: row['Emergency Hospital Phone'] || ''
+                },
+                lastMedicalCheckup: row['Last Medical Checkup (YYYY-MM-DD)'] ? new Date(row['Last Medical Checkup (YYYY-MM-DD)']) : null,
+                vaccinationStatus: row['Vaccination Status'] ? row['Vaccination Status'].split(',').map((v: string) => ({ vaccine: v.trim(), date: new Date(), nextDue: null })) : []
+              },
+              
+              // Transportation
+              transport: {
+                mode: row['Transport Mode'] || '',
+                busRoute: row['Bus Route'] || '',
+                pickupPoint: row['Pickup Point'] || '',
+                dropPoint: row['Drop Point'] || '',
+                pickupTime: row['Pickup Time'] || '',
+                dropTime: row['Drop Time'] || ''
+              },
+              
+              // Financial information
+              financial: {
+                feeCategory: row['Fee Category'] || 'regular',
+                concessionType: row['Concession Type'] || '',
+                concessionPercentage: row['Concession Percentage'] ? parseFloat(row['Concession Percentage']) : null,
+                scholarshipDetails: {
+                  name: row['Scholarship Name'] || '',
+                  amount: row['Scholarship Amount'] ? parseFloat(row['Scholarship Amount']) : null,
+                  provider: row['Scholarship Provider'] || ''
+                },
+                bankDetails: {
+                  bankName: row['Bank Name'] || '',
+                  accountNumber: row['Account Number'] || '',
+                  ifscCode: row['IFSC Code'] || '',
+                  accountHolderName: row['Account Holder Name'] || ''
+                }
+              },
+              
+              // Academic history
+              academicHistory: row['Current Academic Year'] ? [{
+                academicYear: row['Current Academic Year'],
+                class: row['Class*'],
+                section: row['Section*'] || 'A',
+                result: row['Current Class Result'] || '',
+                percentage: row['Current Percentage'] ? parseFloat(row['Current Percentage']) : null,
+                rank: row['Current Rank'] ? parseInt(row['Current Rank']) : null,
+                attendance: row['Current Attendance'] ? parseFloat(row['Current Attendance']) : null
+              }] : []
+            };
+
+            // Add siblings information
+            for (let i = 1; i <= 3; i++) {
+              if (row[`Sibling ${i} Name`]) {
+                userData.studentDetails.family.siblings.push({
+                  name: row[`Sibling ${i} Name`],
+                  age: row[`Sibling ${i} Age`] ? parseInt(row[`Sibling ${i} Age`]) : null,
+                  relationship: row[`Sibling ${i} Relationship`] || '',
+                  school: row[`Sibling ${i} School`] || '',
+                  class: row[`Sibling ${i} Class`] || ''
+                });
+              }
+            }
+
+          } else if (activeTab === 'teacher') {
+            // Comprehensive teacher data mapping
+            userData.teacherDetails = {
+              employeeId: row['Employee ID'] || '',
+              joiningDate: row['Joining Date (YYYY-MM-DD)'] ? new Date(row['Joining Date (YYYY-MM-DD)']) : new Date(),
+              designation: row['Designation'] || '',
+              department: row['Department'] || '',
+              
+              // Qualification
+              qualification: {
+                highest: row['Highest Qualification*'],
+                specialization: row['Specialization'] || '',
+                university: row['University'] || '',
+                year: row['Qualification Year'] ? parseInt(row['Qualification Year']) : null,
+                teachingLicense: row['Teaching License'] || '',
+                certificates: []
+              },
+              
+              // Experience
+              experience: {
+                total: row['Total Experience (Years)*'] ? parseInt(row['Total Experience (Years)*']) : 0,
+                atCurrentSchool: row['Experience at Current School (Years)'] ? parseInt(row['Experience at Current School (Years)']) : 0,
+                previousSchools: []
+              },
+              
+              // Subjects
+              subjects: [],
+              
+              // Class teacher and responsibilities
+              classTeacherOf: row['Class Teacher Of'] || '',
+              responsibilities: row['Responsibilities'] ? row['Responsibilities'].split(',').map((s: string) => s.trim()) : [],
+              
+              // Work schedule
+              workSchedule: {
+                workingDays: row['Working Days'] ? row['Working Days'].split(',').map((s: string) => s.trim()) : [],
+                workingHours: {
+                  start: row['Working Hours Start'] || '',
+                  end: row['Working Hours End'] || ''
+                },
+                maxPeriodsPerDay: row['Max Periods Per Day'] ? parseInt(row['Max Periods Per Day']) : null,
+                maxPeriodsPerWeek: row['Max Periods Per Week'] ? parseInt(row['Max Periods Per Week']) : null
+              },
+              
+              // Performance reviews
+              performanceReviews: row['Latest Review Academic Year'] ? [{
+                academicYear: row['Latest Review Academic Year'],
+                rating: row['Latest Review Rating'] ? parseFloat(row['Latest Review Rating']) : null,
+                comments: row['Latest Review Comments'] || '',
+                reviewedBy: null,
+                reviewDate: new Date()
+              }] : [],
+              
+              // Salary
+              salary: {
+                basic: row['Basic Salary'] ? parseFloat(row['Basic Salary']) : null,
+                allowances: [],
+                currency: row['Currency'] || 'INR'
+              },
+              
+              // Bank details
+              bankDetails: {
+                bankName: row['Bank Name'] || '',
+                accountNumber: row['Account Number'] || '',
+                ifscCode: row['IFSC Code'] || '',
+                branchName: row['Branch Name'] || '',
+                accountHolderName: row['Account Holder Name'] || `${row['First Name*']} ${row['Last Name*']}`
+              }
+            };
+
+            // Add certificates
+            for (let i = 1; i <= 3; i++) {
+              if (row[`Certificate ${i} Name`]) {
+                userData.teacherDetails.qualification.certificates.push({
+                  name: row[`Certificate ${i} Name`],
+                  institution: row[`Certificate ${i} Institution`] || '',
+                  year: row[`Certificate ${i} Year`] ? parseInt(row[`Certificate ${i} Year`]) : null,
+                  documentUrl: ''
+                });
+              }
+            }
+
+            // Add previous schools
+            for (let i = 1; i <= 3; i++) {
+              if (row[`Previous School ${i} Name`]) {
+                userData.teacherDetails.experience.previousSchools.push({
+                  schoolName: row[`Previous School ${i} Name`],
+                  duration: row[`Previous School ${i} Duration`] || '',
+                  position: row[`Previous School ${i} Position`] || '',
+                  reasonForLeaving: row[`Previous School ${i} Reason for Leaving`] || ''
+                });
+              }
+            }
+
+            // Add subjects
+            for (let i = 1; i <= 3; i++) {
+              const codeField = i === 1 ? 'Primary Subject 1 Code' : `Secondary Subject ${i} Code`;
+              const nameField = i === 1 ? 'Primary Subject 1 Name' : `Secondary Subject ${i} Name`;
+              const classesField = i === 1 ? 'Primary Subject 1 Classes' : `Secondary Subject ${i} Classes`;
+              const isPrimaryField = i === 1 ? 'Primary Subject 1 Is Primary' : `Secondary Subject ${i} Is Primary`;
+              
+              if (row[codeField] || row[nameField]) {
+                userData.teacherDetails.subjects.push({
+                  subjectCode: row[codeField] || '',
+                  subjectName: row[nameField] || '',
+                  classes: row[classesField] ? row[classesField].split(',').map((s: string) => s.trim()) : [],
+                  isPrimary: ['true', 'yes'].includes((row[isPrimaryField] || '').toLowerCase())
+                });
+              }
+            }
+
+            // Add salary allowances
+            const allowanceTypes = ['HRA', 'Transport', 'Medical'];
+            allowanceTypes.forEach(type => {
+              const amount = row[`${type} Allowance`];
+              if (amount && parseFloat(amount) > 0) {
+                userData.teacherDetails.salary.allowances.push({
+                  type: type,
+                  amount: parseFloat(amount)
+                });
+              }
+            });
+
+            // Add other allowances if specified
+            if (row['Other Allowances']) {
+              row['Other Allowances'].split(',').forEach((allowance: string) => {
+                const [type, amount] = allowance.trim().split(':');
+                if (type && amount) {
+                  userData.teacherDetails.salary.allowances.push({
+                    type: type.trim(),
+                    amount: parseFloat(amount.trim())
+                  });
+                }
+              });
+            }
+
+          } else if (activeTab === 'admin') {
+            // Comprehensive admin data mapping
+            userData.adminDetails = {
+              adminId: row['Admin ID'] || '',
+              adminLevel: row['Admin Level*'],
+              designation: row['Designation*'],
+              department: row['Department*'],
+              joiningDate: row['Joining Date (YYYY-MM-DD)'] ? new Date(row['Joining Date (YYYY-MM-DD)']) : new Date(),
+              reportingManager: row['Reporting Manager'] || '',
+              
+              // Permissions
+              permissions: {
+                list: row['Permissions'] ? row['Permissions'].split(',').map((s: string) => s.trim()) : [],
+                accessLevel: row['Access Level'] || '',
+                canManageUsers: ['true', 'yes'].includes((row['Can Manage Users'] || '').toLowerCase()),
+                canManageAcademics: ['true', 'yes'].includes((row['Can Manage Academics'] || '').toLowerCase()),
+                canManageFinance: ['true', 'yes'].includes((row['Can Manage Finance'] || '').toLowerCase()),
+                canManageReports: ['true', 'yes'].includes((row['Can Manage Reports'] || '').toLowerCase()),
+                canManageSchoolSettings: ['true', 'yes'].includes((row['Can Manage School Settings'] || '').toLowerCase()),
+                canViewAllData: ['true', 'yes'].includes((row['Can View All Data'] || '').toLowerCase()),
+                canExportData: ['true', 'yes'].includes((row['Can Export Data'] || '').toLowerCase()),
+                canImportData: ['true', 'yes'].includes((row['Can Import Data'] || '').toLowerCase())
+              },
+              
+              // Responsibilities
+              responsibilities: {
+                primary: row['Primary Responsibilities'] ? row['Primary Responsibilities'].split(',').map((s: string) => s.trim()) : [],
+                secondary: row['Secondary Responsibilities'] ? row['Secondary Responsibilities'].split(',').map((s: string) => s.trim()) : [],
+                committees: row['Committees'] ? row['Committees'].split(',').map((s: string) => s.trim()) : [],
+                specialDuties: row['Special Duties'] ? row['Special Duties'].split(',').map((s: string) => s.trim()) : []
+              },
+              
+              // Qualification
+              qualification: {
+                highest: row['Highest Qualification*'],
+                specialization: row['Specialization'] || '',
+                university: row['University'] || '',
+                year: row['Qualification Year'] ? parseInt(row['Qualification Year']) : null
+              },
+              
+              // Experience
+              experience: {
+                totalYears: row['Total Experience (Years)'] ? parseInt(row['Total Experience (Years)']) : null,
+                administrativeYears: row['Administrative Experience (Years)'] ? parseInt(row['Administrative Experience (Years)']) : null,
+                educationSectorYears: row['Education Sector Experience (Years)'] ? parseInt(row['Education Sector Experience (Years)']) : null,
+                previousExperience: []
+              },
+              
+              // Work schedule
+              workSchedule: {
+                workingDays: row['Working Days'] ? row['Working Days'].split(',').map((s: string) => s.trim()) : [],
+                workingHours: {
+                  start: row['Working Hours Start'] || '',
+                  end: row['Working Hours End'] || ''
+                },
+                overtimeEligible: ['true', 'yes'].includes((row['Overtime Eligible'] || '').toLowerCase()),
+                onCallDuties: row['On-Call Duties'] ? row['On-Call Duties'].split(',').map((s: string) => s.trim()) : []
+              },
+              
+              // Salary
+              salary: {
+                basic: row['Basic Salary'] ? parseFloat(row['Basic Salary']) : null,
+                allowances: [],
+                currency: row['Currency'] || 'INR'
+              },
+              
+              // Bank details
+              bankDetails: {
+                bankName: row['Bank Name'] || '',
+                accountNumber: row['Account Number'] || '',
+                ifscCode: row['IFSC Code'] || '',
+                branchName: row['Branch Name'] || '',
+                accountHolderName: row['Account Holder Name'] || `${row['First Name*']} ${row['Last Name*']}`
+              },
+              
+              // System access
+              systemAccess: {
+                loginPermissions: row['Login Permissions'] || '',
+                systemRole: row['System Role'] || '',
+                multiSchoolAccess: ['true', 'yes'].includes((row['Multi-School Access'] || '').toLowerCase()),
+                apiAccess: ['true', 'yes'].includes((row['API Access'] || '').toLowerCase()),
+                reportingAccess: row['Reporting Access'] || ''
+              },
+              
+              // Performance review
+              performanceReview: {
+                latestReviewDate: row['Latest Review Date'] ? new Date(row['Latest Review Date']) : null,
+                latestReviewRating: row['Latest Review Rating'] ? parseFloat(row['Latest Review Rating']) : null,
+                latestReviewComments: row['Latest Review Comments'] || '',
+                goalsAndTargets: row['Goals and Targets'] ? row['Goals and Targets'].split(',').map((s: string) => s.trim()) : []
+              }
+            };
+
+            // Add previous experience
+            for (let i = 1; i <= 3; i++) {
+              if (row[`Previous Organization ${i}`]) {
+                userData.adminDetails.experience.previousExperience.push({
+                  organization: row[`Previous Organization ${i}`],
+                  position: row[`Previous Position ${i}`] || '',
+                  duration: row[`Previous Duration ${i}`] || '',
+                  responsibilities: row[`Previous Responsibilities ${i}`] || ''
+                });
+              }
+            }
+
+            // Add salary allowances
+            const allowanceTypes = ['HRA', 'Transport', 'Medical', 'Management'];
+            allowanceTypes.forEach(type => {
+              const amount = row[`${type} Allowance`];
+              if (amount && parseFloat(amount) > 0) {
+                userData.adminDetails.salary.allowances.push({
+                  type: type,
+                  amount: parseFloat(amount)
+                });
+              }
+            });
+
+            // Add other allowances if specified
+            if (row['Other Allowances']) {
+              row['Other Allowances'].split(',').forEach((allowance: string) => {
+                const [type, amount] = allowance.trim().split(':');
+                if (type && amount) {
+                  userData.adminDetails.salary.allowances.push({
+                    type: type.trim(),
+                    amount: parseFloat(amount.trim())
+                  });
+                }
+              });
+            }
+          }
+
+          // Create user via API
+          const response = await schoolUserAPI.createUser(userData);
+          
+          successResults.push({
+            userId: userId,
+            email: row['Email*'],
+            password: dobPassword,
+            role: activeTab
+          });
+
+        } catch (error: any) {
+          console.error(`Error creating user in row ${row._rowIndex}:`, error);
+          errorResults.push({
+            row: row._rowIndex,
+            error: error.response?.data?.message || error.message || 'Failed to create user',
+            data: row
+          });
+        }
+      }
+
+      setImportResults({
+        success: successResults,
+        errors: errorResults
+      });
+
+      if (successResults.length > 0) {
+        toast.success(`Successfully imported ${successResults.length} users!`);
+        fetchUsers(); // Refresh the users list
+      }
+
+      if (errorResults.length > 0) {
+        toast.error(`${errorResults.length} users failed to import. Check the results.`);
+      }
+
+    } catch (error) {
+      console.error('Import process error:', error);
+      toast.error('Import process failed');
+    } finally {
+      setIsImporting(false);
+      setImportProgress(0);
+    }
+  };
+
+  const downloadCredentials = () => {
+    if (!importResults?.success.length) {
+      toast.error('No successful imports to download credentials for');
+      return;
+    }
+
+    const currentDate = new Date().toISOString().split('T')[0];
+    const filename = `imported_user_credentials_${currentDate}.csv`;
+    
+    const headers = ['User ID', 'Email', 'Password', 'Role', 'Login Instructions'];
+    const rows = importResults.success.map(user => [
+      user.userId,
+      user.email,
+      user.password,
+      user.role,
+      'Use Date of Birth (DDMMYYYY) as password, change on first login'
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      headers.join(',') + '\n' +
+      rows.map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success('User credentials downloaded successfully!');
   };
 
   // Helper function to organize students hierarchically
@@ -2144,6 +4950,21 @@ const ManageUsers: React.FC = () => {
               <span>Export</span>
             </button>
             <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Import</span>
+            </button>
+            <button
+              onClick={() => generateTemplate(activeTab)}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              title={`Download ${activeTab} import template`}
+            >
+              <FileText className="h-4 w-4" />
+              <span>Template</span>
+            </button>
+            <button
               onClick={async () => {
                 setShowAddModal(true);
                 // Set role based on active tab and generate credentials
@@ -2154,7 +4975,8 @@ const ManageUsers: React.FC = () => {
                 // Generate credentials automatically
                 const schoolCode = user?.schoolCode || 'P';
                 const userId = await generateUserId(activeTab, schoolCode);
-                const password = generatePassword();
+                // For students, don't generate password until DOB is entered
+                const password = activeTab === 'student' ? '' : generatePassword();
                 setFormData(prev => ({
                   ...prev,
                   userId: userId,
@@ -2500,9 +5322,54 @@ const ManageUsers: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Generated Password
+                      {formData.role === 'student' ? 'Student Password' : 'Generated Password'}
                       {formData.generatedPassword && <span className="text-green-600 ml-1">✅</span>}
                     </label>
+                    {formData.role === 'student' ? (
+                      <div>
+                        {formData.generatedPassword ? (
+                          <div className="w-full border rounded-lg px-3 py-2 bg-green-50 border-green-300 text-green-800 font-mono">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-lg">{formData.generatedPassword}</span>
+                              <span className="text-green-600 text-sm font-semibold">✅ Generated from DOB</span>
+                            </div>
+                            <div className="text-xs text-green-600 mt-1">
+                              Password format: DDMMYYYY (e.g., 15032010)
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full border rounded-lg px-3 py-2 bg-blue-50 border-blue-300 text-blue-800">
+                            <div className="flex items-center">
+                              <span className="text-blue-500 mr-2">📅</span>
+                              <span className="font-medium">Enter Date of Birth to generate password</span>
+                            </div>
+                            <div className="text-sm text-blue-600 mt-1">
+                              Password will be in DDMMYYYY format (e.g., 15032010)
+                            </div>
+                          </div>
+                        )}
+                        {formData.generatedPassword && (
+                          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <span className="text-green-500 text-lg">🔐</span>
+                              </div>
+                              <div className="ml-3">
+                                <p className="text-sm text-green-700 font-medium">
+                                  ✅ Password created from Date of Birth: <code className="bg-green-100 px-2 py-1 rounded font-mono text-sm">{formData.generatedPassword}</code>
+                                </p>
+                                <p className="text-xs text-green-600 mt-1">
+                                  Give this password to the student for their first login. They will be required to change it on first login.
+                                </p>
+                                <div className="mt-2 text-xs text-green-600">
+                                  <strong>Format:</strong> DDMMYYYY (Day-Month-Year)
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
                     <input
                       type="text"
                       value={formData.generatedPassword || 'Password will be generated when role is selected'}
@@ -2514,20 +5381,43 @@ const ManageUsers: React.FC = () => {
                       }`}
                       placeholder="8-character secure password will appear here"
                     />
-                    {formData.generatedPassword && (
+                    )}
+                    {formData.generatedPassword && formData.role !== 'student' && (
                       <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
                         <p className="text-xs text-green-700 font-medium">
-                          ✅ 8-character secure password generated: <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
+                          ✅ 8-character secure password generated: 
+                          <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
                         </p>
                         <p className="text-xs text-green-600 mt-1">
                           Copy this password - user will need it for first login
                         </p>
                       </div>
                     )}
+                    
+                    {/* DOB Password Generation Info for Students */}
+                    {formData.role === 'student' && !formData.generatedPassword && (
+                      <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <span className="text-orange-500">⚠️</span>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-orange-800">Please enter Date of Birth first</p>
+                            <p className="text-xs text-orange-600">
+                              The student's password will be automatically generated from their Date of Birth (DDMMYYYY format).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {!formData.generatedPassword && formData.role && (
                       <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
                         <p className="text-xs text-gray-600">
-                          🔒 Password will be auto-generated when you select a role
+                          {formData.role === 'student' 
+                            ? '📅 Enter the student\'s Date of Birth to generate a DOB-based password' 
+                            : '🔒 Password will be auto-generated when you select a role'
+                          }
                         </p>
                       </div>
                     )}
@@ -2600,8 +5490,8 @@ const ManageUsers: React.FC = () => {
                     <input
                       type="date"
                       required
-                      value={formData.dateOfBirth}
-                      onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                      value={formData.dateOfBirth || formData.studentDetails?.dateOfBirth || ''}
+                      onChange={(e) => handleDOBChangeWithStudentDetails(e.target.value)}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     />
                   </div>
@@ -2609,8 +5499,18 @@ const ManageUsers: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
                     <select
                       required
-                      value={formData.gender}
-                      onChange={(e) => setFormData({...formData, gender: e.target.value as any})}
+                      value={formData.gender || formData.studentDetails?.gender || 'male'}
+                      onChange={(e) => {
+                        const newGender = e.target.value;
+                        setFormData({
+                          ...formData, 
+                          gender: newGender as any,
+                          studentDetails: {
+                            ...formData.studentDetails,
+                            gender: newGender
+                          }
+                        });
+                      }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     >
                       <option value="male">Male</option>
@@ -2660,8 +5560,18 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Admission to Class *</label>
                         <select
                           required
-                          value={formData.class}
-                          onChange={(e) => setFormData({...formData, class: e.target.value})}
+                          value={formData.class || formData.studentDetails?.currentClass || ''}
+                          onChange={(e) => {
+                            const newClass = e.target.value;
+                            setFormData({
+                              ...formData, 
+                              class: newClass,
+                              studentDetails: {
+                                ...formData.studentDetails,
+                                currentClass: newClass
+                              }
+                            });
+                          }}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Class</option>
@@ -2676,19 +5586,38 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
                         <select
                           required
-                          value={formData.academicYear}
-                          onChange={(e) => setFormData({...formData, academicYear: e.target.value})}
+                          value={formData.studentDetails?.academicYear || '2024-25'}
+                          onChange={(e) => {
+                            const newYear = e.target.value;
+                            setFormData({
+                              ...formData,
+                              studentDetails: {
+                                ...formData.studentDetails,
+                                academicYear: newYear
+                              }
+                            });
+                          }}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
-                          <option value="2024-2025">2024-2025</option>
-                          <option value="2025-2026">2025-2026</option>
+                          <option value="2024-25">2024-25</option>
+                          <option value="2025-26">2025-26</option>
                         </select>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select
-                          value={formData.section}
-                          onChange={(e) => setFormData({...formData, section: e.target.value})}
+                          value={formData.section || formData.studentDetails?.currentSection || ''}
+                          onChange={(e) => {
+                            const newSection = e.target.value;
+                            setFormData({
+                              ...formData, 
+                              section: newSection,
+                              studentDetails: {
+                                ...formData.studentDetails,
+                                currentSection: newSection
+                              }
+                            });
+                          }}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Section</option>
@@ -2774,7 +5703,7 @@ const ManageUsers: React.FC = () => {
                           type="date"
                           required
                           value={formData.dateOfBirth}
-                          onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                          onChange={(e) => handleDOBChange(e.target.value)}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         />
                       </div>
@@ -2828,7 +5757,14 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.fatherName}
-                          onChange={(e) => setFormData({...formData, fatherName: e.target.value})}
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            fatherName: e.target.value,
+                            studentDetails: {
+                              ...formData.studentDetails,
+                              fatherName: e.target.value
+                            }
+                          })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter father's name"
                         />
@@ -2861,7 +5797,14 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.motherName}
-                          onChange={(e) => setFormData({...formData, motherName: e.target.value})}
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            motherName: e.target.value,
+                            studentDetails: {
+                              ...formData.studentDetails,
+                              motherName: e.target.value
+                            }
+                          })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mother's name"
                         />
@@ -3146,7 +6089,7 @@ const ManageUsers: React.FC = () => {
                   {/* Special Needs - SATS Standard */}
                   <div className="bg-pink-50 p-4 rounded-lg">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
                         <select
@@ -3174,6 +6117,21 @@ const ManageUsers: React.FC = () => {
                             placeholder="Please specify disability type"
                           />
                         )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formData.isRTECandidate || ''}
+                          onChange={(e) => setFormData({...formData, isRTECandidate: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Option</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -3264,6 +6222,28 @@ const ManageUsers: React.FC = () => {
                           <option value="Uttara Kannada">Uttara Kannada</option>
                           <option value="Vijayapura">Vijayapura</option>
                           <option value="Yadgir">Yadgir</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                        <select
+                          required
+                          value={formData.state || formData.permanentState || 'Karnataka'}
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            state: e.target.value,
+                            permanentState: e.target.value
+                          })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="Karnataka">Karnataka</option>
+                          <option value="Andhra Pradesh">Andhra Pradesh</option>
+                          <option value="Telangana">Telangana</option>
+                          <option value="Tamil Nadu">Tamil Nadu</option>
+                          <option value="Kerala">Kerala</option>
+                          <option value="Goa">Goa</option>
+                          <option value="Maharashtra">Maharashtra</option>
+                          <option value="Other">Other</option>
                         </select>
                       </div>
                       <div>
@@ -3670,7 +6650,7 @@ const ManageUsers: React.FC = () => {
                     <input
                       type="date"
                       value={formData.dateOfBirth}
-                      onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                      onChange={(e) => handleDOBChange(e.target.value)}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     />
                   </div>
@@ -3751,7 +6731,7 @@ const ManageUsers: React.FC = () => {
                           type="date"
                           required
                           value={formData.dateOfBirth}
-                          onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                          onChange={(e) => handleDOBChange(e.target.value)}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         />
                       </div>
@@ -4210,7 +7190,7 @@ const ManageUsers: React.FC = () => {
                   {/* Special Needs - SATS Standard */}
                   <div className="bg-pink-50 p-4 rounded-lg">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
                         <select
@@ -4238,6 +7218,21 @@ const ManageUsers: React.FC = () => {
                             placeholder="Please specify disability type"
                           />
                         )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formData.isRTECandidate || ''}
+                          onChange={(e) => setFormData({...formData, isRTECandidate: e.target.value})}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Option</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -4630,6 +7625,247 @@ const ManageUsers: React.FC = () => {
                   Done
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900">
+                  Import {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}s
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportPreview([]);
+                    setImportResults(null);
+                    setIsImporting(false);
+                    setImportProgress(0);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  ×
+                </button>
+              </div>
+
+              {!importResults ? (
+                <div className="space-y-6">
+                  {/* Instructions */}
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-gray-900 mb-2">Import Instructions</h4>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• Download the template for {activeTab}s using the "Template" button</li>
+                      <li>• Fill in your data (required fields marked with *)</li>
+                      <li>• Date of Birth will be used as the default password (format: DDMMYYYY)</li>
+                      <li>• User IDs will be auto-generated sequentially</li>
+                      <li>• Upload the completed CSV file below</li>
+                    </ul>
+                  </div>
+
+                  {/* File Upload */}
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="csv-upload"
+                    />
+                    <label htmlFor="csv-upload" className="cursor-pointer">
+                      <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-lg text-gray-600 mb-2">
+                        {importFile ? importFile.name : 'Choose CSV file or drag and drop'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        CSV files only. Make sure to use the template format.
+                      </p>
+                    </label>
+                  </div>
+
+                  {/* File Selected */}
+                  {importFile && (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-medium text-gray-900">
+                          File Selected: {importFile.name}
+                        </h4>
+                        <div className="space-x-2">
+                          <button
+                            onClick={() => generateTemplate(activeTab)}
+                            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                          >
+                            Download Template
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center">
+                          <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-800">
+                              Ready to import {activeTab} users
+                            </p>
+                            <p className="text-xs text-blue-600">
+                              Make sure your CSV file follows the template format
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {isImporting ? (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Processing users...</span>
+                            <span>{Math.round(importProgress)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{width: `${importProgress}%`}}
+                            ></div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end space-x-2">
+                          <button
+                            onClick={() => {
+                              setImportFile(null);
+                              setImportPreview([]);
+                              setImportResults(null);
+                            }}
+                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={processImport}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            Import Users
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Import Results */
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                      <Check className="h-6 w-6 text-green-600" />
+                    </div>
+                    <h3 className="mt-4 text-lg font-medium text-gray-900">
+                      Import Completed
+                    </h3>
+                    <p className="mt-2 text-sm text-gray-500">
+                      {importResults.success.length} users imported successfully
+                      {importResults.errors.length > 0 && `, ${importResults.errors.length} failed`}
+                    </p>
+                  </div>
+
+                  {/* Success Summary */}
+                  {importResults.success.length > 0 && (
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-green-900 mb-2">
+                        Successfully Imported ({importResults.success.length})
+                      </h4>
+                      <div className="max-h-40 overflow-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-green-700">
+                              <th className="font-medium">User ID</th>
+                              <th className="font-medium">Email</th>
+                              <th className="font-medium">Password</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-green-800">
+                            {importResults.success.slice(0, 10).map((user, index) => (
+                              <tr key={index}>
+                                <td className="font-mono">{user.userId}</td>
+                                <td>{user.email}</td>
+                                <td className="font-mono">{user.password}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {importResults.success.length > 10 && (
+                          <p className="text-green-600 text-center mt-2">
+                            +{importResults.success.length - 10} more users
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Summary */}
+                  {importResults.errors.length > 0 && (
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-red-900 mb-2">
+                        Failed to Import ({importResults.errors.length})
+                      </h4>
+                      <div className="max-h-40 overflow-auto space-y-2">
+                        {importResults.errors.slice(0, 10).map((error, index) => (
+                          <div key={index} className="text-sm">
+                            <span className="font-medium text-red-800">Row {error.row}:</span>
+                            <span className="text-red-700 ml-2">{error.error}</span>
+                          </div>
+                        ))}
+                        {importResults.errors.length > 10 && (
+                          <p className="text-red-600 text-center">
+                            +{importResults.errors.length - 10} more errors
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-between">
+                    <button
+                      onClick={() => {
+                        setImportResults(null);
+                        setImportFile(null);
+                        setImportPreview([]);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Import More
+                    </button>
+                    <div className="space-x-2">
+                      {importResults.success.length > 0 && (
+                        <button
+                          onClick={downloadCredentials}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                        >
+                          Download Credentials
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowImportModal(false);
+                          setImportFile(null);
+                          setImportPreview([]);
+                          setImportResults(null);
+                          setIsImporting(false);
+                          setImportProgress(0);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

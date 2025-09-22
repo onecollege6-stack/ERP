@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import api from '../../../api/axios';
 import { schoolUserAPI } from '../../../api/schoolUsers';
 import StudentAdmissionFormComponent from './StudentAdmissionForm';
+import AcademicTestConfiguration from './AcademicTestConfiguration';
 
 // Define proper types for the component
 type TabType = 'overview' | 'users' | 'admissions' | 'academics' | 'settings';
@@ -163,15 +164,12 @@ function SchoolDetailsContent() {
   const [reloadKey, setReloadKey] = useState(0);
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const [resetPasswordResult, setResetPasswordResult] = useState<any>(null);
+  const [showTestDetailsManager, setShowTestDetailsManager] = useState(false);
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   
-  // Test details state
-  const [testDetails, setTestDetails] = useState<any[]>([]);
-  const [testDetailsLoading, setTestDetailsLoading] = useState(false);
-  const [showTestDetailsManager, setShowTestDetailsManager] = useState(false);
   
   // Find the selected school
   const school = schools.find(s => s.id === selectedSchoolId);
@@ -343,37 +341,6 @@ function SchoolDetailsContent() {
     };
   }, [selectedSchoolId, reloadKey, school?.name]);
   
-  // Fetch test details for academics tab
-  useEffect(() => {
-    const fetchTestDetails = async () => {
-      if (!selectedSchoolId || activeTab !== 'academics') {
-        return;
-      }
-
-      setTestDetailsLoading(true);
-      try {
-        const token = getAuthToken();
-        if (!token) throw new Error('No authentication token');
-
-        const response = await api.get(`/test-details/${selectedSchoolId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        const testDetailsData = response.data?.testDetails || response.data || [];
-        setTestDetails(testDetailsData);
-        console.log('Test details loaded:', testDetailsData);
-      } catch (error: any) {
-        console.error('Error fetching test details:', error);
-        setTestDetails([]);
-      } finally {
-        setTestDetailsLoading(false);
-      }
-    };
-
-    fetchTestDetails();
-  }, [selectedSchoolId, activeTab]);
   
   // Handle user management operations
   const handleSaveUser = async (userId: string) => {
@@ -1241,76 +1208,12 @@ function SchoolDetailsContent() {
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold">Academic Test Configuration</h2>
-            <button
-              onClick={() => setShowTestDetailsManager(true)}
-              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Manage Test Types</span>
-            </button>
+            <div className="text-sm text-gray-600">
+              Configure test types and academic settings for {school?.name}
+            </div>
           </div>
           
-          {testDetailsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2 text-gray-600">Loading test details...</span>
-            </div>
-          ) : testDetails.length > 0 ? (
-            <div className="space-y-6">
-              {testDetails.map((testDoc: any, index: number) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-6">Academic Year: {testDoc.academicYear}</h3>
-                  
-                  {/* Display test types by class */}
-                  <div className="space-y-8">
-                    {Object.entries(testDoc.classTestTypes || {}).map(([className, testTypes]: [string, unknown]) => (
-                      <div key={className} className="bg-white border border-gray-100 rounded-lg p-4">
-                        <h4 className="text-md font-semibold text-blue-700 mb-4 border-b border-gray-200 pb-2">
-                          Class {className}
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {Array.isArray(testTypes) && testTypes.map((testType: any, testIndex: number) => (
-                            <div key={testIndex} className="bg-gray-50 p-4 rounded-lg border">
-                              <div className="flex items-center justify-between mb-2">
-                                <h5 className="font-medium text-gray-900">{testType.name}</h5>
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  testType.isActive 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {testType.isActive ? 'Active' : 'Inactive'}
-                                </span>
-                              </div>
-                              <div className="text-sm text-gray-600 space-y-1">
-                                <p><span className="font-medium">Code:</span> {testType.code}</p>
-                                <p><span className="font-medium">Max Marks:</span> {testType.maxMarks}</p>
-                                <p><span className="font-medium">Weightage:</span> {(testType.weightage * 100).toFixed(1)}%</p>
-                                {testType.description && (
-                                  <p><span className="font-medium">Description:</span> {testType.description}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <GraduationCap className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Test Details Found</h3>
-              <p className="text-gray-600 mb-4">No test configuration has been set up for this school yet.</p>
-              <button
-                onClick={() => setShowTestDetailsManager(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                Set Up Test Configuration
-              </button>
-            </div>
-          )}
+          <AcademicTestConfiguration />
         </div>
       )}
       
@@ -1510,22 +1413,6 @@ function SchoolDetailsContent() {
         </div>
       )}
       
-      {showTestDetailsManager && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Test Configuration - {school.code}</h3>
-              <button onClick={() => setShowTestDetailsManager(false)} className="text-gray-500 hover:text-gray-700">Close</button>
-            </div>
-            <div className="p-4 border rounded">
-              <p className="text-sm text-gray-600">Test configuration UI is available here. For now, saved defaults are managed on the backend and the detailed editor will be enabled after final integration.</p>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={() => setShowTestDetailsManager(false)} className="px-4 py-2 bg-blue-600 text-white rounded">Done</button>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Add User Modal */}
       {showAddUserModal && (
@@ -1897,45 +1784,6 @@ function SchoolDetailsContent() {
         </div>
       )}
       
-      {/* Test Details Manager Modal */}
-      {/* Temporarily commented out due to build issues
-      {showTestDetailsManager && school?.code && (
-        <TestDetailsManager
-          schoolCode={school.code}
-          isOpen={showTestDetailsManager}
-          onClose={() => {
-            setShowTestDetailsManager(false);
-            if (activeTab === 'academics') {
-              setTestDetails([]);
-              setTimeout(() => {
-                const fetchTestDetails = async () => {
-                  setTestDetailsLoading(true);
-                  try {
-                    const token = getAuthToken();
-                    if (!token) throw new Error('No authentication token');
-
-                    const response = await api.get(`/test-details/${selectedSchoolId}`, {
-                      headers: {
-                        'Authorization': `Bearer ${token}`
-                      }
-                    });
-
-                    const testDetailsData = response.data?.testDetails || response.data || [];
-                    setTestDetails(testDetailsData);
-                  } catch (error: any) {
-                    console.error('Error fetching test details:', error);
-                    setTestDetails([]);
-                  } finally {
-                    setTestDetailsLoading(false);
-                  }
-                };
-                fetchTestDetails();
-              }, 100);
-            }
-          }}
-        />
-      )}
-      */}
     </div>
   );
 }

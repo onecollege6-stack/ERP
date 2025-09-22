@@ -40,6 +40,36 @@ function generateStudentPassword(studentName, studentId) {
 }
 
 /**
+ * Generate a student password based on Date of Birth
+ * Format: DDMMYYYY (8 digits)
+ * @param {string} dateOfBirth - Date of birth in DD/MM/YYYY format
+ * @returns {string} - Generated password based on DOB
+ */
+function generateStudentPasswordFromDOB(dateOfBirth) {
+  if (!dateOfBirth) {
+    return generateRandomPassword(8);
+  }
+  
+  // Convert DD/MM/YYYY to DDMMYYYY
+  const dobStr = String(dateOfBirth).replace(/\D/g, ''); // Remove all non-digits
+  if (dobStr.length === 8) {
+    return dobStr;
+  }
+  
+  // If format is different, try to parse and format
+  const parts = String(dateOfBirth).split(/[\/\-\.]/);
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${day}${month}${year}`;
+  }
+  
+  // Fallback to random password if parsing fails
+  return generateRandomPassword(8);
+}
+
+/**
  * Generate a teacher-specific password
  * Format: First letter of name + Last 3 digits of employee ID + random 4 chars
  * @param {string} teacherName - Teacher's name
@@ -102,6 +132,7 @@ function generateTemporaryPassword() {
 module.exports = {
   generateRandomPassword,
   generateStudentPassword,
+  generateStudentPasswordFromDOB,
   generateTeacherPassword,
   generateParentPassword,
   hashPassword,

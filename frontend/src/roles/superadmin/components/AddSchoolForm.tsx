@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { School } from '../types';
+import { VALIDATION_PATTERNS } from '../types/admission';
 
 export function AddSchoolForm() {
   const { setCurrentView, addSchool } = useApp();
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    logo: 'https://images.pexels.com/photos/289740/pexels-photo-289740.jpeg?auto=compress&cs=tinysrgb&w=100&h=100',
     area: '',
     district: '',
     pinCode: '',
@@ -23,17 +23,119 @@ export function AddSchoolForm() {
     schoolType: '',
     establishedYear: '',
     affiliationBoard: '',
-    website: '',
     secondaryContact: ''
   });
-  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+
+    // Required field validations
+    if (!formData.name.trim()) {
+      errors.name = 'School name is required';
+    }
+
+    if (!formData.code.trim()) {
+      errors.code = 'School code is required';
+    }
+
+    if (!formData.area.trim()) {
+      errors.area = 'Area is required';
+    }
+
+    if (!formData.district.trim()) {
+      errors.district = 'District is required';
+    }
+
+    if (!formData.pinCode.trim()) {
+      errors.pinCode = 'Pin code is required';
+    } else if (!VALIDATION_PATTERNS.pinCode.test(formData.pinCode.trim())) {
+      errors.pinCode = 'Pin code must be 6 digits';
+    }
+
+    if (!formData.mobile.trim()) {
+      errors.mobile = 'Mobile number is required';
+    } else if (!VALIDATION_PATTERNS.mobile.test(formData.mobile.trim())) {
+      errors.mobile = 'Mobile number must be 10 digits';
+    }
+
+    if (!formData.principalName.trim()) {
+      errors.principalName = 'Principal name is required';
+    }
+
+    if (!formData.principalEmail.trim()) {
+      errors.principalEmail = 'Principal email is required';
+    } else if (!VALIDATION_PATTERNS.email.test(formData.principalEmail.trim())) {
+      errors.principalEmail = 'Please enter a valid email address';
+    }
+
+    if (!formData.schoolType) {
+      errors.schoolType = 'School type is required';
+    }
+
+    if (!formData.establishedYear.trim()) {
+      errors.establishedYear = 'Established year is required';
+    } else {
+      const year = parseInt(formData.establishedYear);
+      const currentYear = new Date().getFullYear();
+      if (isNaN(year) || year < 1800 || year > currentYear) {
+        errors.establishedYear = `Year must be between 1800 and ${currentYear}`;
+      } else if (formData.establishedYear.length !== 4) {
+        errors.establishedYear = 'Year must be exactly 4 digits';
+      }
+    }
+
+    if (!formData.affiliationBoard) {
+      errors.affiliationBoard = 'Affiliation board is required';
+    }
+
+    // Bank details validations
+    if (!formData.bankName.trim()) {
+      errors.bankName = 'Bank name is required';
+    }
+
+    if (!formData.accountNumber.trim()) {
+      errors.accountNumber = 'Account number is required';
+    } else if (!/^\d{16}$/.test(formData.accountNumber.trim())) {
+      errors.accountNumber = 'Account number must be exactly 16 digits';
+    }
+
+    if (!formData.ifscCode.trim()) {
+      errors.ifscCode = 'IFSC code is required';
+    } else if (!VALIDATION_PATTERNS.ifsc.test(formData.ifscCode.trim().toUpperCase())) {
+      errors.ifscCode = 'IFSC code must be 11 characters (format: ABCD0123456)';
+    }
+
+    if (!formData.branch.trim()) {
+      errors.branch = 'Branch name is required';
+    }
+
+    if (!formData.accountHolderName.trim()) {
+      errors.accountHolderName = 'Account holder name is required';
+    }
+
+    // Optional field validation for secondaryContact
+    if (formData.secondaryContact.trim() && !VALIDATION_PATTERNS.mobile.test(formData.secondaryContact.trim())) {
+      errors.secondaryContact = 'Secondary contact must be 10 digits';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccess(null);
     setError(null);
+    
+    // Validate form before submission
+    if (!validateForm()) {
+      setError('Please fix the validation errors below');
+      return;
+    }
+
     try {
       await addSchool({
         name: formData.name,
@@ -60,9 +162,7 @@ export function AddSchoolForm() {
         schoolType: formData.schoolType,
         establishedYear: formData.establishedYear,
         affiliationBoard: formData.affiliationBoard,
-        website: formData.website,
-        secondaryContact: formData.secondaryContact,
-        ...(logoFile ? { logoFile } : {})
+        secondaryContact: formData.secondaryContact
       });
       setSuccess('School created successfully!');
       setTimeout(() => {
@@ -77,7 +177,6 @@ export function AddSchoolForm() {
     setFormData({
       name: '',
       code: '',
-      logo: 'https://images.pexels.com/photos/289740/pexels-photo-289740.jpeg?auto=compress&cs=tinysrgb&w=100&h=100',
       area: '',
       district: '',
       pinCode: '',
@@ -92,9 +191,18 @@ export function AddSchoolForm() {
       schoolType: '',
       establishedYear: '',
       affiliationBoard: '',
-      website: '',
       secondaryContact: ''
     });
+    setValidationErrors({});
+    setError(null);
+    setSuccess(null);
+  };
+
+  const renderFieldError = (fieldName: string) => {
+    if (validationErrors[fieldName]) {
+      return <p className="text-red-500 text-xs mt-1">{validationErrors[fieldName]}</p>;
+    }
+    return null;
   };
 
   return (
@@ -125,9 +233,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter school name"
                 />
+                {renderFieldError('name')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">School Code</label>
@@ -136,29 +245,12 @@ export function AddSchoolForm() {
                   required
                   value={formData.code}
                   onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.code ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter school code (e.g., NPS, DAV, KVS)"
                   maxLength={10}
                 />
                 <p className="text-xs text-gray-500 mt-1">This code will be used for admin and teacher panel identification</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Upload Logo</label>
-                <div className="flex items-center space-x-3">
-                  <img src={formData.logo} alt="School logo" className="w-12 h-12 rounded-lg object-cover border border-gray-300" />
-                  <label className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 cursor-pointer">
-                    <Upload className="h-4 w-4" />
-                    <span>Upload</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      if (file) {
-                        setLogoFile(file);
-                        const url = URL.createObjectURL(file);
-                        setFormData({ ...formData, logo: url });
-                      }
-                    }} />
-                  </label>
-                </div>
+                {renderFieldError('code')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Area</label>
@@ -167,9 +259,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.area}
                   onChange={(e) => setFormData({...formData, area: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.area ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter area"
                 />
+                {renderFieldError('area')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">District</label>
@@ -178,31 +271,42 @@ export function AddSchoolForm() {
                   required
                   value={formData.district}
                   onChange={(e) => setFormData({...formData, district: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.district ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter district"
                 />
+                {renderFieldError('district')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Pin Code</label>
                 <input
                   type="text"
                   required
+                  maxLength={6}
                   value={formData.pinCode}
-                  onChange={(e) => setFormData({...formData, pinCode: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter pin code"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                    setFormData({...formData, pinCode: value});
+                  }}
+                  className={`w-full px-3 py-2 border ${validationErrors.pinCode ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter 6-digit pin code"
                 />
+                {renderFieldError('pinCode')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
                 <input
                   type="tel"
                   required
+                  maxLength={10}
                   value={formData.mobile}
-                  onChange={(e) => setFormData({...formData, mobile: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter mobile number"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                    setFormData({...formData, mobile: value});
+                  }}
+                  className={`w-full px-3 py-2 border ${validationErrors.mobile ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter 10-digit mobile number"
                 />
+                {renderFieldError('mobile')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Principal Name</label>
@@ -211,9 +315,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.principalName}
                   onChange={(e) => setFormData({...formData, principalName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.principalName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter principal name"
                 />
+                {renderFieldError('principalName')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Principal Email ID</label>
@@ -222,9 +327,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.principalEmail}
                   onChange={(e) => setFormData({...formData, principalEmail: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.principalEmail ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter principal email"
                 />
+                {renderFieldError('principalEmail')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">School Type</label>
@@ -232,24 +338,35 @@ export function AddSchoolForm() {
                   required
                   value={formData.schoolType}
                   onChange={(e) => setFormData({ ...formData, schoolType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.schoolType ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 >
                   <option value="">Select School Type</option>
                   <option value="Public">Public</option>
                   <option value="Private">Private</option>
                   <option value="International">International</option>
                 </select>
+                {renderFieldError('schoolType')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Established Year</label>
                 <input
                   type="number"
                   required
+                  min={1800}
+                  max={new Date().getFullYear()}
+                  maxLength={4}
+                  pattern="[0-9]{4}"
                   value={formData.establishedYear}
-                  onChange={(e) => setFormData({ ...formData, establishedYear: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter established year"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                    if (value.length <= 4) {
+                      setFormData({ ...formData, establishedYear: value });
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border ${validationErrors.establishedYear ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter year"
                 />
+                {renderFieldError('establishedYear')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Affiliation Board</label>
@@ -257,7 +374,7 @@ export function AddSchoolForm() {
                   required
                   value={formData.affiliationBoard}
                   onChange={(e) => setFormData({ ...formData, affiliationBoard: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.affiliationBoard ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                 >
                   <option value="">Select Affiliation Board</option>
                   <option value="CBSE">CBSE</option>
@@ -265,26 +382,22 @@ export function AddSchoolForm() {
                   <option value="State Board">State Board</option>
                   <option value="IB">IB</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Website URL</label>
-                <input
-                  type="url"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter website URL"
-                />
+                {renderFieldError('affiliationBoard')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Contact Number</label>
                 <input
                   type="tel"
+                  maxLength={10}
                   value={formData.secondaryContact}
-                  onChange={(e) => setFormData({ ...formData, secondaryContact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter secondary contact number"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                    setFormData({ ...formData, secondaryContact: value });
+                  }}
+                  className={`w-full px-3 py-2 border ${validationErrors.secondaryContact ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter 10-digit secondary contact number"
                 />
+                {renderFieldError('secondaryContact')}
               </div>
             </div>
           </div>
@@ -300,31 +413,39 @@ export function AddSchoolForm() {
                   required
                   value={formData.bankName}
                   onChange={(e) => setFormData({...formData, bankName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.bankName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter bank name"
                 />
+                {renderFieldError('bankName')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
                 <input
                   type="text"
                   required
+                  maxLength={16}
                   value={formData.accountNumber}
-                  onChange={(e) => setFormData({...formData, accountNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter account number"
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // Only allow digits
+                    setFormData({...formData, accountNumber: value});
+                  }}
+                  className={`w-full px-3 py-2 border ${validationErrors.accountNumber ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter 16-digit account number"
                 />
+                {renderFieldError('accountNumber')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">IFSC Code</label>
                 <input
                   type="text"
                   required
+                  maxLength={11}
                   value={formData.ifscCode}
-                  onChange={(e) => setFormData({...formData, ifscCode: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter IFSC code"
+                  onChange={(e) => setFormData({...formData, ifscCode: e.target.value.toUpperCase()})}
+                  className={`w-full px-3 py-2 border ${validationErrors.ifscCode ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter 11-character IFSC code (e.g., SBIN0123456)"
                 />
+                {renderFieldError('ifscCode')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
@@ -333,9 +454,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.branch}
                   onChange={(e) => setFormData({...formData, branch: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.branch ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter branch name"
                 />
+                {renderFieldError('branch')}
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name</label>
@@ -344,9 +466,10 @@ export function AddSchoolForm() {
                   required
                   value={formData.accountHolderName}
                   onChange={(e) => setFormData({...formData, accountHolderName: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 border ${validationErrors.accountHolderName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
                   placeholder="Enter account holder name"
                 />
+                {renderFieldError('accountHolderName')}
               </div>
             </div>
           </div>

@@ -39,6 +39,7 @@ const StudentAdmissionFormComponent: React.FC<StudentAdmissionFormProps> = ({
     specialCategory: 'None',
     belongingToBPL: 'No',
     disability: 'None',
+    isRTECandidate: 'No',
     urbanRural: 'Urban',
     bmtcBusPass: 'Not Required'
   });
@@ -86,6 +87,7 @@ const StudentAdmissionFormComponent: React.FC<StudentAdmissionFormProps> = ({
         if (!formData.studentNameEnglish?.lastName) newErrors['studentNameEnglish.lastName'] = 'Last name is required';
         if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
         if (!formData.gender) newErrors.gender = 'Gender is required';
+        if (!formData.isRTECandidate) newErrors.isRTECandidate = 'RTE candidate status is required';
 
         // Aadhar validation
         if (formData.aadharKPRNo && !VALIDATION_PATTERNS.aadhar.test(formData.aadharKPRNo)) {
@@ -181,6 +183,7 @@ const StudentAdmissionFormComponent: React.FC<StudentAdmissionFormProps> = ({
         specialCategory: 'None',
         belongingToBPL: 'No',
         disability: 'None',
+        isRTECandidate: 'No',
         urbanRural: 'Urban',
         bmtcBusPass: 'Not Required'
       });
@@ -827,19 +830,37 @@ const StudentAdmissionFormComponent: React.FC<StudentAdmissionFormProps> = ({
           {/* Special Needs */}
           <div className="bg-gray-50 p-4 rounded-lg">
             <h4 className="font-semibold text-gray-900 mb-4">Special Needs</h4>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Disability
-              </label>
-              <select
-                value={formData.disability || ''}
-                onChange={(e) => updateFormData('disability', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {DISABILITY_OPTIONS.map(disability => (
-                  <option key={disability} value={disability}>{disability}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Disability
+                </label>
+                <select
+                  value={formData.disability || ''}
+                  onChange={(e) => updateFormData('disability', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {DISABILITY_OPTIONS.map(disability => (
+                    <option key={disability} value={disability}>{disability}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.isRTECandidate || ''}
+                  onChange={(e) => updateFormData('isRTECandidate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select Option</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+                {errors.isRTECandidate && <p className="text-red-500 text-sm mt-1">{errors.isRTECandidate}</p>}
+              </div>
             </div>
           </div>
         </div>
@@ -1172,6 +1193,7 @@ const StudentAdmissionFormComponent: React.FC<StudentAdmissionFormProps> = ({
                 specialCategory: 'None',
                 belongingToBPL: 'No',
                 disability: 'None',
+                isRTECandidate: 'No',
                 urbanRural: 'Urban',
                 bmtcBusPass: 'Not Required'
               });

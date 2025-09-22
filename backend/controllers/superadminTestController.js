@@ -1,167 +1,31 @@
-// Add these methods to testDetailsController.js
+const School = require('../models/School');
+const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+const { ObjectId } = require('mongodb');
 
-/**
- * Add test type to a specific class (superadmin access)
- */
-exports.addTestTypeToClass = async (req, res) => {
+// Helper function to get school database connection with fallback creation
+async function getSchoolConnectionWithFallback(schoolCode) {
   try {
-    const { schoolId, className } = req.params;
-    const { testType } = req.body;
-    const academicYear = req.body.academicYear || '2024-25';
-
-    // Verify superadmin role
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Superadmin access required.'
-      });
-    }
-
-    // Validate test type
-    if (!testType || !testType.name || !testType.code) {
-      return res.status(400).json({
-        success: false,
-        message: 'Test type must have a name and code'
-      });
-    }
-
-    // Find the school
-    const School = require('../models/School');
-    const school = await School.findById(schoolId);
-    
-    if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found'
-      });
-    }
-
-    const schoolCode = school.code;
-
-    // Add the test type to the class
-    const TestDetails = require('../models/TestDetails');
-    const updatedTestDetails = await TestDetails.addTestTypeToClass(
-      schoolCode,
-      className,
-      testType,
-      academicYear,
-      req.user._id
-    );
-
-    // Get the updated test types for the class
-    const updatedClassTestTypes = updatedTestDetails.classTestTypes.get(className) || [];
-
-    res.json({
-      success: true,
-      data: {
-        schoolId,
-        schoolCode,
-        className,
-        testTypes: updatedClassTestTypes,
-        academicYear
-      },
-      message: `Test type ${testType.name} added successfully to class ${className}`
-    });
+    return await SchoolDatabaseManager.getSchoolConnection(schoolCode);
   } catch (error) {
-    console.error('Error adding test type to class:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error adding test type to class',
-      error: error.message
-    });
+    console.error(`Failed to connect to school database for ${schoolCode}:`, error);
+    // Try to create the database if it doesn't exist
+    try {
+      await SchoolDatabaseManager.createSchoolDatabase(schoolCode);
+      return await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    } catch (createError) {
+      console.error(`Failed to create school database for ${schoolCode}:`, createError);
+      throw new Error(`Error accessing school database: ${createError.message}`);
+    }
   }
-};
+}
 
-/**
- * Remove test type from a specific class (superadmin access)
- */
-exports.removeTestTypeFromClass = async (req, res) => {
-  try {
-    const { schoolId, className, testTypeCode } = req.params;
-    const academicYear = req.query.academicYear || '2024-25';
-
-    // Verify superadmin role
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Superadmin access required.'
-      });
-    }
-
-    if (!testTypeCode) {
-      return res.status(400).json({
-        success: false,
-        message: 'Test type code is required'
-      });
-    }
-
-    // Find the school
-    const School = require('../models/School');
-    const school = await School.findById(schoolId);
-    
-    if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found'
-      });
-    }
-
-    const schoolCode = school.code;
-
-    // Remove the test type from the class
-    const TestDetails = require('../models/TestDetails');
-    const updatedTestDetails = await TestDetails.removeTestTypeFromClass(
-      schoolCode,
-      className,
-      testTypeCode,
-      academicYear,
-      req.user._id
-    );
-
-    // Get the updated test types for the class
-    const updatedClassTestTypes = updatedTestDetails.classTestTypes.get(className) || [];
-
-    res.json({
-      success: true,
-      data: {
-        schoolId,
-        schoolCode,
-        className,
-        testTypes: updatedClassTestTypes,
-        academicYear
-      },
-      message: `Test type with code ${testTypeCode} removed successfully from class ${className}`
-    });
-  } catch (error) {
-    console.error('Error removing test type from class:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error removing test type from class',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Get all test details for a school (superadmin access)
- */
-exports.getSchoolTestDetails = async (req, res) => {
+// Get all tests for a school
+exports.getSchoolTests = async (req, res) => {
   try {
     const { schoolId } = req.params;
-    const academicYear = req.query.academicYear || '2024-25';
-
-    // Verify superadmin role
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Superadmin access required.'
-      });
-    }
-
-    // Find the school
-    const School = require('../models/School');
-    const school = await School.findById(schoolId);
     
+    // Get school information
+    const school = await School.findById(schoolId);
     if (!school) {
       return res.status(404).json({
         success: false,
@@ -169,146 +33,314 @@ exports.getSchoolTestDetails = async (req, res) => {
       });
     }
 
-    const schoolCode = school.code;
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(school.code);
+    const testDetailsCollection = schoolConnection.collection('testdetails');
 
-    // Get test details for the school
-    const TestDetails = require('../models/TestDetails');
-    const testDetails = await TestDetails.findOne({
-      schoolCode,
-      academicYear
-    });
+    // Fetch all tests (no need for isActive filter since we're doing hard deletes)
+    const tests = await testDetailsCollection.find({
+      schoolId: schoolId
+    }).sort({ createdAt: -1 }).toArray();
 
-    if (!testDetails) {
-      // Return empty test details structure instead of creating default ones
-      return res.json({
-        success: true,
-        data: {
-          schoolId,
-          schoolCode,
-          classes: [], // Empty classes array
-          academicYear
-        },
-        message: 'No test details found - empty configuration'
-      });
-    }
-
-    // Convert Map to array format for frontend
-    const classes = [];
-    testDetails.classTestTypes.forEach((testTypes, className) => {
-      classes.push({
-        className,
-        testTypes: testTypes || []
-      });
-    });
+    console.log('Fetched tests for school:', school.code);
+    console.log('Tests found:', tests.map(t => ({ _id: t._id, name: t.name, className: t.className })));
 
     res.json({
       success: true,
       data: {
-        schoolId,
-        schoolCode,
-        classes,
-        academicYear
+        schoolId: schoolId,
+        schoolName: school.name,
+        schoolCode: school.code,
+        tests: tests,
+        totalTests: tests.length
       }
     });
+
   } catch (error) {
-    console.error('Error fetching school test details:', error);
+    console.error('Error fetching school tests:', error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching school test details',
+      message: 'Error fetching school tests',
       error: error.message
     });
   }
 };
 
-/**
- * Get test types for a specific class in a school (superadmin access)
- */
-exports.getSchoolClassTestTypes = async (req, res) => {
-  try {
-    const { schoolId, className } = req.params;
-    const academicYear = req.query.academicYear || '2024-25';
-
-    // Verify superadmin role
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Superadmin access required.'
-      });
-    }
-
-    // Find the school
-    const School = require('../models/School');
-    const school = await School.findById(schoolId);
-    
-    if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found'
-      });
-    }
-
-    const schoolCode = school.code;
-
-    // Get test details for the school
-    const TestDetails = require('../models/TestDetails');
-    const testDetails = await TestDetails.findOne({
-      schoolCode,
-      academicYear
-    });
-
-    if (!testDetails) {
-      return res.status(404).json({
-        success: false,
-        message: 'Test details not found'
-      });
-    }
-
-    const classTestTypes = testDetails.classTestTypes.get(className) || [];
-
-    res.json({
-      success: true,
-      data: {
-        schoolId,
-        schoolCode,
-        className,
-        testTypes: classTestTypes,
-        academicYear
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching class test types:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching class test types',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Update academic settings for a school
- */
-exports.updateSchoolAcademicSettings = async (req, res) => {
+// Add a new test
+exports.addTest = async (req, res) => {
   try {
     const { schoolId } = req.params;
-    const { 
-      schoolTypes, 
-      classes, 
-      academicYear 
-    } = req.body;
+    const { name, className, description, maxMarks = 100, weightage = 25, sections = [] } = req.body;
 
-    // Verify superadmin role for this operation
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({ 
+    // Validate input
+    if (!name || !className) {
+      return res.status(400).json({
         success: false,
-        message: 'Only superadmins can update school academic settings' 
+        message: 'Test name and class name are required'
       });
     }
 
-    // Find school by ID
-    const School = require('../models/School');
+    // Get school information
     const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
 
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(school.code);
+    const testDetailsCollection = schoolConnection.collection('testdetails');
+
+    // Check if test already exists for this class
+    const existingTest = await testDetailsCollection.findOne({
+      schoolId: schoolId,
+      name: name,
+      className: className,
+      isActive: true
+    });
+
+    if (existingTest) {
+      return res.status(400).json({
+        success: false,
+        message: `Test "${name}" already exists for Class ${className}`
+      });
+    }
+
+    // Generate test ID
+    const testId = `${school.code}_${className}_${name.replace(/\s+/g, '_')}_${Date.now()}`;
+
+    // Create new test document
+    const newTest = {
+      testId: testId,
+      name: name,
+      className: className,
+      description: description || `Test for Class ${className}`,
+      maxMarks: maxMarks,
+      weightage: weightage,
+      sections: sections, // Array of sections this test applies to
+      schoolId: schoolId,
+      schoolCode: school.code,
+      academicYear: '2024-25',
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Insert new test
+    const result = await testDetailsCollection.insertOne(newTest);
+
+    res.status(201).json({
+      success: true,
+      message: `Test "${name}" created successfully for Class ${className}`,
+      data: {
+        _id: result.insertedId,
+        testId: testId,
+        name: name,
+        className: className,
+        sections: sections
+      }
+    });
+
+  } catch (error) {
+    console.error('Error adding test:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error adding test',
+      error: error.message
+    });
+  }
+};
+
+// Update test information
+exports.updateTest = async (req, res) => {
+  try {
+    const { schoolId, testId } = req.params;
+    const updateData = req.body;
+
+    // Get school information
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(school.code);
+    const testDetailsCollection = schoolConnection.collection('testdetails');
+
+    // Convert testId to ObjectId
+    let objectId;
+    try {
+      objectId = new ObjectId(testId);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid test ID format'
+      });
+    }
+
+    // Update test
+    const result = await testDetailsCollection.updateOne(
+      { 
+        _id: objectId,
+        schoolId: schoolId,
+        isActive: true 
+      },
+      { 
+        $set: { 
+          ...updateData,
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Test not found or no changes made'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Test updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating test:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating test',
+      error: error.message
+    });
+  }
+};
+
+// Delete test (soft delete)
+exports.deleteTest = async (req, res) => {
+  try {
+    const { schoolId, testId } = req.params;
+    
+    console.log('Delete test request:', { schoolId, testId });
+
+    // Get school information
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(school.code);
+    const testDetailsCollection = schoolConnection.collection('testdetails');
+
+    // First, let's see what tests exist in the collection
+    const allTests = await testDetailsCollection.find({ schoolId: schoolId }).toArray();
+    console.log('All tests in collection:', allTests.map(t => ({ _id: t._id, name: t.name })));
+    
+    // First, let's check if the test exists
+    console.log('Searching for test with string ID:', testId);
+    const testQuery = { schoolId: schoolId };
+    
+    // Try to find the test first with string ID (in case it's stored as string)
+    let existingTest = await testDetailsCollection.findOne({
+      ...testQuery,
+      _id: testId
+    });
+    
+    console.log('Test found with string ID:', existingTest ? 'YES' : 'NO');
+    
+    if (!existingTest) {
+      // Try with ObjectId conversion
+      let objectId;
+      try {
+        objectId = new ObjectId(testId);
+        console.log('Converted to ObjectId:', objectId);
+        
+        existingTest = await testDetailsCollection.findOne({
+          ...testQuery,
+          _id: objectId
+        });
+        
+        console.log('Test found with ObjectId:', existingTest ? 'YES' : 'NO');
+        
+        if (!existingTest) {
+          console.log('Test not found with either string or ObjectId');
+          return res.status(404).json({
+            success: false,
+            message: 'Test not found'
+          });
+        }
+        
+        // Hard delete with ObjectId
+        console.log('Attempting to hard delete test with ObjectId:', objectId);
+        const result = await testDetailsCollection.deleteOne({
+          _id: objectId,
+          schoolId: schoolId
+        });
+        
+        console.log('Hard delete result with ObjectId:', result);
+        
+        if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+            message: 'Test not found'
+          });
+        }
+        
+      } catch (error) {
+        console.log('ObjectId conversion failed:', error.message);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid test ID format'
+        });
+      }
+    } else {
+      // Hard delete with string ID
+      console.log('Attempting to hard delete test with string ID:', testId);
+      const result = await testDetailsCollection.deleteOne({
+        _id: testId,
+        schoolId: schoolId
+      });
+      
+      console.log('Hard delete result with string ID:', result);
+      
+      if (result.deletedCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Test not found'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Test deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting test:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting test',
+      error: error.message
+    });
+  }
+};
+
+// Get tests for a specific class
+exports.getTestsByClass = async (req, res) => {
+  try {
+    const { schoolId, className } = req.params;
+    
+    // Get school information
+    const school = await School.findById(schoolId);
     if (!school) {
       return res.status(404).json({ 
         success: false,
@@ -316,107 +348,33 @@ exports.updateSchoolAcademicSettings = async (req, res) => {
       });
     }
 
-    // Update school types if provided
-    if (schoolTypes && Array.isArray(schoolTypes)) {
-      // Create new schema field if it doesn't exist
-      if (!school.academicSettings) {
-        school.academicSettings = {};
-      }
-      school.academicSettings.schoolTypes = schoolTypes;
-    }
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(school.code);
+    const testDetailsCollection = schoolConnection.collection('testdetails');
 
-    // Update classes if provided
-    if (classes && Array.isArray(classes)) {
-      // Update the classes array in settings
-      school.settings = school.settings || {};
-      school.settings.classes = classes;
-      
-      // Update test details for the new class structure
-      await updateTestDetailsForClasses(school, classes, req.user._id);
-    }
-
-    // Update academic year if provided
-    if (academicYear) {
-      school.settings = school.settings || {};
-      school.settings.academicYear = school.settings.academicYear || {};
-      school.settings.academicYear.currentYear = academicYear;
-    }
-
-    await school.save();
+    // Fetch tests for specific class
+    const tests = await testDetailsCollection.find({
+      schoolId: schoolId,
+      className: className,
+      isActive: true
+    }).sort({ createdAt: -1 }).toArray();
 
     res.json({
       success: true,
       data: {
-        schoolId: school._id,
-        schoolCode: school.code,
-        academicSettings: school.academicSettings,
-        classes: school.settings?.classes || [],
-        academicYear: school.settings?.academicYear?.currentYear || ''
-      },
-      message: 'School academic settings updated successfully'
+        schoolId: schoolId,
+        className: className,
+        tests: tests,
+        totalTests: tests.length
+      }
     });
+
   } catch (error) {
-    console.error('Error updating school academic settings:', error);
+    console.error('Error fetching tests by class:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating school academic settings',
+      message: 'Error fetching tests by class',
       error: error.message
     });
   }
 };
-
-// Helper function to update test details when classes change
-async function updateTestDetailsForClasses(school, classes, userId) {
-  try {
-    const currentYear = school.settings?.academicYear?.currentYear || '2024-25';
-    
-    // Find existing test details
-    const TestDetails = require('../models/TestDetails');
-    let testDetails = await TestDetails.findOne({
-      schoolCode: school.code,
-      academicYear: currentYear
-    });
-
-    if (!testDetails) {
-      // If no test details exist, create default ones
-      return await TestDetails.createDefaultTestTypes(
-        school._id,
-        school.code,
-        userId
-      );
-    }
-
-    // Get current class test types map
-    const classTestTypes = testDetails.classTestTypes || new Map();
-    
-    // Create a new map with updated classes
-    const updatedClassTestTypes = new Map();
-    
-    // For each class, either keep existing test types or create default ones
-    for (const className of classes) {
-      if (classTestTypes.has(className)) {
-        // Keep existing test types for this class
-        updatedClassTestTypes.set(className, classTestTypes.get(className));
-      } else {
-        // Create default test types for new class
-        const defaultTestTypes = [
-          { name: 'Formative Assessment 1', code: 'FA-1', description: 'First Formative Assessment', maxMarks: 20, weightage: 0.1, isActive: true },
-          { name: 'Formative Assessment 2', code: 'FA-2', description: 'Second Formative Assessment', maxMarks: 20, weightage: 0.1, isActive: true },
-          { name: 'Midterm Examination', code: 'MIDTERM', description: 'Midterm Examination', maxMarks: 80, weightage: 0.3, isActive: true },
-          { name: 'Summative Assessment 1', code: 'SA-1', description: 'First Summative Assessment', maxMarks: 80, weightage: 0.3, isActive: true },
-          { name: 'Summative Assessment 2', code: 'SA-2', description: 'Second Summative Assessment', maxMarks: 80, weightage: 0.3, isActive: true }
-        ];
-        updatedClassTestTypes.set(className, defaultTestTypes);
-      }
-    }
-    
-    // Update the test details with the new class test types
-    testDetails.classTestTypes = updatedClassTestTypes;
-    testDetails.updatedBy = userId;
-    
-    return await testDetails.save();
-  } catch (error) {
-    console.error('Error updating test details for classes:', error);
-    throw error;
-  }
-}

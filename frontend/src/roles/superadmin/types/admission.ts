@@ -76,6 +76,9 @@ export interface StudentAdmissionForm {
 
   // Special Needs
   disability: string; // Disability categories as specified
+  
+  // RTE (Right to Education) Status
+  isRTECandidate: 'Yes' | 'No';
 
   // Address Information
   urbanRural: 'Urban' | 'Rural';

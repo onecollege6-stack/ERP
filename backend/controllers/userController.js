@@ -360,8 +360,15 @@ exports.registerUser = async (req, res) => {
         await processParentRegistration(req.body, userData, req.files);
       }
       
-      // Generate temporary password
-      const tempPassword = generateTempPassword(userData.name.firstName, userId);
+      // Generate temporary password - use DOB for students, regular method for others
+      let tempPassword;
+      if (role === 'student' && req.body.personalInfo?.dateOfBirth) {
+        const { generateStudentPasswordFromDOB } = require('../utils/passwordGenerator');
+        tempPassword = generateStudentPasswordFromDOB(req.body.personalInfo.dateOfBirth);
+      } else {
+        tempPassword = generateTempPassword(userData.name.firstName, userId);
+      }
+      
       userData.password = await bcrypt.hash(tempPassword, 10);
       userData.temporaryPassword = tempPassword;
       userData.passwordChangeRequired = true;
@@ -533,7 +540,8 @@ const processStudentRegistration = async (formData, userData, files) => {
       caste: personalInfo.caste,
       category: personalInfo.category,
       motherTongue: personalInfo.motherTongue,
-      languagesKnown: personalInfo.languagesKnown
+      languagesKnown: personalInfo.languagesKnown,
+      isRTECandidate: personalInfo.isRTECandidate || 'No'
     },
     medical: medicalInfo,
     family: {
@@ -719,7 +727,16 @@ exports.createUserSimple = async (req, res) => {
 
     // Generate IDs and password using enhanced sequential generation
     const userId = await generateSequentialUserId(schoolCode, role);
-    const tempPassword = require('../utils/passwordGenerator').generateRandomPassword(10);
+    
+    // Use DOB for students, random password for others
+    let tempPassword;
+    if (role === 'student' && req.body.dateOfBirth) {
+      const { generateStudentPasswordFromDOB } = require('../utils/passwordGenerator');
+      tempPassword = generateStudentPasswordFromDOB(req.body.dateOfBirth);
+    } else {
+      tempPassword = require('../utils/passwordGenerator').generateRandomPassword(10);
+    }
+    
     const hashedPassword = await hashPassword(tempPassword);
 
     // Basic name parsing
@@ -1720,6 +1737,9 @@ exports.updateUser = async (req, res) => {
       if (updateData.disability) studentUpdate['studentDetails.personal.disability'] = updateData.disability;
       if (updateData.disabilityOther) studentUpdate['studentDetails.personal.disabilityOther'] = updateData.disabilityOther;
       
+      // RTE (Right to Education) Status
+      if (updateData.isRTECandidate) studentUpdate['studentDetails.personal.isRTECandidate'] = updateData.isRTECandidate;
+      
       // Economic Status
       if (updateData.belongingToBPL) studentUpdate['studentDetails.personal.belongingToBPL'] = updateData.belongingToBPL;
       if (updateData.bplCardNo) studentUpdate['studentDetails.personal.bplCardNo'] = updateData.bplCardNo;
@@ -1821,10 +1841,16 @@ exports.resetUserPassword = async (req, res) => {
     let newPassword;
     switch (user.role) {
       case 'student':
-        newPassword = generateStudentPassword(
-          user.name.firstName || user.name.displayName || '',
-          user.studentDetails?.studentId || ''
-        );
+        // Use DOB for students if available, otherwise use name-based password
+        if (user.studentDetails?.personal?.dateOfBirth) {
+          const { generateStudentPasswordFromDOB } = require('../utils/passwordGenerator');
+          newPassword = generateStudentPasswordFromDOB(user.studentDetails.personal.dateOfBirth);
+        } else {
+          newPassword = generateStudentPassword(
+            user.name.firstName || user.name.displayName || '',
+            user.studentDetails?.studentId || ''
+          );
+        }
         break;
       case 'teacher':
         newPassword = generateTeacherPassword(

@@ -8,7 +8,6 @@ export function Navigation() {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'add-school', label: 'Add New School', icon: Plus },
-    { id: 'academic-test-config', label: 'Test Configuration', icon: Award },
   ];
 
   return (

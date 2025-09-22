@@ -8,22 +8,51 @@ class SchoolDatabaseManager {
     const dbName = `school_${schoolCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     
     if (this.connections.has(dbName)) {
-      return this.connections.get(dbName);
+      const existingConnection = this.connections.get(dbName);
+      if (existingConnection.readyState === 1) {
+        return existingConnection;
+      } else {
+        // Remove stale connection
+        this.connections.delete(dbName);
+      }
     }
     
-    const connection = mongoose.createConnection(
-      `mongodb+srv://nitopunk04o:IOilWo4osDam0vmN@erp.ua5qems.mongodb.net/${dbName}?retryWrites=true&w=majority&appName=erp`
-    );
+    console.log(`🔍 Attempting to connect to database: ${dbName}`);
+    const connectionUri = `mongodb+srv://nitopunk04o:IOilWo4osDam0vmN@erp.ua5qems.mongodb.net/${dbName}?retryWrites=true&w=majority&appName=erp`;
+    console.log(`🔗 Connection URI: ${connectionUri}`);
     
-    await new Promise((resolve, reject) => {
-      connection.once('open', resolve);
-      connection.once('error', reject);
+    const connection = mongoose.createConnection(connectionUri, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      bufferCommands: false
     });
     
-    this.connections.set(dbName, connection);
-    console.log(`🔌 Connected to school database: ${dbName}`);
-    
-    return connection;
+    try {
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error(`Connection timeout for ${dbName} after 10 seconds`));
+        }, 10000);
+        
+        connection.once('open', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        
+        connection.once('error', (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+      
+      this.connections.set(dbName, connection);
+      console.log(`✅ Connected to school database: ${dbName}`);
+      
+      return connection;
+    } catch (error) {
+      console.error(`❌ Failed to connect to school database ${dbName}:`, error.message);
+      throw new Error(`Failed to connect to school database: ${error.message}`);
+    }
   }
   
   // Create models for a specific school database
@@ -87,6 +116,63 @@ class SchoolDatabaseManager {
       return collections.length > 0;
     } catch (error) {
       return false;
+    }
+  }
+
+  // Create school database with required collections
+  static async createSchoolDatabase(schoolCode) {
+    const dbName = this.getDatabaseName(schoolCode);
+    
+    try {
+      console.log(`🏗️ Creating school database: ${dbName}`);
+      
+      // Get connection
+      const connection = await this.getSchoolConnection(schoolCode);
+      
+      // Create required collections
+      const collections = [
+        'classes',
+        'subjects', 
+        'users',
+        'students',
+        'teachers',
+        'parents',
+        'testdetails',
+        'attendances',
+        'assignments',
+        'results',
+        'timetables',
+        'admissions',
+        'messages',
+        'audit_logs',
+        'id_sequences'
+      ];
+      
+      for (const collectionName of collections) {
+        try {
+          await connection.db.createCollection(collectionName);
+          console.log(`✅ Created collection: ${collectionName}`);
+        } catch (error) {
+          if (error.code !== 48) { // Collection already exists
+            console.error(`❌ Error creating collection ${collectionName}:`, error.message);
+          }
+        }
+      }
+      
+      // Initialize ID sequences
+      const idSequences = connection.collection('id_sequences');
+      await idSequences.insertOne({
+        _id: 'class_sequence',
+        sequence_value: 1001,
+        schoolCode: schoolCode
+      });
+      
+      console.log(`✅ School database ${dbName} created successfully`);
+      return true;
+      
+    } catch (error) {
+      console.error(`❌ Error creating school database ${dbName}:`, error);
+      throw error;
     }
   }
 }

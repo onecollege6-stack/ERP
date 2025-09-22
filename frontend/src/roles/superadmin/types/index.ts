@@ -60,8 +60,7 @@ export type ViewType =
   | 'account-details'
   | 'school-details'
   | 'edit-school'
-  | 'school-login'
-  | 'academic-test-config';
+  | 'school-login';
 
 export interface User {
   id: string;

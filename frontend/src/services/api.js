@@ -147,6 +147,31 @@ export const attendanceAPI = {
   getStudentAttendanceReport: (params) => api.get('/attendance/student-report', { params }),
 };
 
+// Export/Import APIs
+export const exportImportAPI = {
+  // Export users to CSV/Excel
+  exportUsers: (schoolCode, params) => api.get(`/schools/${schoolCode}/export/users`, { 
+    params,
+    responseType: 'blob'
+  }),
+  
+  // Import users from CSV
+  importUsers: (schoolCode, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/schools/${schoolCode}/import/users`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  
+  // Generate template for import
+  generateTemplate: (schoolCode, role) => api.get(`/schools/${schoolCode}/template/${role}`, {
+    responseType: 'blob'
+  })
+};
+
 // Academic Results APIs
 export const resultsAPI = {
   // Get students for a specific class and section
@@ -171,6 +196,84 @@ export const resultsAPI = {
   
   // Get results statistics
   getResultsStats: (params) => api.get('/results/stats', { params }),
+};
+
+// Class Management API
+export const classAPI = {
+  // Get all classes for a school
+  getSchoolClasses: async (schoolId) => {
+    const response = await api.get(`/superadmin/classes/schools/${schoolId}/classes`);
+    return response.data;
+  },
+
+  // Add a new class
+  addClass: async (schoolId, classData) => {
+    const response = await api.post(`/superadmin/classes/schools/${schoolId}/classes`, classData);
+    return response.data;
+  },
+
+  // Add section to existing class
+  addSectionToClass: async (schoolId, classId, section) => {
+    const response = await api.post(`/superadmin/classes/schools/${schoolId}/classes/${classId}/sections`, { section });
+    return response.data;
+  },
+
+  // Remove section from class
+  removeSectionFromClass: async (schoolId, classId, section) => {
+    const response = await api.delete(`/superadmin/classes/schools/${schoolId}/classes/${classId}/sections`, { data: { section } });
+    return response.data;
+  },
+
+  // Update class information
+  updateClass: async (schoolId, classId, updateData) => {
+    const response = await api.put(`/superadmin/classes/schools/${schoolId}/classes/${classId}`, updateData);
+    return response.data;
+  },
+
+  // Delete class (soft delete)
+  deleteClass: async (schoolId, classId) => {
+    const response = await api.delete(`/superadmin/classes/schools/${schoolId}/classes/${classId}`);
+    return response.data;
+  },
+
+  // Get available classes for dropdown (used in test configuration)
+  getAvailableClasses: async (schoolId) => {
+    const response = await api.get(`/superadmin/classes/schools/${schoolId}/classes/available`);
+    return response.data;
+  }
+};
+
+// Test Management API
+export const testAPI = {
+  // Get all tests for a school
+  getSchoolTests: async (schoolId) => {
+    const response = await api.get(`/superadmin/tests/schools/${schoolId}/tests`);
+    return response.data;
+  },
+
+  // Add a new test
+  addTest: async (schoolId, testData) => {
+    const response = await api.post(`/superadmin/tests/schools/${schoolId}/tests`, testData);
+    return response.data;
+  },
+
+  // Update test information
+  updateTest: async (schoolId, testId, updateData) => {
+    const response = await api.put(`/superadmin/tests/schools/${schoolId}/tests/${testId}`, updateData);
+    return response.data;
+  },
+
+  // Delete test (soft delete)
+  deleteTest: async (schoolId, testId) => {
+    const response = await api.delete(`/superadmin/tests/schools/${schoolId}/tests/${testId}`);
+    return response.data;
+  },
+
+  // Get tests for a specific class
+  getTestsByClass: async (schoolId, className) => {
+    const response = await api.get(`/superadmin/tests/schools/${schoolId}/tests/class/${className}`);
+    return response.data;
+  }
 };
 
 // Utility functions

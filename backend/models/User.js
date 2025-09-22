@@ -374,7 +374,14 @@ const userSchema = new mongoose.Schema({
                'Autism Spectrum Disorder', 'Multiple Disabilities', 'Other'],
         default: 'Not Applicable'
       },
-      disabilityOther: { type: String } // When disability is "Other"
+      disabilityOther: { type: String }, // When disability is "Other"
+      
+      // RTE (Right to Education) Status
+      isRTECandidate: { 
+        type: String, 
+        enum: ['Yes', 'No'], 
+        default: 'No' 
+      }
     },
     
     // Medical Information

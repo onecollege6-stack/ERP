@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const schoolController = require('../controllers/schoolController');
+const exportImportController = require('../controllers/exportImportController');
 const authMiddleware = require('../middleware/auth');
 const { setSchoolContext, validateSchoolAccess, requireSuperAdmin, setMainDbContext } = require('../middleware/schoolContext');
 
@@ -59,6 +60,11 @@ router.post('/:schoolId/users', schoolController.addUser);
 router.post('/:schoolId/admins', schoolController.addAdminToSchool);
 router.post('/:schoolId/users/import', upload.single('file'), schoolController.importUsers);
 router.get('/:schoolId/users/export', schoolController.exportUsers);
+
+// Comprehensive export/import routes
+router.get('/:schoolCode/export/users', exportImportController.exportUsers);
+router.post('/:schoolCode/import/users', upload.single('file'), exportImportController.importUsers);
+router.get('/:schoolCode/template/:role', exportImportController.generateTemplate);
 router.put('/:schoolId/users/:userId', schoolController.updateUser);
 router.delete('/:schoolId/users/:userId', schoolController.deleteUser);
 router.patch('/:schoolId/users/:userId/status', schoolController.toggleUserStatus);
