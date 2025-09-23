@@ -5,7 +5,7 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const API_URL = process.env.API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.API_URL || 'http://localhost:5050/api';
 let authToken = '';
 let schoolId = '';
 

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Users, GraduationCap, UserCheck, Settings, BarChart3, Calendar, BookOpen, Award, TrendingUp, Edit, Save, X, Plus, Trash2, Eye, EyeOff, RefreshCw, Key } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, Settings, BarChart3, Calendar, BookOpen, Award, TrendingUp, Edit, Save, X, Plus, Trash2, Eye, EyeOff, RefreshCw, Key } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import api from '../../../api/axios';
 import { schoolUserAPI } from '../../../api/schoolUsers';
-import StudentAdmissionFormComponent from './StudentAdmissionForm';
 import AcademicTestConfiguration from './AcademicTestConfiguration';
 
 // Define proper types for the component
-type TabType = 'overview' | 'users' | 'admissions' | 'academics' | 'settings';
+type TabType = 'overview' | 'users' | 'academics' | 'settings';
 type UserRole = 'admin' | 'teacher' | 'student' | 'parent';
 
 interface User {
@@ -775,19 +774,6 @@ function SchoolDetailsContent() {
             </span>
           </button>
           
-          <button
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'admissions'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-            onClick={() => setActiveTab('admissions')}
-          >
-            <span className="flex items-center">
-              <UserCheck className="mr-2 h-4 w-4" />
-              Admissions
-            </span>
-          </button>
           
           <button
             className={`pb-4 px-1 border-b-2 font-medium text-sm ${
@@ -867,7 +853,7 @@ function SchoolDetailsContent() {
                 onClick={() => setCurrentView('school-login')}
                 className="flex flex-col items-center justify-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100"
               >
-                <UserCheck className="h-8 w-8 text-purple-600 mb-2" />
+                <Key className="h-8 w-8 text-purple-600 mb-2" />
                 <span className="text-purple-800 font-medium">Test Login</span>
               </button>
               
@@ -1136,73 +1122,6 @@ function SchoolDetailsContent() {
         </div>
       )}
       
-      {activeTab === 'admissions' && (
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <StudentAdmissionFormComponent
-            onSubmit={async (formData) => {
-              try {
-                const token = getAuthToken();
-                if (!token) throw new Error('No authentication token');
-
-                const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-                const schoolInfo = schoolRes.data?.school || schoolRes.data;
-                const schoolCode = schoolInfo.code;
-
-                if (!schoolCode) throw new Error('School code not found');
-
-                // Submit the admission form data to the backend
-                const response = await api.post('/admissions', {
-                  ...formData,
-                  schoolId: selectedSchoolId,
-                  schoolCode: schoolCode
-                }, {
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                  }
-                });
-
-                console.log('Admission submitted successfully:', response.data);
-                alert('Student admission form submitted successfully!');
-
-                // Refresh the data to show the new admission
-                setReloadKey(prev => prev + 1);
-              } catch (error: any) {
-                console.error('Error submitting admission:', error);
-                alert('Error submitting admission: ' + (error.response?.data?.message || error.message));
-              }
-            }}
-            onSearch={async (criteria) => {
-              try {
-                const token = getAuthToken();
-                if (!token) throw new Error('No authentication token');
-
-                const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-                const schoolInfo = schoolRes.data?.school || schoolRes.data;
-                const schoolCode = schoolInfo.code;
-
-                if (!schoolCode) throw new Error('School code not found');
-
-                // Search for existing student records
-                const response = await api.get(`/admissions/search`, {
-                  params: {
-                    ...criteria,
-                    schoolCode: schoolCode
-                  },
-                  headers: {
-                    'Authorization': `Bearer ${token}`
-                  }
-                });
-
-                return response.data;
-              } catch (error: any) {
-                console.error('Error searching admissions:', error);
-                throw new Error('Error searching student records: ' + (error.response?.data?.message || error.message));
-              }
-            }}
-          />
-        </div>
-      )}
       
       {activeTab === 'academics' && (
         <div className="bg-white p-6 rounded-lg shadow-md">

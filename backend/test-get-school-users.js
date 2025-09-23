@@ -17,7 +17,7 @@ async function testGetSchoolUsers() {
         console.log(`Testing with school ID: ${schoolId}`);
         
         // Test the getSchoolUsers endpoint
-        const usersResponse = await axios.get(`http://localhost:5000/api/schools/${schoolId}/users`);
+        const usersResponse = await axios.get(`http://localhost:5050/api/schools/${schoolId}/users`);
         
         console.log(`✅ Success! Users found: ${usersResponse.data.length}`);
         console.log('\nUsers data:');
@@ -33,7 +33,7 @@ async function testGetSchoolUsers() {
           
           // Test with role filter
           console.log('Testing with role filter (admin)...');
-          const adminResponse = await axios.get(`http://localhost:5000/api/schools/${schoolId}/users?role=admin`);
+          const adminResponse = await axios.get(`http://localhost:5050/api/schools/${schoolId}/users?role=admin`);
           console.log(`Admin users found: ${adminResponse.data.length}\n`);
           
           break; // Success, exit the loop

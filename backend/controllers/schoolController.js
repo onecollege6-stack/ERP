@@ -1547,19 +1547,33 @@ exports.toggleSchoolStatus = async (req, res) => {
 // Delete school (Super Admin only)
 exports.deleteSchool = async (req, res) => {
   try {
+    console.log('🚨 DELETE SCHOOL FUNCTION CALLED 🚨');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    
     const { schoolId } = req.params;
     
-    console.log(`[DELETE REQUEST] School ID: ${schoolId}, User: ${req.user.email}, Role: ${req.user.role}`);
+    console.log(`[DELETE REQUEST] School ID: ${schoolId}, User: ${req.user?.email || 'UNKNOWN'}, Role: ${req.user?.role || 'UNKNOWN'}`);
+    console.log(`[DELETE REQUEST] Headers:`, req.headers);
+    console.log(`[DELETE REQUEST] Method: ${req.method}, URL: ${req.originalUrl}`);
+    
+    if (!req.user) {
+      console.log('[DELETE DENIED] No user found in request');
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
     
     if (req.user.role !== 'superadmin') {
       console.log('[DELETE DENIED] User is not superadmin');
-      return res.status(403).json({ message: 'Only super admin can delete schools' });
+      return res.status(403).json({ success: false, message: 'Only super admin can delete schools' });
     }
 
     const school = await School.findById(schoolId);
+    console.log('[DELETE DEBUG] School found:', school);
     if (!school) {
       console.log('[DELETE ERROR] School not found');
-      return res.status(404).json({ message: 'School not found' });
+      return res.status(404).json({ success: false, message: 'School not found' });
     }
 
     console.log(`[DELETE START] Deleting school: ${school.name} (${school.code})`);
@@ -1638,11 +1652,32 @@ exports.deleteSchool = async (req, res) => {
       }
     }
 
+    console.log('[DELETE DEBUG] About to delete school from database...');
+    console.log('[DELETE DEBUG] School ID to delete:', schoolId);
+    console.log('[DELETE DEBUG] School object found:', { id: school._id, name: school.name, code: school.code });
+    
+    // Verify the School model is properly connected
+    console.log('[DELETE DEBUG] School model info:', {
+      modelName: School.modelName,
+      collection: School.collection.name,
+      db: School.db.name
+    });
+    
     const deletedSchool = await School.findByIdAndDelete(schoolId);
+    console.log('[DELETE DEBUG] School deletion result:', deletedSchool);
+    console.log('[DELETE DEBUG] Was deletion successful?', !!deletedSchool);
+    
+    // Verify deletion by trying to find the school again
+    const verifyDeletion = await School.findById(schoolId);
+    console.log('[DELETE VERIFICATION] School still exists after deletion?', !!verifyDeletion);
+    if (verifyDeletion) {
+      console.error('[DELETE VERIFICATION ERROR] School still exists in database after deletion!');
+      return res.status(500).json({ success: false, message: 'School deletion failed - school still exists in database' });
+    }
     
     if (!deletedSchool) {
       console.log('[DELETE ERROR] Failed to delete school from database');
-      return res.status(500).json({ message: 'Failed to delete school from database' });
+      return res.status(500).json({ success: false, message: 'Failed to delete school from database' });
     }
 
     console.log(`[SCHOOL DELETED] ${school.name} (${school._id}) successfully deleted by ${req.user.email}`);

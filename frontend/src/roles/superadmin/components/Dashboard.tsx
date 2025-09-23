@@ -24,20 +24,41 @@ export function Dashboard() {
     setCurrentView('edit-school');
   };
   const handleDelete = async (schoolId: string, name: string) => {
-    const confirmMessage = `Are you sure you want to delete "${name}"?\n\nThis will permanently delete:\n- The school record\n- All associated users (teachers, students, parents, admins)\n- All school data\n\nThis action cannot be undone.`;
+    // First confirmation dialog
+    const confirmMessage = `⚠️  PERMANENT DELETION WARNING  ⚠️\n\nYou are about to delete school: "${name}"\n\nThis action will PERMANENTLY DELETE:\n✗ School record and all settings\n✗ All users (admins, teachers, students, parents)\n✗ All classes, sections, and subjects\n✗ All test records and results\n✗ All attendance data\n✗ School database and all data\n\n❌ THIS ACTION CANNOT BE UNDONE ❌\n\nAre you sure you want to proceed?`;
     
-    if (window.confirm(confirmMessage)) {
-      try {
-        console.log(`User confirmed deletion of school: ${name} (${schoolId})`);
+    if (!window.confirm(confirmMessage)) {
+      console.log(`User cancelled deletion of school: ${name}`);
+      return;
+    }
+
+    // Second confirmation dialog
+    const secondConfirmMessage = `🚨 FINAL CONFIRMATION 🚨\n\nType the school name "${name}" to confirm deletion:\n\nNote: This will delete ALL data permanently.`;
+    
+    const userInput = window.prompt(secondConfirmMessage);
+    
+    if (userInput !== name) {
+      if (userInput !== null) { // null means user clicked cancel
+        alert(`❌ School name does not match. Deletion cancelled.\n\nYou entered: "${userInput}"\nRequired: "${name}"`);
+      }
+      console.log(`User provided incorrect school name or cancelled: entered "${userInput}", required "${name}"`);
+      return;
+    }
+
+    // Proceed with deletion
+    try {
+      console.log(`User confirmed deletion of school: ${name} (${schoolId})`);
+      
+      // Show loading state
+      if (window.confirm(`🔄 Processing deletion of "${name}"...\n\nThis may take a few moments. Click OK to proceed.`)) {
         await deleteSchool(schoolId);
         console.log(`Successfully deleted school: ${name}`);
-        alert(`School "${name}" has been successfully deleted.`);
-      } catch (error: any) {
-        console.error('Failed to delete school:', error);
-        alert(`Failed to delete school "${name}". Please try again.`);
+        alert(`✅ School "${name}" and all associated data have been permanently deleted.`);
       }
-    } else {
-      console.log(`User cancelled deletion of school: ${name}`);
+    } catch (error: any) {
+      console.error('Failed to delete school:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Unknown error occurred';
+      alert(`❌ Failed to delete school "${name}".\n\nError: ${errorMessage}\n\nPlease try again or contact support.`);
     }
   };
   const statCards = [

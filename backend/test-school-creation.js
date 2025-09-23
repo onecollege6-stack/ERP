@@ -92,7 +92,7 @@ async function testSchoolCreation() {
 
     console.log('📤 Sending request to create school...');
     
-    const response = await axios.post('http://localhost:5000/api/schools', form, {
+    const response = await axios.post('http://localhost:5050/api/schools', form, {
       headers: {
         ...form.getHeaders(),
         'Authorization': 'Bearer test-token' // We'll need to handle auth properly

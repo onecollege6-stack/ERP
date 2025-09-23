@@ -5,7 +5,7 @@ async function testNextIdAPI() {
     console.log('🧪 Testing /api/users/next-id/student endpoint');
     
     // First, let's try to get a token by logging in
-    const loginResponse = await fetch('http://localhost:5000/api/auth/login', {
+    const loginResponse = await fetch('http://localhost:5050/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -26,7 +26,7 @@ async function testNextIdAPI() {
     const token = loginData.token;
     
     // Now test the next-id endpoint
-    const nextIdResponse = await fetch('http://localhost:5000/api/users/next-id/student', {
+    const nextIdResponse = await fetch('http://localhost:5050/api/users/next-id/student', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

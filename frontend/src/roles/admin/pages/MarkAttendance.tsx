@@ -122,7 +122,7 @@ const MarkAttendance: React.FC = () => {
       setError('');
       
       // Make direct API call with proper headers
-      const response = await fetch('http://localhost:5000/api/users/role/student', {
+      const response = await fetch('http://localhost:5050/api/users/role/student', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

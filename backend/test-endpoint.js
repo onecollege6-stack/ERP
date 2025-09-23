@@ -6,7 +6,7 @@ async function testTestDetailsEndpoint() {
     
     // You'll need to get a valid superadmin token first
     // For now, let's just test if the endpoint is reachable
-    const response = await axios.get(`http://localhost:5000/api/test-details/${schoolId}`, {
+    const response = await axios.get(`http://localhost:5050/api/test-details/${schoolId}`, {
       headers: {
         'Authorization': 'Bearer YOUR_TOKEN_HERE' // Replace with actual token
       }
@@ -21,7 +21,7 @@ async function testTestDetailsEndpoint() {
 // For now, just check if we can connect to the server
 async function testConnection() {
   try {
-    const response = await axios.get('http://localhost:5000/api/health');
+    const response = await axios.get('http://localhost:5050/api/health');
     console.log('Server is running');
   } catch (error) {
     if (error.code === 'ECONNREFUSED') {

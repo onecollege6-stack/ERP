@@ -34,6 +34,7 @@ interface AppContextType {
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  console.log('[AppProvider] Rendering AppProvider');
   const [schools, setSchools] = useState<School[]>(initialSchools);
   const [schoolsData, setSchoolsData] = useState<{ [schoolId: string]: SchoolData }>(initialSchoolsData);
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
@@ -186,21 +187,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Delete a school via backend
   const deleteSchool = async (id: string) => {
     try {
-      console.log(`Deleting school with ID: ${id}`);
-  const res = await api.delete(`/schools/${id}`);
-      console.log('Delete response:', res.data);
+      console.log(`[DELETE] Starting deletion process for school ID: ${id}`);
       
+      // Make API call to delete school
+      const res = await api.delete(`/schools/${id}`);
+      console.log('[DELETE] Backend response:', res.data);
+      
+      if (res.data?.success === false) {
+        throw new Error(res.data?.message || 'Backend reported failure');
+      }
+      
+      // Update local state only if backend deletion was successful
       setSchools(prev => {
+        const schoolToDelete = prev.find(school => school.id === id);
         const filtered = prev.filter(school => school.id !== id);
-        console.log(`School deleted. Remaining schools: ${filtered.length}`);
+        console.log(`[DELETE] Removed school "${schoolToDelete?.name}" from UI. Remaining schools: ${filtered.length}`);
         return filtered;
       });
       
       setStats(prev => ({ ...prev, totalSchools: prev.totalSchools - 1 }));
-      console.log('School successfully deleted from UI');
+      console.log('[DELETE] School successfully deleted from UI state');
+      
+      return res.data; // Return response data for additional info
     } catch (error: any) {
-      console.error('Error deleting school:', error);
-      throw error;
+      console.error('[DELETE] Error deleting school:', {
+        error: error,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        message: error?.message
+      });
+      
+      // Enhance error message for user
+      if (error?.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.');
+      } else if (error?.response?.status === 403) {
+        throw new Error('Permission denied. Only super admin can delete schools.');
+      } else if (error?.response?.status === 404) {
+        throw new Error('School not found or already deleted.');
+      } else if (error?.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else {
+        throw new Error(error?.message || 'Failed to delete school. Please try again.');
+      }
     }
   };
 
@@ -291,7 +319,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useApp() {
   const context = useContext(AppContext);
+  console.log('[useApp] Context value:', context);
   if (context === undefined) {
+    console.error('[useApp] Context is undefined - this should not happen if AppProvider is properly set up');
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;

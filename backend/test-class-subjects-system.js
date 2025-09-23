@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 // Test configuration
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'http://localhost:5050/api';
 const TEST_SCHOOL_CODE = 'TEST001';
 const TEST_USER = {
   schoolCode: TEST_SCHOOL_CODE,
@@ -361,7 +361,7 @@ async function runTests() {
 // Handle command line execution
 if (require.main === module) {
   console.log('⚠️  Note: This test requires a running server and valid authentication.');
-  console.log('   Please ensure your server is running on http://localhost:5000');
+  console.log('   Please ensure your server is running on http://localhost:5050');
   console.log('   and update the authToken variable with a valid JWT token.\n');
   
   runTests().catch(error => {

@@ -7,12 +7,10 @@ import './index.css';
 import { Toaster } from 'react-hot-toast';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <Toaster position="top-right" />
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+  <BrowserRouter>
+    <AuthProvider>
+      <Toaster position="top-right" />
+      <App />
+    </AuthProvider>
+  </BrowserRouter>
 );

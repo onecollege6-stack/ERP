@@ -1,7 +1,7 @@
 import axios from 'axios';
 import api from './axios'; // Use the same axios instance
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5050/api';
 
 // School User Management API
 export const schoolUserAPI = {

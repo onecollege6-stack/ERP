@@ -6,7 +6,7 @@ async function testSchoolUserUpdate() {
     
     // Step 1: Login as school user
     console.log('📝 Step 1: Logging in as school user...');
-    const loginResponse = await axios.post('http://localhost:5000/api/auth/school-login', {
+    const loginResponse = await axios.post('http://localhost:5050/api/auth/school-login', {
       identifier: 'admin@test.com',
       password: 'test123',
       schoolCode: 'p'
@@ -28,7 +28,7 @@ async function testSchoolUserUpdate() {
     };
     
     try {
-      const authTestResponse = await axios.get('http://localhost:5000/api/school-users/p/users', {
+      const authTestResponse = await axios.get('http://localhost:5050/api/school-users/p/users', {
         headers: authHeaders
       });
       console.log('✅ Authentication test successful - can access protected route');
@@ -46,14 +46,14 @@ async function testSchoolUserUpdate() {
     };
     
     try {
-      const updateResponse = await axios.put('http://localhost:5000/api/school-users/p/users/P-A-0004', updateData, {
+      const updateResponse = await axios.put('http://localhost:5050/api/school-users/p/users/P-A-0004', updateData, {
         headers: authHeaders
       });
       console.log('✅ User update successful:', updateResponse.data);
     } catch (updateError) {
       console.error('❌ User update failed:', updateError.response?.data || updateError.message);
       console.error('Request details:', {
-        url: 'http://localhost:5000/api/school-users/p/users/P-A-0004',
+        url: 'http://localhost:5050/api/school-users/p/users/P-A-0004',
         method: 'PUT',
         headers: authHeaders,
         data: updateData

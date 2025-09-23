@@ -61,10 +61,17 @@ const schoolSchema = new mongoose.Schema({
   
   address: {
     street: String,
-    city: String,
-    state: String,
-    country: String,
-    zipCode: String
+    area: String,      // Area/Locality
+    city: String,      // City name
+    district: String,  // District name
+    taluka: String,    // Taluka/Taluk
+    state: String,     // State name
+    stateId: Number,   // State ID for API reference
+    districtId: Number, // District ID for API reference
+    talukaId: Number,  // Taluka ID for API reference
+    country: { type: String, default: 'India' },
+    zipCode: String,
+    pinCode: String    // Alternative name for zipCode
   },
   contact: {
     phone: String,

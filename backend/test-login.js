@@ -4,7 +4,7 @@ async function testLogin() {
   try {
     console.log('Testing school login for admin...');
     
-    const adminResponse = await axios.post('http://localhost:5000/api/auth/school-login', {
+    const adminResponse = await axios.post('http://localhost:5050/api/auth/school-login', {
       identifier: 'admin@test.com',
       password: 't8qW7Y58',
       schoolCode: 'p'
@@ -17,7 +17,7 @@ async function testLogin() {
     
     console.log('\nTesting school login for teacher...');
     
-    const teacherResponse = await axios.post('http://localhost:5000/api/auth/school-login', {
+    const teacherResponse = await axios.post('http://localhost:5050/api/auth/school-login', {
       identifier: 'teacher@test.com',
       password: 'fFvja2L5',
       schoolCode: 'p'

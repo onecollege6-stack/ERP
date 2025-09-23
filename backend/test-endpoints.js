@@ -7,7 +7,7 @@ async function testClassSubjectsEndpoint() {
     
     console.log(`Testing class subjects endpoint for class: ${className}`);
     
-    const response = await fetch(`http://localhost:5000/api/class-subjects/class/${encodeURIComponent(className)}`, {
+    const response = await fetch(`http://localhost:5050/api/class-subjects/class/${encodeURIComponent(className)}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -35,7 +35,7 @@ async function testSimpleEndpoint() {
   try {
     console.log('Testing simple test endpoint');
     
-    const response = await fetch('http://localhost:5000/api/test-endpoint', {
+    const response = await fetch('http://localhost:5050/api/test-endpoint', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

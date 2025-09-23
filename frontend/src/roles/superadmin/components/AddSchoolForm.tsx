@@ -3,18 +3,30 @@ import { ArrowLeft, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { School } from '../types';
 import { VALIDATION_PATTERNS } from '../types/admission';
+import LocationSelector from '../../../components/LocationSelector';
+import { State, District, Taluka } from '../../../services/locationAPI';
 
 export function AddSchoolForm() {
   const { setCurrentView, addSchool } = useApp();
   const [formData, setFormData] = useState({
     name: '',
     code: '',
+    street: '',
     area: '',
+    city: '',
     district: '',
+    taluka: '',
+    state: '',
+    stateId: '',
+    districtId: '',
+    talukaId: '',
+    districtText: '',
+    talukaText: '',
     pinCode: '',
     mobile: '',
     principalName: '',
     principalEmail: '',
+    website: '',
     bankName: '',
     accountNumber: '',
     ifscCode: '',
@@ -143,9 +155,24 @@ export function AddSchoolForm() {
         mobile: formData.mobile,
         principalName: formData.principalName,
         principalEmail: formData.principalEmail,
-        area: formData.area,
-        district: formData.district,
-        pinCode: formData.pinCode,
+        address: {
+          street: formData.street,
+          area: formData.area,
+          city: formData.city,
+          district: formData.district,
+          taluka: formData.taluka,
+          state: formData.state,
+          stateId: formData.stateId ? parseInt(formData.stateId) : undefined,
+          districtId: formData.districtId ? parseInt(formData.districtId) : undefined,
+          talukaId: formData.talukaId ? parseInt(formData.talukaId) : undefined,
+          pinCode: formData.pinCode,
+          country: 'India'
+        },
+        contact: {
+          phone: formData.mobile,
+          email: formData.principalEmail,
+          website: formData.website
+        },
         bankDetails: {
           bankName: formData.bankName,
           accountNumber: formData.accountNumber,
@@ -177,12 +204,22 @@ export function AddSchoolForm() {
     setFormData({
       name: '',
       code: '',
+      street: '',
       area: '',
+      city: '',
       district: '',
+      taluka: '',
+      state: '',
+      stateId: '',
+      districtId: '',
+      talukaId: '',
+      districtText: '',
+      talukaText: '',
       pinCode: '',
       mobile: '',
       principalName: '',
       principalEmail: '',
+      website: '',
       bankName: '',
       accountNumber: '',
       ifscCode: '',
@@ -196,6 +233,60 @@ export function AddSchoolForm() {
     setValidationErrors({});
     setError(null);
     setSuccess(null);
+  };
+
+  // Location handlers
+  const handleStateChange = (stateId: number, state: State) => {
+    setFormData(prev => ({
+      ...prev,
+      stateId: stateId.toString(),
+      state: state.name,
+      // Clear dependent fields
+      districtId: '',
+      district: '',
+      talukaId: '',
+      taluka: '',
+      districtText: '',
+      talukaText: ''
+    }));
+  };
+
+  const handleDistrictChange = (districtId: number, district: District) => {
+    setFormData(prev => ({
+      ...prev,
+      districtId: districtId.toString(),
+      district: district.name,
+      // Clear dependent fields
+      talukaId: '',
+      taluka: '',
+      talukaText: ''
+    }));
+  };
+
+  const handleTalukaChange = (talukaId: number, taluka: Taluka) => {
+    setFormData(prev => ({
+      ...prev,
+      talukaId: talukaId.toString(),
+      taluka: taluka.name
+    }));
+  };
+
+  const handleDistrictTextChange = (text: string) => {
+    setFormData(prev => ({
+      ...prev,
+      districtText: text,
+      district: text,
+      // Clear dependent fields when typing manually
+      talukaText: ''
+    }));
+  };
+
+  const handleTalukaTextChange = (text: string) => {
+    setFormData(prev => ({
+      ...prev,
+      talukaText: text,
+      taluka: text
+    }));
   };
 
   const renderFieldError = (fieldName: string) => {
@@ -252,30 +343,64 @@ export function AddSchoolForm() {
                 <p className="text-xs text-gray-500 mt-1">This code will be used for admin and teacher panel identification</p>
                 {renderFieldError('code')}
               </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.street}
+                  onChange={(e) => setFormData({...formData, street: e.target.value})}
+                  className={`w-full px-3 py-2 border ${validationErrors.street ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter street address"
+                />
+                {renderFieldError('street')}
+              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Area</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Area/Locality</label>
                 <input
                   type="text"
                   required
                   value={formData.area}
                   onChange={(e) => setFormData({...formData, area: e.target.value})}
                   className={`w-full px-3 py-2 border ${validationErrors.area ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="Enter area"
+                  placeholder="Enter area/locality"
                 />
                 {renderFieldError('area')}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">District</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
                 <input
                   type="text"
                   required
-                  value={formData.district}
-                  onChange={(e) => setFormData({...formData, district: e.target.value})}
-                  className={`w-full px-3 py-2 border ${validationErrors.district ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  placeholder="Enter district"
+                  value={formData.city}
+                  onChange={(e) => setFormData({...formData, city: e.target.value})}
+                  className={`w-full px-3 py-2 border ${validationErrors.city ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter city"
                 />
-                {renderFieldError('district')}
+                {renderFieldError('city')}
               </div>
+            </div>
+            
+            {/* Location Selector */}
+            <div className="mt-6">
+              <h3 className="text-md font-medium text-gray-900 mb-4">Location Details</h3>
+              <LocationSelector
+                selectedState={formData.stateId}
+                selectedDistrict={formData.districtId}
+                selectedTaluka={formData.talukaId}
+                districtText={formData.districtText}
+                talukaText={formData.talukaText}
+                onStateChange={handleStateChange}
+                onDistrictChange={handleDistrictChange}
+                onTalukaChange={handleTalukaChange}
+                onDistrictTextChange={handleDistrictTextChange}
+                onTalukaTextChange={handleTalukaTextChange}
+                required={true}
+                className="grid grid-cols-1 md:grid-cols-3 gap-4"
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Pin Code</label>
                 <input
@@ -331,6 +456,17 @@ export function AddSchoolForm() {
                   placeholder="Enter principal email"
                 />
                 {renderFieldError('principalEmail')}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Website URL</label>
+                <input
+                  type="url"
+                  value={formData.website}
+                  onChange={(e) => setFormData({...formData, website: e.target.value})}
+                  className={`w-full px-3 py-2 border ${validationErrors.website ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  placeholder="Enter website URL (optional)"
+                />
+                {renderFieldError('website')}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">School Type</label>

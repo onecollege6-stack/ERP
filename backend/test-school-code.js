@@ -5,7 +5,7 @@ async function testSchoolUsersWithCode() {
     console.log('Testing getSchoolUsers with school code "p"...\n');
 
     // Test the getSchoolUsers endpoint with school code
-    const response = await axios.get('http://localhost:5000/api/schools/p/users');
+    const response = await axios.get('http://localhost:5050/api/schools/p/users');
 
     console.log(`✅ Success! Users found: ${response.data.length}`);
     console.log('\nUsers data:');

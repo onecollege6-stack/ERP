@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Save, X, MapPin, Phone, Settings as SettingsIcon, Building } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import api from '../../../api/axios';
+import LocationSelector from '../../../components/LocationSelector';
+import { State, District, Taluka } from '../../../services/locationAPI';
 
 const SchoolEditDetails: React.FC = () => {
   const { selectedSchoolId, setCurrentView, updateSchool } = useApp();
@@ -45,6 +47,40 @@ const SchoolEditDetails: React.FC = () => {
     });
   };
 
+  // Location handlers
+  const handleStateChange = (stateId: number, state: State) => {
+    update('address.stateId', stateId);
+    update('address.state', state.name);
+    // Clear dependent fields
+    update('address.districtId', '');
+    update('address.district', '');
+    update('address.talukaId', '');
+    update('address.taluka', '');
+  };
+
+  const handleDistrictChange = (districtId: number, district: District) => {
+    update('address.districtId', districtId);
+    update('address.district', district.name);
+    // Clear dependent fields
+    update('address.talukaId', '');
+    update('address.taluka', '');
+  };
+
+  const handleTalukaChange = (talukaId: number, taluka: Taluka) => {
+    update('address.talukaId', talukaId);
+    update('address.taluka', taluka.name);
+  };
+
+  const handleDistrictTextChange = (text: string) => {
+    update('address.district', text);
+    // Clear dependent fields when typing manually
+    update('address.taluka', '');
+  };
+
+  const handleTalukaTextChange = (text: string) => {
+    update('address.taluka', text);
+  };
+
   const handleSave = async () => {
     if (!selectedSchoolId) return;
     setLoading(true);
@@ -57,14 +93,21 @@ const SchoolEditDetails: React.FC = () => {
         id: updated._id || updated.id || selectedSchoolId,
         name: updated.name,
         logo: updated.logoUrl ? (String(updated.logoUrl).startsWith('http') ? updated.logoUrl : `${import.meta.env.VITE_API_BASE_URL || ''}${updated.logoUrl}`) : '',
-        area: updated.address?.street || '',
-        district: updated.address?.city || '',
-        pinCode: updated.address?.zipCode || '',
+        area: updated.address?.area || '',
+        district: updated.address?.district || '',
+        pinCode: updated.address?.pinCode || updated.address?.zipCode || '',
         mobile: updated.contact?.phone || '',
         principalName: updated.principalName || '',
         principalEmail: updated.principalEmail || updated.contact?.email || '',
         bankDetails: updated.bankDetails || {},
         accessMatrix: updated.accessMatrix || {},
+        address: updated.address || {},
+        contact: updated.contact || {},
+        schoolType: updated.schoolType || '',
+        establishedYear: updated.establishedYear || '',
+        affiliationBoard: updated.affiliationBoard || '',
+        website: updated.contact?.website || '',
+        secondaryContact: updated.secondaryContact || ''
       } as any);
       alert('School updated');
       setCurrentView('school-details');
@@ -161,21 +204,47 @@ const SchoolEditDetails: React.FC = () => {
             <h2 className="text-lg font-semibold text-gray-900">Address</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.street || ''} onChange={(e) => update('address.street', e.target.value)} placeholder="Enter street address" />
+            </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Street</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.street || ''} onChange={(e) => update('address.street', e.target.value)} />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Area/Locality</label>
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.area || ''} onChange={(e) => update('address.area', e.target.value)} placeholder="Enter area/locality" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.city || ''} onChange={(e) => update('address.city', e.target.value)} />
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.city || ''} onChange={(e) => update('address.city', e.target.value)} placeholder="Enter city" />
+            </div>
+          </div>
+
+          {/* Location Selector */}
+          <div className="mt-6">
+            <h3 className="text-md font-medium text-gray-900 mb-4">Location Details</h3>
+            <LocationSelector
+              selectedState={form?.address?.stateId}
+              selectedDistrict={form?.address?.districtId}
+              selectedTaluka={form?.address?.talukaId}
+              districtText={form?.address?.district}
+              talukaText={form?.address?.taluka}
+              onStateChange={handleStateChange}
+              onDistrictChange={handleDistrictChange}
+              onTalukaChange={handleTalukaChange}
+              onDistrictTextChange={handleDistrictTextChange}
+              onTalukaTextChange={handleTalukaTextChange}
+              required={false}
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Pin Code</label>
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.pinCode || form?.address?.zipCode || ''} onChange={(e) => { update('address.pinCode', e.target.value); update('address.zipCode', e.target.value); }} placeholder="Enter pin code" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.state || ''} onChange={(e) => update('address.state', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.zipCode || ''} onChange={(e) => update('address.zipCode', e.target.value)} />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+              <input className="w-full px-3 py-2 border rounded-lg bg-gray-50" value={form?.address?.country || 'India'} readOnly />
             </div>
           </div>
         </div>
@@ -187,12 +256,56 @@ const SchoolEditDetails: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.phone || ''} onChange={(e) => update('contact.phone', e.target.value)} />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Primary Phone</label>
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.phone || ''} onChange={(e) => update('contact.phone', e.target.value)} placeholder="Enter primary phone number" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Phone</label>
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.secondaryContact || ''} onChange={(e) => update('secondaryContact', e.target.value)} placeholder="Enter secondary phone number" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <input type="email" className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.email || ''} onChange={(e) => update('contact.email', e.target.value)} />
+              <input type="email" className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.email || ''} onChange={(e) => update('contact.email', e.target.value)} placeholder="Enter email address" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
+              <input type="url" className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.website || ''} onChange={(e) => update('contact.website', e.target.value)} placeholder="Enter website URL" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Building className="h-6 w-6 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">School Details</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">School Type</label>
+              <select className="w-full px-3 py-2 border rounded-lg" value={form?.schoolType || ''} onChange={(e) => update('schoolType', e.target.value)}>
+                <option value="">Select School Type</option>
+                <option value="Public">Public</option>
+                <option value="Private">Private</option>
+                <option value="International">International</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Established Year</label>
+              <input type="number" className="w-full px-3 py-2 border rounded-lg" value={form?.establishedYear || ''} onChange={(e) => update('establishedYear', parseInt(e.target.value))} placeholder="Enter established year" min="1800" max="2030" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Affiliation Board</label>
+              <select className="w-full px-3 py-2 border rounded-lg" value={form?.affiliationBoard || ''} onChange={(e) => update('affiliationBoard', e.target.value)}>
+                <option value="">Select Affiliation Board</option>
+                <option value="CBSE">CBSE</option>
+                <option value="ICSE">ICSE</option>
+                <option value="State Board">State Board</option>
+                <option value="IB">IB</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Established Date</label>
+              <input type="date" className="w-full px-3 py-2 border rounded-lg" value={form?.establishedDate ? String(form.establishedDate).substring(0,10) : ''} onChange={(e) => update('establishedDate', e.target.value)} />
             </div>
           </div>
         </div>
@@ -200,19 +313,19 @@ const SchoolEditDetails: React.FC = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center space-x-3 mb-6">
             <SettingsIcon className="h-6 w-6 text-gray-700" />
-            <h2 className="text-lg font-semibold text-gray-900">Status</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Status & Timestamps</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Active</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Active Status</label>
               <select className="w-full px-3 py-2 border rounded-lg" value={form?.isActive ? 'true' : 'false'} onChange={(e) => update('isActive', e.target.value === 'true')}>
                 <option value="true">Active</option>
                 <option value="false">Inactive</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Established</label>
-              <input type="date" className="w-full px-3 py-2 border rounded-lg" value={form?.establishedDate ? String(form.establishedDate).substring(0,10) : ''} onChange={(e) => update('establishedDate', e.target.value)} />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Created At</label>
+              <p className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900">{profile.createdAt ? new Date(profile.createdAt).toLocaleString() : '—'}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Last Updated</label>

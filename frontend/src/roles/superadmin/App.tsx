@@ -10,6 +10,7 @@ import SchoolEditDetails from './components/SchoolEditDetails';
 import { SchoolLogin } from '../../pages/SchoolLogin';
 
 function AppContent() {
+  console.log('[AppContent] Rendering AppContent');
   const { currentView, setCurrentView } = useApp();
 
   const renderCurrentView = () => {
@@ -52,6 +53,7 @@ function AppContent() {
 }
 
 function App() {
+  console.log('[App] Rendering App component');
   return (
     <AppProvider>
       <AppContent />

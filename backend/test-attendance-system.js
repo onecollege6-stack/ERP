@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 
 // Test the attendance system with sample data
 async function testAttendanceSystem() {
-  const baseURL = 'http://localhost:5000/api';
+  const baseURL = 'http://localhost:5050/api';
   
   // Test login first to get token
   const loginData = {

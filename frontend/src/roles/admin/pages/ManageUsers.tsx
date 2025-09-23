@@ -1590,7 +1590,7 @@ const ManageUsers: React.FC = () => {
           headers['x-school-code'] = user.schoolCode;
         }
         
-        const response = await fetch(`http://localhost:5000/api/users/next-id/${role}`, {
+        const response = await fetch(`http://localhost:5050/api/users/next-id/${role}`, {
           method: 'GET',
           headers
         });
@@ -1673,7 +1673,7 @@ const ManageUsers: React.FC = () => {
       }
 
       console.log('Fetching users for school:', schoolCode);
-      console.log('API URL will be:', `http://localhost:5000/api/school-users/${schoolCode}/users`);
+      console.log('API URL will be:', `http://localhost:5050/api/school-users/${schoolCode}/users`);
       console.log('Token being used:', token ? 'Present' : 'Missing');
       
       try {
@@ -1815,10 +1815,10 @@ const ManageUsers: React.FC = () => {
         console.log('⚠️ No school code available in user context');
       }
 
-      console.log('📡 Making API request to:', `http://localhost:5000/api/users/next-id/${role}`);
+      console.log('📡 Making API request to:', `http://localhost:5050/api/users/next-id/${role}`);
       console.log('📋 Request headers:', headers);
 
-      const response = await fetch(`http://localhost:5000/api/users/next-id/${role}`, {
+      const response = await fetch(`http://localhost:5050/api/users/next-id/${role}`, {
         method: 'GET',
         headers
       });
@@ -5390,34 +5390,6 @@ const ManageUsers: React.FC = () => {
                         </p>
                         <p className="text-xs text-green-600 mt-1">
                           Copy this password - user will need it for first login
-                        </p>
-                      </div>
-                    )}
-                    
-                    {/* DOB Password Generation Info for Students */}
-                    {formData.role === 'student' && !formData.generatedPassword && (
-                      <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <span className="text-orange-500">⚠️</span>
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-orange-800">Please enter Date of Birth first</p>
-                            <p className="text-xs text-orange-600">
-                              The student's password will be automatically generated from their Date of Birth (DDMMYYYY format).
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {!formData.generatedPassword && formData.role && (
-                      <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
-                        <p className="text-xs text-gray-600">
-                          {formData.role === 'student' 
-                            ? '📅 Enter the student\'s Date of Birth to generate a DOB-based password' 
-                            : '🔒 Password will be auto-generated when you select a role'
-                          }
                         </p>
                       </div>
                     )}

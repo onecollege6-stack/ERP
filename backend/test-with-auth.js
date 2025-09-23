@@ -6,7 +6,7 @@ async function testWithAuthentication() {
     
     // Step 1: Login to get the school information and token
     console.log('1. Logging in...');
-    const loginResponse = await axios.post('http://localhost:5000/api/auth/login', {
+    const loginResponse = await axios.post('http://localhost:5050/api/auth/login', {
       email: 'admin@test.com',
       password: 'test123',
       schoolCode: 'p'
@@ -29,7 +29,7 @@ async function testWithAuthentication() {
     
     // Step 2: Test the getSchoolUsers endpoint with authentication
     console.log('\n2. Fetching users for the authenticated school...');
-    const usersResponse = await axios.get(`http://localhost:5000/api/schools/${schoolId}/users`, {
+    const usersResponse = await axios.get(`http://localhost:5050/api/schools/${schoolId}/users`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -49,7 +49,7 @@ async function testWithAuthentication() {
       
       // Test with role filter
       console.log('3. Testing with role filter (admin)...');
-      const adminResponse = await axios.get(`http://localhost:5000/api/schools/${schoolId}/users?role=admin`, {
+      const adminResponse = await axios.get(`http://localhost:5050/api/schools/${schoolId}/users?role=admin`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

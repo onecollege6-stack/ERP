@@ -142,6 +142,11 @@ const validateSchoolAccess = (allowedRoles = []) => {
  */
 const requireSuperAdmin = (req, res, next) => {
   try {
+    console.log('🔐 requireSuperAdmin middleware called');
+    console.log('Request method:', req.method);
+    console.log('Request URL:', req.originalUrl);
+    console.log('Request user:', req.user);
+    
     if (!req.user || req.user.role !== 'superadmin') {
       console.error('Authorization failed: User is not a superadmin');
       return res.status(401).json({

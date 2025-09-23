@@ -6,6 +6,9 @@ const SuperAdmin = require('../models/SuperAdmin');
 // Authentication middleware
 const auth = async (req, res, next) => {
   try {
+    console.log('🔑 AUTH middleware called for:', req.method, req.originalUrl);
+    console.log('Authorization header:', req.headers.authorization);
+    
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
       console.error('[AUTH ERROR] Missing Authorization header');
