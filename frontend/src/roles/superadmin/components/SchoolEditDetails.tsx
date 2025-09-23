@@ -21,6 +21,22 @@ const SchoolEditDetails: React.FC = () => {
       setError(null);
       try {
         const res = await api.get(`/schools/${selectedSchoolId}`);
+        console.log('School edit data fetched:', res.data);
+        console.log('Key fields check:', {
+          mobile: res.data.mobile,
+          contactPhone: res.data.contact?.phone,
+          principalName: res.data.principalName,
+          principalEmail: res.data.principalEmail,
+          address: res.data.address,
+          contact: res.data.contact,
+          // Check for address fields at root level too
+          street: res.data.street,
+          area: res.data.area,
+          city: res.data.city,
+          district: res.data.district,
+          pinCode: res.data.pinCode,
+          state: res.data.state
+        });
         setProfile(res.data);
         setForm(res.data);
       } catch (e: any) {
@@ -206,15 +222,31 @@ const SchoolEditDetails: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.street || ''} onChange={(e) => update('address.street', e.target.value)} placeholder="Enter street address" />
+              <input 
+                className="w-full px-3 py-2 border rounded-lg" 
+                value={form?.address?.street || form?.street || ''} 
+                onChange={(e) => update('address.street', e.target.value)} 
+                placeholder="Enter street address" 
+                title={`Current value: ${form?.address?.street || form?.street || 'Empty'}`}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Area/Locality</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.area || ''} onChange={(e) => update('address.area', e.target.value)} placeholder="Enter area/locality" />
+              <input 
+                className="w-full px-3 py-2 border rounded-lg" 
+                value={form?.address?.area || form?.area || ''} 
+                onChange={(e) => update('address.area', e.target.value)} 
+                placeholder="Enter area/locality" 
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.city || ''} onChange={(e) => update('address.city', e.target.value)} placeholder="Enter city" />
+              <input 
+                className="w-full px-3 py-2 border rounded-lg" 
+                value={form?.address?.city || form?.city || ''} 
+                onChange={(e) => update('address.city', e.target.value)} 
+                placeholder="Enter city" 
+              />
             </div>
           </div>
 
@@ -222,11 +254,11 @@ const SchoolEditDetails: React.FC = () => {
           <div className="mt-6">
             <h3 className="text-md font-medium text-gray-900 mb-4">Location Details</h3>
             <LocationSelector
-              selectedState={form?.address?.stateId}
-              selectedDistrict={form?.address?.districtId}
-              selectedTaluka={form?.address?.talukaId}
-              districtText={form?.address?.district}
-              talukaText={form?.address?.taluka}
+              selectedState={form?.address?.stateId || ''}
+              selectedDistrict={form?.address?.districtId || ''}
+              selectedTaluka={form?.address?.talukaId || ''}
+              districtText={form?.address?.district || form?.district || ''}
+              talukaText={form?.address?.taluka || form?.taluka || ''}
               onStateChange={handleStateChange}
               onDistrictChange={handleDistrictChange}
               onTalukaChange={handleTalukaChange}
@@ -240,7 +272,16 @@ const SchoolEditDetails: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Pin Code</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.address?.pinCode || form?.address?.zipCode || ''} onChange={(e) => { update('address.pinCode', e.target.value); update('address.zipCode', e.target.value); }} placeholder="Enter pin code" />
+              <input 
+                className="w-full px-3 py-2 border rounded-lg" 
+                value={form?.address?.pinCode || form?.address?.zipCode || form?.pinCode || ''} 
+                onChange={(e) => { 
+                  update('address.pinCode', e.target.value); 
+                  update('address.zipCode', e.target.value); 
+                  update('pinCode', e.target.value); 
+                }} 
+                placeholder="Enter pin code" 
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
@@ -257,7 +298,7 @@ const SchoolEditDetails: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Primary Phone</label>
-              <input className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.phone || ''} onChange={(e) => update('contact.phone', e.target.value)} placeholder="Enter primary phone number" />
+              <input className="w-full px-3 py-2 border rounded-lg" value={form?.mobile || form?.contact?.phone || ''} onChange={(e) => { update('mobile', e.target.value); update('contact.phone', e.target.value); }} placeholder="Enter primary phone number" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Phone</label>
@@ -265,7 +306,7 @@ const SchoolEditDetails: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <input type="email" className="w-full px-3 py-2 border rounded-lg" value={form?.contact?.email || ''} onChange={(e) => update('contact.email', e.target.value)} placeholder="Enter email address" />
+              <input type="email" className="w-full px-3 py-2 border rounded-lg" value={form?.principalEmail || form?.contact?.email || ''} onChange={(e) => { update('principalEmail', e.target.value); update('contact.email', e.target.value); }} placeholder="Enter email address" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>

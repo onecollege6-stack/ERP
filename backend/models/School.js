@@ -6,6 +6,7 @@ const schoolSchema = new mongoose.Schema({
   logoUrl: { type: String },
   principalName: { type: String },
   principalEmail: { type: String },
+  mobile: { type: String }, // Direct mobile field for backward compatibility
   
   // Academic settings for school types and configurations
   academicSettings: {

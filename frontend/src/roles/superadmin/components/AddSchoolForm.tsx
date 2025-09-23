@@ -150,35 +150,35 @@ export function AddSchoolForm() {
 
     try {
       await addSchool({
-        name: formData.name,
-        code: formData.code,
-        mobile: formData.mobile,
-        principalName: formData.principalName,
-        principalEmail: formData.principalEmail,
+        name: formData.name.trim(),
+        code: formData.code.trim().toUpperCase(),
+        mobile: formData.mobile.trim(),
+        principalName: formData.principalName.trim(),
+        principalEmail: formData.principalEmail.trim(),
         address: {
-          street: formData.street,
-          area: formData.area,
-          city: formData.city,
-          district: formData.district,
-          taluka: formData.taluka,
-          state: formData.state,
+          street: formData.street.trim(),
+          area: formData.area.trim(),
+          city: formData.city.trim(),
+          district: formData.district.trim(),
+          taluka: formData.taluka.trim(),
+          state: formData.state.trim(),
           stateId: formData.stateId ? parseInt(formData.stateId) : undefined,
           districtId: formData.districtId ? parseInt(formData.districtId) : undefined,
           talukaId: formData.talukaId ? parseInt(formData.talukaId) : undefined,
-          pinCode: formData.pinCode,
+          pinCode: formData.pinCode.trim(),
           country: 'India'
         },
         contact: {
-          phone: formData.mobile,
-          email: formData.principalEmail,
-          website: formData.website
+          phone: formData.mobile.trim(),
+          email: formData.principalEmail.trim(),
+          website: formData.website.trim()
         },
         bankDetails: {
-          bankName: formData.bankName,
-          accountNumber: formData.accountNumber,
-          ifscCode: formData.ifscCode,
-          branch: formData.branch,
-          accountHolderName: formData.accountHolderName
+          bankName: formData.bankName.trim(),
+          accountNumber: formData.accountNumber.trim(),
+          ifscCode: formData.ifscCode.trim().toUpperCase(),
+          branch: formData.branch.trim(),
+          accountHolderName: formData.accountHolderName.trim()
         } as any,
         accessMatrix: {
           admin: { manageUsers: true, manageSchoolSettings: true, viewAttendance: true, viewResults: true, messageStudentsParents: true },
@@ -186,10 +186,10 @@ export function AddSchoolForm() {
           student: { manageUsers: false, manageSchoolSettings: false, viewAttendance: true, viewResults: true, messageStudentsParents: false },
           parent: { manageUsers: false, manageSchoolSettings: false, viewAttendance: true, viewResults: true, messageStudentsParents: false }
         } as any,
-        schoolType: formData.schoolType,
-        establishedYear: formData.establishedYear,
-        affiliationBoard: formData.affiliationBoard,
-        secondaryContact: formData.secondaryContact
+        schoolType: formData.schoolType.trim(),
+        establishedYear: formData.establishedYear.trim(),
+        affiliationBoard: formData.affiliationBoard.trim(),
+        secondaryContact: formData.secondaryContact.trim()
       });
       setSuccess('School created successfully!');
       setTimeout(() => {

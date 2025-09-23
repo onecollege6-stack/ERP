@@ -729,12 +729,15 @@ const { generateTeacherPassword, generateParentPassword, hashPassword } = requir
 // Create a new school
 exports.createSchool = async (req, res) => {
   try {
-    console.log('Request body:', req.body);
+    console.log('🏫 CREATE SCHOOL REQUEST RECEIVED');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
     console.log('Request file:', req.file);
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
 
     const { 
       name, 
-      code: providedCode,
+      code,
       mobile, 
       principalName, 
       principalEmail, 
@@ -747,8 +750,19 @@ exports.createSchool = async (req, res) => {
       establishedYear, 
       affiliationBoard, 
       website, 
-      secondaryContact 
+      secondaryContact,
+      settings,
+      features,
+      // New nested fields
+      address,
+      contact
     } = req.body;
+
+    console.log('📋 PARSED FIELDS:', {
+      name, code, mobile, principalName, principalEmail,
+      area, district, pinCode, address, contact,
+      bankDetails: typeof bankDetails, accessMatrix: typeof accessMatrix
+    });
 
     if (!name) {
       return res.status(400).json({
@@ -757,24 +771,18 @@ exports.createSchool = async (req, res) => {
       });
     }
 
-    if (!providedCode) {
+    if (!code) {
       return res.status(400).json({
         success: false,
         message: 'School code is required'
       });
     }
 
-    // Use provided code or generate one from name if not provided
-    let code = providedCode ? providedCode.toUpperCase().trim() : 
-      name.toUpperCase()
-        .replace(/[^A-Z\s]/g, '') // Remove non-alphabetic characters except spaces
-        .split(' ')
-        .map(word => word.substring(0, 3)) // Take first 3 letters of each word
-        .join('')
-        .substring(0, 6); // Limit to 6 characters
+    // Use provided code, clean and validate it
+    const cleanCode = code.toUpperCase().trim();
 
     // Validate code format (allow 1-10 characters to support single-letter codes)
-    if (!/^[A-Z0-9]{1,10}$/.test(code)) {
+    if (!/^[A-Z0-9]{1,10}$/.test(cleanCode)) {
       return res.status(400).json({
         success: false,
         message: 'School code must be 1-10 characters long and contain only letters and numbers'
@@ -782,52 +790,127 @@ exports.createSchool = async (req, res) => {
     }
 
     // Check if code already exists
-    const existingSchool = await School.findOne({ code });
+    const existingSchool = await School.findOne({ code: cleanCode });
     if (existingSchool) {
       return res.status(400).json({
         success: false,
-        message: `School code '${code}' already exists. Please choose a different code.`
+        message: `School code '${cleanCode}' already exists. Please choose a different code.`
       });
     }
 
     // Generate database name before creating school
-    const dbName = SchoolDatabaseManager.getDatabaseName(code);
+    const dbName = SchoolDatabaseManager.getDatabaseName(cleanCode);
 
     // Structure the data properly for the School model
     const schoolData = {
-      name,
-      code,
-      principalName,
-      principalEmail,
+      name: name?.trim() || '',
+      code: cleanCode,
+      principalName: principalName?.trim() || '',
+      principalEmail: principalEmail?.trim() || '',
+      mobile: mobile?.trim() || '', // Direct mobile field for dashboard display
       
-      // Structure contact information
-      contact: {
-        phone: mobile,
-        email: principalEmail,
-        website: website || ''
-      },
+      // Parse and structure contact information
+      contact: (() => {
+        try {
+          const parsedContact = typeof contact === 'string' ? JSON.parse(contact) : contact;
+          return {
+            phone: (parsedContact?.phone || mobile || '').trim(),
+            email: (parsedContact?.email || principalEmail || '').trim(),
+            website: (parsedContact?.website || website || '').trim()
+          };
+        } catch (error) {
+          console.error('Error parsing contact:', error, 'Raw contact:', contact);
+          return {
+            phone: (mobile || '').trim(),
+            email: (principalEmail || '').trim(),
+            website: (website || '').trim()
+          };
+        }
+      })(),
       
-      // Structure address information
-      address: {
-        street: area || '',
-        city: district || '',
-        state: '', // Could be added to frontend form
-        country: 'India',
-        zipCode: pinCode || ''
-      },
+      // Parse and structure address information
+      address: (() => {
+        try {
+          const parsedAddress = typeof address === 'string' ? JSON.parse(address) : address;
+          return {
+            street: (parsedAddress?.street || area || '').trim(),
+            area: (parsedAddress?.area || area || '').trim(),
+            city: (parsedAddress?.city || district || '').trim(),
+            district: (parsedAddress?.district || district || '').trim(),
+            taluka: (parsedAddress?.taluka || '').trim(),
+            state: (parsedAddress?.state || '').trim(),
+            stateId: parsedAddress?.stateId || null,
+            districtId: parsedAddress?.districtId || null,
+            talukaId: parsedAddress?.talukaId || null,
+            country: (parsedAddress?.country || 'India').trim(),
+            zipCode: (parsedAddress?.pinCode || parsedAddress?.zipCode || pinCode || '').trim(),
+            pinCode: (parsedAddress?.pinCode || pinCode || '').trim()
+          };
+        } catch (error) {
+          console.error('Error parsing address:', error, 'Raw address:', address);
+          return {
+            street: (area || '').trim(),
+            area: (area || '').trim(),
+            city: (district || '').trim(),
+            district: (district || '').trim(),
+            taluka: '',
+            state: '',
+            stateId: null,
+            districtId: null,
+            talukaId: null,
+            country: 'India',
+            zipCode: (pinCode || '').trim(),
+            pinCode: (pinCode || '').trim()
+          };
+        }
+      })(),
       
       // Parse bank details if it's a string, otherwise use directly
-      bankDetails: typeof bankDetails === 'string' ? JSON.parse(bankDetails) : bankDetails,
+      bankDetails: (() => {
+        try {
+          return typeof bankDetails === 'string' ? JSON.parse(bankDetails) : bankDetails;
+        } catch (error) {
+          console.error('Error parsing bankDetails:', error, 'Raw bankDetails:', bankDetails);
+          return {};
+        }
+      })(),
       
       // Parse access matrix if it's a string, otherwise use directly
-      accessMatrix: typeof accessMatrix === 'string' ? JSON.parse(accessMatrix) : accessMatrix,
+      accessMatrix: (() => {
+        try {
+          return typeof accessMatrix === 'string' ? JSON.parse(accessMatrix) : accessMatrix;
+        } catch (error) {
+          console.error('Error parsing accessMatrix:', error, 'Raw accessMatrix:', accessMatrix);
+          return {};
+        }
+      })(),
+      
+      // Parse settings if it's a string, otherwise use directly
+      settings: (() => {
+        try {
+          return typeof settings === 'string' ? JSON.parse(settings) : settings;
+        } catch (error) {
+          console.error('Error parsing settings:', error, 'Raw settings:', settings);
+          return {};
+        }
+      })(),
+      
+      // Parse features if it's a string, otherwise use directly
+      features: (() => {
+        try {
+          return typeof features === 'string' ? JSON.parse(features) : features;
+        } catch (error) {
+          console.error('Error parsing features:', error, 'Raw features:', features);
+          return {};
+        }
+      })(),
       
       // Additional school information
-      schoolType,
+      schoolType: schoolType?.trim() || 'Public',
       establishedYear: parseInt(establishedYear) || new Date().getFullYear(),
-      affiliationBoard,
-      website: website || '',
-      secondaryContact: secondaryContact || '',
+      affiliationBoard: affiliationBoard?.trim() || 'CBSE',
+      website: (website || '').trim(),
+      secondaryContact: (secondaryContact || '').trim(),
       
       // Default settings and features
       settings: {
@@ -905,7 +988,41 @@ exports.createSchool = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error creating school:', error);
+    console.error('❌ ERROR CREATING SCHOOL:', error);
+    console.error('❌ ERROR STACK:', error.stack);
+    console.error('❌ ERROR DETAILS:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      validation: error.errors
+    });
+    
+    // Handle MongoDB validation errors specifically
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map((err) => ({
+        field: err.path,
+        message: err.message,
+        value: err.value
+      }));
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `${field} already exists`,
+        duplicateField: field,
+        duplicateValue: error.keyValue[field]
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -1299,10 +1416,10 @@ exports.getAllSchools = async (req, res) => {
       logoUrl: school.logoUrl,
       address: school.address,
       contact: school.contact,
-      area: school.address?.street || '',
-      district: school.address?.city || '',
-      pinCode: school.address?.zipCode || '',
-      mobile: school.contact?.phone || '',
+      area: school.address?.area || school.address?.street || '',
+      district: school.address?.district || school.address?.city || '',
+      pinCode: school.address?.pinCode || school.address?.zipCode || '',
+      mobile: school.mobile || school.contact?.phone || '',
       principalName: school.principalName || '',
       principalEmail: school.principalEmail || school.contact?.email || '',
       bankDetails: school.bankDetails || {},
@@ -1313,7 +1430,12 @@ exports.getAllSchools = async (req, res) => {
       isActive: school.isActive,
       establishedDate: school.establishedDate,
       createdAt: school.createdAt,
-      updatedAt: school.updatedAt
+      updatedAt: school.updatedAt,
+      schoolType: school.schoolType,
+      establishedYear: school.establishedYear,
+      affiliationBoard: school.affiliationBoard,
+      website: school.website,
+      secondaryContact: school.secondaryContact
     }));
 
     console.log(`Successfully fetched ${mappedSchools.length} schools for superadmin`);
@@ -1662,7 +1784,7 @@ exports.deleteSchool = async (req, res) => {
       collection: School.collection.name,
       db: School.db.name
     });
-    
+
     const deletedSchool = await School.findByIdAndDelete(schoolId);
     console.log('[DELETE DEBUG] School deletion result:', deletedSchool);
     console.log('[DELETE DEBUG] Was deletion successful?', !!deletedSchool);

@@ -53,11 +53,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: created._id || created.id,
           name: created.name,
           code: created.code || '',
-          logo: created.logoUrl ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${import.meta.env.VITE_API_BASE_URL || ''}${created.logoUrl}`) : '',
-          area: created.address?.street || '',
-          district: created.address?.city || '',
-          pinCode: created.address?.zipCode || '',
-          mobile: created.contact?.phone || '',
+          logo: created.logoUrl ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${import.meta.env.VITE_API_BASE_URL || ''}${created.logoUrl}`) : '/default-school-logo.svg',
+          area: created.address?.area || created.address?.street || '',
+          district: created.address?.district || created.address?.city || '',
+          pinCode: created.address?.pinCode || created.address?.zipCode || '',
+          mobile: created.mobile || created.contact?.phone || '',
           principalName: created.principalName || '',
           principalEmail: created.principalEmail || created.contact?.email || '',
           bankDetails: created.bankDetails || {},
@@ -90,9 +90,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     form.append('mobile', String(schoolData.mobile || ''));
     form.append('principalName', String(schoolData.principalName || ''));
     form.append('principalEmail', String(schoolData.principalEmail || ''));
+    
+    // Legacy individual fields for backward compatibility
     form.append('area', String(schoolData.area || ''));
     form.append('district', String(schoolData.district || ''));
     form.append('pinCode', String(schoolData.pinCode || ''));
+    
+    // Address object as JSON string
+    form.append('address', JSON.stringify({
+      street: (schoolData as any).address?.street || '',
+      area: (schoolData as any).address?.area || schoolData.area || '',
+      city: (schoolData as any).address?.city || '',
+      district: (schoolData as any).address?.district || schoolData.district || '',
+      taluka: (schoolData as any).address?.taluka || '',
+      state: (schoolData as any).address?.state || '',
+      stateId: (schoolData as any).address?.stateId || null,
+      districtId: (schoolData as any).address?.districtId || null,
+      talukaId: (schoolData as any).address?.talukaId || null,
+      country: (schoolData as any).address?.country || 'India',
+      pinCode: (schoolData as any).address?.pinCode || schoolData.pinCode || '',
+      zipCode: (schoolData as any).address?.pinCode || schoolData.pinCode || ''
+    }));
+    
+    // Contact object as JSON string
+    form.append('contact', JSON.stringify({
+      phone: (schoolData as any).contact?.phone || schoolData.mobile || '',
+      email: (schoolData as any).contact?.email || schoolData.principalEmail || '',
+      website: (schoolData as any).contact?.website || (schoolData as any).website || ''
+    }));
     
     // Bank details as JSON string
     form.append('bankDetails', JSON.stringify({
