@@ -4,6 +4,9 @@ import { schoolUserAPI } from '../../../api/schoolUsers';
 import { exportImportAPI } from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
+import { exportUsers, generateImportTemplate } from '../../../utils/userImportExport';
+import { User, UserFormData, getDefaultFormData, transformUserToFormData } from '../../../types/user';
+import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
 
 interface School {
   _id: string;
@@ -12,30 +15,11 @@ interface School {
   logoUrl?: string;
 }
 
-interface User {
-  _id: string;
-  userId?: string; // Add the userId field
-  name: string;
-  email: string;
-  role: 'student' | 'teacher' | 'admin';
-  phone?: string;
-  address?: string;
-  isActive: boolean;
-  createdAt: string;
-  studentDetails?: {
-    studentId: string;
-    class: string;
-    section: string;
-  };
-  teacherDetails?: {
-    employeeId: string;
-    subjects: string[];
-    qualification: string;
-    experience: number;
-  };
-}
+// User interface now imported from standardized types
 
-interface AddUserFormData {
+// Old form data interface replaced with standardized types from '../../../types/user'
+
+interface OldAddUserFormData {
   // Core Fields
   role: 'admin' | 'teacher' | 'student';
   
@@ -118,7 +102,6 @@ interface AddUserFormData {
     motherTongueOther?: string;
     
     // Karnataka SATS Specific
-    studentNameKannada?: string;
     ageYears: number;
     ageMonths: number;
     socialCategory?: string;
@@ -127,8 +110,6 @@ interface AddUserFormData {
     studentCasteOther?: string;
     studentAadhaar?: string;
     studentCasteCertNo?: string;
-    specialCategory?: string;
-    specialCategoryOther?: string;
     
     // Economic Status
     belongingToBPL: string;
@@ -144,7 +125,6 @@ interface AddUserFormData {
     
     // Family Information - Father
     fatherName: string;
-    fatherNameKannada?: string;
     fatherOccupation?: string;
     fatherQualification?: string;
     fatherPhone?: string;
@@ -153,12 +133,10 @@ interface AddUserFormData {
     fatherCaste?: string;
     fatherCasteOther?: string;
     fatherCasteCertNo?: string;
-    fatherWorkAddress?: string;
     fatherAnnualIncome?: number;
     
     // Family Information - Mother
     motherName: string;
-    motherNameKannada?: string;
     motherOccupation?: string;
     motherQualification?: string;
     motherPhone?: string;
@@ -167,7 +145,6 @@ interface AddUserFormData {
     motherCaste?: string;
     motherCasteOther?: string;
     motherCasteCertNo?: string;
-    motherWorkAddress?: string;
     motherAnnualIncome?: number;
     
     // Guardian Information
@@ -175,7 +152,6 @@ interface AddUserFormData {
     guardianRelationship?: string;
     guardianPhone?: string;
     guardianEmail?: string;
-    guardianAddress?: string;
     isEmergencyContact?: boolean;
     
     // Transportation
@@ -322,7 +298,6 @@ interface AddUserFormData {
   generatedPassword?: string;
   
   // Additional SATS fields for backward compatibility
-  studentNameKannada?: string;
   ageYears?: number;
   ageMonths?: number;
   socialCategory?: string;
@@ -331,20 +306,16 @@ interface AddUserFormData {
   studentCasteOther?: string;
   studentAadhaar?: string;
   studentCasteCertNo?: string;
-  fatherNameKannada?: string;
   fatherAadhaar?: string;
   fatherCaste?: string;
   fatherCasteOther?: string;
   fatherCasteCertNo?: string;
-  motherNameKannada?: string;
   motherAadhaar?: string;
   motherCaste?: string;
   motherCasteOther?: string;
   motherCasteCertNo?: string;
   religion?: string;
   religionOther?: string;
-  specialCategory?: string;
-  specialCategoryOther?: string;
   belongingToBPL?: string;
   bplCardNo?: string;
   bhagyalakshmiBondNo?: string;
@@ -399,8 +370,6 @@ interface AddUserFormData {
   disabilityType?: string;
   disabilityCertificate?: string;
   medicalConditions?: string;
-  permanentAddress?: string;
-  currentAddress?: string;
   village?: string;
   motherTongue?: string;
   motherTongueOther?: string;
@@ -410,6 +379,30 @@ interface AddUserFormData {
 
 const ManageUsers: React.FC = () => {
   const { user } = useAuth();
+  
+  // Use the school classes hook to get dynamic data
+  const { 
+    classesData, 
+    loading: classesLoading, 
+    error: classesError,
+    getClassOptions,
+    getSectionsByClass,
+    hasClasses
+  } = useSchoolClasses();
+
+  // State for dynamic sections based on selected class
+  const [availableSections, setAvailableSections] = useState<any[]>([]);
+
+  // Function to handle class selection and update sections
+  const handleClassSelection = (selectedClass: string) => {
+    if (selectedClass && classesData) {
+      // Update sections for the selected class
+      const sections = getSectionsByClass(selectedClass);
+      setAvailableSections(sections);
+    } else {
+      setAvailableSections([]);
+    }
+  };
 
   // Helper function to generate sequential user ID based on role and school code
   const generateUserId = async (role: string, schoolCode: string): Promise<string> => {
@@ -484,31 +477,37 @@ const ManageUsers: React.FC = () => {
   const isSubmittingRef = useRef(false);
 
   // Basic client-side validation before submitting the form
-  const validateFormBeforeSubmit = (): string[] => {
+  const validateFormBeforeSubmit = (data: any): string[] => {
     const errors: string[] = [];
 
+    // Check if data exists
+    if (!data) {
+      errors.push('Form data is required');
+      return errors;
+    }
+
     // Common required fields
-    if (!formData.firstName || formData.firstName.trim() === '') {
+    if (!data.firstName || data.firstName.trim() === '') {
       errors.push('First name is required');
     }
-    if (!formData.lastName || formData.lastName.trim() === '') {
+    if (!data.lastName || data.lastName.trim() === '') {
       errors.push('Last name is required');
     }
-    if (!formData.email || !formData.email.includes('@')) {
+    if (!data.email || !data.email.includes('@')) {
       errors.push('A valid email is required');
     }
     
     // Phone validation - check both primaryPhone and legacy phone field
-    const phoneToValidate = formData.primaryPhone || formData.phone;
+    const phoneToValidate = data.primaryPhone || data.phone;
     if (!phoneToValidate || phoneToValidate.replace(/\D/g, '').length < 10) {
       errors.push('A valid 10-digit phone number is required');
     }
     
     // Address validation - check both new structure and legacy fields
-    const streetToValidate = formData.permanentStreet || formData.address;
-    const cityToValidate = formData.permanentCity || formData.city;
-    const stateToValidate = formData.permanentState || formData.state;
-    const pincodeToValidate = formData.permanentPincode || formData.pinCode;
+    const streetToValidate = data.permanentStreet || data.address;
+    const cityToValidate = data.permanentCity || data.city;
+    const stateToValidate = data.permanentState || data.state;
+    const pincodeToValidate = data.permanentPincode || data.pinCode;
     
     if (!streetToValidate || streetToValidate.trim() === '') {
       errors.push('Address/Street is required');
@@ -524,15 +523,15 @@ const ManageUsers: React.FC = () => {
     }
 
     // Role-specific validation
-    if (formData.role === 'student') {
+    if (data.role === 'student') {
       // Check nested studentDetails or fallback to legacy fields
-      const studentDetails = formData.studentDetails;
+      const studentDetails = data.studentDetails;
       
       // Academic Information
-      const classValue = studentDetails?.currentClass || formData.class;
-      const sectionValue = studentDetails?.currentSection || formData.section;
-      const dobValue = studentDetails?.dateOfBirth || formData.dateOfBirth;
-      const genderValue = studentDetails?.gender || formData.gender;
+      const classValue = studentDetails?.currentClass || data.class;
+      const sectionValue = studentDetails?.currentSection || data.section;
+      const dobValue = studentDetails?.dateOfBirth || data.dateOfBirth;
+      const genderValue = studentDetails?.gender || data.gender;
       
       if (!classValue || classValue === '') {
         errors.push('Class selection is required for students');
@@ -548,8 +547,8 @@ const ManageUsers: React.FC = () => {
       }
       
       // Family Information - Karnataka SATS Standards
-      const fatherName = studentDetails?.fatherName || formData.fatherName;
-      const motherName = studentDetails?.motherName || formData.motherName;
+      const fatherName = studentDetails?.fatherName || data.fatherName;
+      const motherName = studentDetails?.motherName || data.motherName;
       
       if (!fatherName || fatherName.trim() === '') {
         errors.push("Father's name is required for students");
@@ -559,19 +558,19 @@ const ManageUsers: React.FC = () => {
       }
       
       // Karnataka SATS Specific Validations
-      const ageYears = studentDetails?.ageYears || formData.ageYears;
-      const socialCategory = studentDetails?.socialCategory || formData.socialCategory;
-      const belongingToBPL = studentDetails?.belongingToBPL || formData.belongingToBPL;
-      const disability = studentDetails?.disability || formData.disability;
+      const ageYears = studentDetails?.ageYears || data.ageYears;
+      const socialCategory = studentDetails?.socialCategory || data.socialCategory;
+      const belongingToBPL = studentDetails?.belongingToBPL || data.belongingToBPL;
+      const disability = studentDetails?.disability || data.disability;
       
       if (ageYears && (ageYears < 3 || ageYears > 25)) {
         errors.push('Student age must be between 3 and 25 years');
       }
       
       // Aadhaar validation for Karnataka SATS
-      const studentAadhaar = studentDetails?.studentAadhaar || formData.studentAadhaar;
-      const fatherAadhaar = studentDetails?.fatherAadhaar || formData.fatherAadhaar;
-      const motherAadhaar = studentDetails?.motherAadhaar || formData.motherAadhaar;
+      const studentAadhaar = studentDetails?.studentAadhaar || data.studentAadhaar;
+      const fatherAadhaar = studentDetails?.fatherAadhaar || data.fatherAadhaar;
+      const motherAadhaar = studentDetails?.motherAadhaar || data.motherAadhaar;
       
       if (studentAadhaar && !/^\d{12}$/.test(studentAadhaar)) {
         errors.push('Student Aadhaar number must be 12 digits');
@@ -584,8 +583,8 @@ const ManageUsers: React.FC = () => {
       }
       
       // Phone number validation for family
-      const fatherPhone = studentDetails?.fatherPhone || formData.fatherPhone || formData.fatherMobile;
-      const motherPhone = studentDetails?.motherPhone || formData.motherPhone || formData.motherMobile;
+      const fatherPhone = studentDetails?.fatherPhone || data.fatherPhone || data.fatherMobile;
+      const motherPhone = studentDetails?.motherPhone || data.motherPhone || data.motherMobile;
       
       if (fatherPhone && !/^[6-9]\d{9}$/.test(fatherPhone)) {
         errors.push('Father phone number must be a valid 10-digit mobile number');
@@ -890,7 +889,6 @@ const ManageUsers: React.FC = () => {
       motherTongueOther: '',
       
       // Karnataka SATS Specific
-      studentNameKannada: '',
       ageYears: 0,
       ageMonths: 0,
       socialCategory: '',
@@ -899,8 +897,6 @@ const ManageUsers: React.FC = () => {
       studentCasteOther: '',
       studentAadhaar: '',
       studentCasteCertNo: '',
-      specialCategory: '',
-      specialCategoryOther: '',
       
       // Economic Status
       belongingToBPL: 'No',
@@ -914,7 +910,6 @@ const ManageUsers: React.FC = () => {
       
       // Family Information - Father
       fatherName: '',
-      fatherNameKannada: '',
       fatherOccupation: '',
       fatherQualification: '',
       fatherPhone: '',
@@ -923,12 +918,10 @@ const ManageUsers: React.FC = () => {
       fatherCaste: '',
       fatherCasteOther: '',
       fatherCasteCertNo: '',
-      fatherWorkAddress: '',
       fatherAnnualIncome: 0,
       
       // Family Information - Mother
       motherName: '',
-      motherNameKannada: '',
       motherOccupation: '',
       motherQualification: '',
       motherPhone: '',
@@ -937,7 +930,6 @@ const ManageUsers: React.FC = () => {
       motherCaste: '',
       motherCasteOther: '',
       motherCasteCertNo: '',
-      motherWorkAddress: '',
       motherAnnualIncome: 0,
       
       // Guardian Information
@@ -945,7 +937,6 @@ const ManageUsers: React.FC = () => {
       guardianRelationship: '',
       guardianPhone: '',
       guardianEmail: '',
-      guardianAddress: '',
       isEmergencyContact: false,
       
       // Transportation
@@ -1102,8 +1093,6 @@ const ManageUsers: React.FC = () => {
     motherCasteCertNo: '',
     religion: '',
     religionOther: '',
-    specialCategory: '',
-    specialCategoryOther: '',
     belongingToBPL: 'No',
     bplCardNo: '',
     bhagyalakshmiBondNo: '',
@@ -1260,8 +1249,6 @@ const ManageUsers: React.FC = () => {
         studentCasteOther: '',
         studentAadhaar: '',
         studentCasteCertNo: '',
-        specialCategory: '',
-        specialCategoryOther: '',
         
         // Economic Status
         belongingToBPL: 'No',
@@ -1463,8 +1450,6 @@ const ManageUsers: React.FC = () => {
       motherCasteCertNo: '',
       religion: '',
       religionOther: '',
-      specialCategory: '',
-      specialCategoryOther: '',
       belongingToBPL: 'No',
       bplCardNo: '',
       bhagyalakshmiBondNo: '',
@@ -1949,7 +1934,7 @@ const ManageUsers: React.FC = () => {
       if (isSubmittingRef.current) return;
 
       // Client-side validation: block submission if invalid
-      const clientErrors = validateFormBeforeSubmit();
+      const clientErrors = validateFormBeforeSubmit(formData);
       if (clientErrors.length > 0) {
         clientErrors.slice(0, 3).forEach(err => toast.error(err));
         return;
@@ -2122,8 +2107,6 @@ const ManageUsers: React.FC = () => {
             studentCasteOther: formData.studentDetails?.studentCasteOther || formData.studentCasteOther || '',
             studentAadhaar: formData.studentDetails?.studentAadhaar || formData.studentAadhaar || '',
             studentCasteCertNo: formData.studentDetails?.studentCasteCertNo || formData.studentCasteCertNo || '',
-            specialCategory: formData.studentDetails?.specialCategory || formData.specialCategory || '',
-            specialCategoryOther: formData.studentDetails?.specialCategoryOther || formData.specialCategoryOther || '',
             
             // Economic Status
             belongingToBPL: formData.studentDetails?.belongingToBPL || formData.belongingToBPL || 'No',
@@ -2426,8 +2409,6 @@ const ManageUsers: React.FC = () => {
       socialCategoryOther: userData.socialCategoryOther || '',
       religion: userData.religion || '',
       religionOther: userData.religionOther || '',
-      specialCategory: userData.specialCategory || '',
-      specialCategoryOther: userData.specialCategoryOther || '',
       
       // Economic Status (SATS Standard)
       belongingToBPL: userData.belongingToBPL || 'No',
@@ -2626,8 +2607,6 @@ const ManageUsers: React.FC = () => {
         updateData.socialCategoryOther = formData.socialCategoryOther;
         updateData.religion = formData.religion;
         updateData.religionOther = formData.religionOther;
-        updateData.specialCategory = formData.specialCategory;
-        updateData.specialCategoryOther = formData.specialCategoryOther;
         
         // Special Needs
         updateData.disability = formData.disability;
@@ -2810,13 +2789,13 @@ const ManageUsers: React.FC = () => {
 
   // Simple form validity check for disabling submit button
   const isFormValid = () => {
-    const errors = validateFormBeforeSubmit();
+    const errors = validateFormBeforeSubmit(formData);
     return errors.length === 0;
   };
 
   // Compute human-friendly missing fields list for tooltip
   const missingFieldsForTooltip = () => {
-    const errors = validateFormBeforeSubmit();
+    const errors = validateFormBeforeSubmit(formData);
     if (errors.length === 0) return '';
     // Map validation messages to shorter labels where possible
     const mapLabel = (msg: string) => {
@@ -2981,7 +2960,7 @@ const ManageUsers: React.FC = () => {
         // Karnataka SATS Specific Personal Fields
         'Student Name Kannada', 'Age Years', 'Age Months', 'Social Category', 'Social Category Other',
         'Student Caste', 'Student Caste Other', 'Student Aadhaar', 'Student Caste Certificate No',
-        'Special Category', 'Special Category Other', 'Belonging to BPL', 'BPL Card No', 'Bhagyalakshmi Bond No',
+        'Belonging to BPL', 'BPL Card No', 'Bhagyalakshmi Bond No',
         'Disability', 'Disability Other', 'Is RTE Candidate*',
         
         // Address Information - Current
@@ -3105,8 +3084,6 @@ const ManageUsers: React.FC = () => {
           personal.studentCasteOther || '',
           personal.studentAadhaar || '',
           personal.studentCasteCertNo || '',
-          personal.specialCategory || '',
-          personal.specialCategoryOther || '',
           personal.belongingToBPL || '',
           personal.bplCardNo || '',
           personal.bhagyalakshmiBondNo || '',
@@ -4256,8 +4233,6 @@ const ManageUsers: React.FC = () => {
                 studentCasteOther: row['Student Caste Other'] || '',
                 studentAadhaar: row['Student Aadhaar'] || '',
                 studentCasteCertNo: row['Student Caste Certificate No'] || '',
-                specialCategory: row['Special Category'] || '',
-                specialCategoryOther: row['Special Category Other'] || '',
                 belongingToBPL: row['Belonging to BPL'] || 'No',
                 bplCardNo: row['BPL Card No'] || '',
                 bhagyalakshmiBondNo: row['Bhagyalakshmi Bond No'] || '',
@@ -5530,29 +5505,47 @@ const ManageUsers: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Admission to Class *</label>
+                        {classesLoading ? (
+                          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                            Loading classes...
+                          </div>
+                        ) : (
                         <select
                           required
                           value={formData.class || formData.studentDetails?.currentClass || ''}
                           onChange={(e) => {
                             const newClass = e.target.value;
+                              handleClassSelection(newClass); // Update sections
                             setFormData({
                               ...formData, 
                               class: newClass,
+                                section: '', // Clear section when class changes
                               studentDetails: {
                                 ...formData.studentDetails,
-                                currentClass: newClass
+                                  currentClass: newClass,
+                                  currentSection: '' // Clear section when class changes
                               }
                             });
                           }}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Class</option>
+                            {hasClasses() ? (
+                              getClassOptions().map(cls => (
+                                <option key={cls.value} value={cls.value}>{cls.label}</option>
+                              ))
+                            ) : (
+                              <>
                           <option value="LKG">LKG</option>
                           <option value="UKG">UKG</option>
                           {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
                             <option key={num} value={num.toString()}>{num}</option>
                           ))}
+                              </>
+                            )}
                         </select>
+                        )}
+                        {classesError && <p className="text-yellow-600 text-sm mt-1">⚠️ Using default classes (Super Admin hasn't configured classes yet)</p>}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
@@ -5591,11 +5584,23 @@ const ManageUsers: React.FC = () => {
                             });
                           }}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          disabled={!formData.class && !formData.studentDetails?.currentClass}
                         >
-                          <option value="">Select Section</option>
-                          {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
+                          <option value="">
+                            {!formData.class && !formData.studentDetails?.currentClass 
+                              ? 'Select Class First' 
+                              : 'Select Section'
+                            }
+                          </option>
+                          {availableSections.length > 0 ? (
+                            availableSections.map(section => (
+                              <option key={section.value} value={section.value}>{section.label}</option>
+                            ))
+                          ) : (
+                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
                             <option key={letter} value={letter}>Section {letter}</option>
-                          ))}
+                            ))
+                          )}
                         </select>
                       </div>
                       <div>
@@ -5989,31 +5994,6 @@ const ManageUsers: React.FC = () => {
                             onChange={(e) => setFormData({...formData, religionOther: e.target.value})}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify religion"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Special Category</label>
-                        <select
-                          value={formData.specialCategory}
-                          onChange={(e) => setFormData({...formData, specialCategory: e.target.value})}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Special Category</option>
-                          <option value="None">None</option>
-                          <option value="Destitute">Destitute</option>
-                          <option value="Orphan">Orphan</option>
-                          <option value="HIV case">HIV case</option>
-                          <option value="Child of Sex worker">Child of Sex worker</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.specialCategory === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.specialCategoryOther}
-                            onChange={(e) => setFormData({...formData, specialCategoryOther: e.target.value})}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify special category"
                           />
                         )}
                       </div>

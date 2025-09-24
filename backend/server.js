@@ -37,6 +37,8 @@ const superadminAcademicRoutes = require('./routes/superadminAcademic');
 const superadminSubjectRoutes = require('./routes/superadminSubject');
 const superadminClassRoutes = require('./routes/superadminClasses');
 const superadminTestRoutes = require('./routes/superadminTests');
+const userManagementRoutes = require('./routes/userManagement');
+const adminClassRoutes = require('./routes/adminClasses');
 
 // Serve uploads statically
 app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
@@ -222,6 +224,8 @@ app.use('/api/superadmin/academic', superadminAcademicRoutes);
 app.use('/api/superadmin/subjects', superadminSubjectRoutes);
 app.use('/api/superadmin/classes', superadminClassRoutes);
 app.use('/api/superadmin/tests', superadminTestRoutes);
+app.use('/api/user-management', userManagementRoutes);
+app.use('/api/admin/classes', adminClassRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

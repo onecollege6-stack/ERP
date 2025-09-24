@@ -1,0 +1,244 @@
+const School = require('../models/School');
+const { ObjectId } = require('mongodb');
+
+// Get school database connection
+async function getSchoolConnectionWithFallback(schoolCode) {
+  try {
+    const DatabaseManager = require('../utils/databaseManager');
+    return await DatabaseManager.getSchoolConnection(schoolCode);
+  } catch (error) {
+    console.error(`Error connecting to school database ${schoolCode}:`, error);
+    throw error;
+  }
+}
+
+// Get classes and sections for a school (for admin users)
+exports.getSchoolClassesAndSections = async (req, res) => {
+  try {
+    const { schoolCode } = req.params;
+    
+    console.log(`🔍 Fetching classes and sections for school: ${schoolCode}`);
+    
+    // Get school information
+    const school = await School.findOne({ code: schoolCode.toUpperCase() });
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(schoolCode);
+    const classesCollection = schoolConnection.collection('classes');
+
+    // Fetch all active classes with their sections
+    const classes = await classesCollection.find({
+      schoolId: school._id.toString(),
+      isActive: true
+    }).sort({ className: 1 }).toArray();
+
+    console.log(`📚 Found ${classes.length} classes for school ${schoolCode}`);
+
+    // Transform classes for frontend use
+    const formattedClasses = classes.map(cls => ({
+      _id: cls._id,
+      className: cls.className,
+      sections: cls.sections || [],
+      academicYear: cls.academicYear || '2024-25',
+      displayName: `Class ${cls.className}`,
+      hasMultipleSections: cls.sections && cls.sections.length > 1
+    }));
+
+    // Create separate arrays for dropdowns
+    const classOptions = formattedClasses.map(cls => ({
+      value: cls.className,
+      label: cls.displayName,
+      className: cls.className
+    }));
+
+    // Create section options grouped by class
+    const sectionsByClass = {};
+    formattedClasses.forEach(cls => {
+      if (cls.sections && cls.sections.length > 0) {
+        sectionsByClass[cls.className] = cls.sections.map(section => ({
+          value: section,
+          label: `Section ${section}`,
+          section: section
+        }));
+      } else {
+        // If no sections defined, provide default sections
+        sectionsByClass[cls.className] = [
+          { value: 'A', label: 'Section A', section: 'A' }
+        ];
+      }
+    });
+
+    // Also create a flat list of all available sections
+    const allSections = [...new Set(
+      formattedClasses.flatMap(cls => cls.sections || ['A'])
+    )].sort().map(section => ({
+      value: section,
+      label: `Section ${section}`,
+      section: section
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        schoolId: school._id,
+        schoolName: school.name,
+        schoolCode: school.code,
+        classes: formattedClasses,
+        classOptions: classOptions,
+        sectionsByClass: sectionsByClass,
+        allSections: allSections,
+        totalClasses: formattedClasses.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching school classes and sections:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching school classes and sections',
+      error: error.message
+    });
+  }
+};
+
+// Get sections for a specific class
+exports.getSectionsForClass = async (req, res) => {
+  try {
+    const { schoolCode, className } = req.params;
+    
+    console.log(`🔍 Fetching sections for class ${className} in school: ${schoolCode}`);
+    
+    // Get school information
+    const school = await School.findOne({ code: schoolCode.toUpperCase() });
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(schoolCode);
+    const classesCollection = schoolConnection.collection('classes');
+
+    // Find the specific class
+    const classData = await classesCollection.findOne({
+      schoolId: school._id.toString(),
+      className: className,
+      isActive: true
+    });
+
+    if (!classData) {
+      return res.status(404).json({
+        success: false,
+        message: `Class ${className} not found`
+      });
+    }
+
+    // Get sections for this class
+    const sections = (classData.sections || ['A']).map(section => ({
+      value: section,
+      label: `Section ${section}`,
+      section: section
+    }));
+
+    console.log(`📝 Found ${sections.length} sections for class ${className}`);
+
+    res.json({
+      success: true,
+      data: {
+        className: className,
+        sections: sections,
+        totalSections: sections.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching sections for class:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching sections for class',
+      error: error.message
+    });
+  }
+};
+
+// Get all tests/exams for a school (for admin users)
+exports.getSchoolTests = async (req, res) => {
+  try {
+    const { schoolCode } = req.params;
+    
+    console.log(`🔍 Fetching tests for school: ${schoolCode}`);
+    
+    // Get school information
+    const school = await School.findOne({ code: schoolCode.toUpperCase() });
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await getSchoolConnectionWithFallback(schoolCode);
+    const testsCollection = schoolConnection.collection('testdetails');
+
+    // Fetch all active tests
+    const tests = await testsCollection.find({
+      schoolId: school._id.toString(),
+      isActive: true
+    }).sort({ testName: 1 }).toArray();
+
+    console.log(`📚 Found ${tests.length} tests for school ${schoolCode}`);
+
+    // Transform tests for frontend use
+    const formattedTests = tests.map(test => ({
+      _id: test._id,
+      testId: test.testId,
+      testName: test.testName,
+      testType: test.testType,
+      className: test.className,
+      academicYear: test.academicYear,
+      maxMarks: test.maxMarks,
+      duration: test.duration,
+      description: test.description,
+      displayName: `${test.testName} (${test.testType})`,
+      isActive: test.isActive
+    }));
+
+    // Group tests by class for easier filtering
+    const testsByClass = {};
+    formattedTests.forEach(test => {
+      if (!testsByClass[test.className]) {
+        testsByClass[test.className] = [];
+      }
+      testsByClass[test.className].push(test);
+    });
+
+    res.json({
+      success: true,
+      data: {
+        schoolId: school._id,
+        schoolName: school.name,
+        schoolCode: school.code,
+        tests: formattedTests,
+        testsByClass: testsByClass,
+        totalTests: formattedTests.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching school tests:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching school tests',
+      error: error.message
+    });
+  }
+};
