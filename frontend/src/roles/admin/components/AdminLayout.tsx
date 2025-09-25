@@ -13,7 +13,10 @@ import {
   Bell,
   User,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  MessageSquare,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 
 const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,6 +43,16 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { name: 'View Results', href: '/admin/results' }
       ]
     },
+    { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
+    {
+      name: 'Fees',
+      icon: CreditCard,
+      children: [
+        { name: 'Fee Structure', href: '/admin/fees/structure' },
+        { name: 'Fee Payments', href: '/admin/fees/payments' }
+      ]
+    },
+    { name: 'Reports', href: '/admin/reports', icon: FileText },
   ];
 
   const isActive = (href: string) => location.pathname === href;

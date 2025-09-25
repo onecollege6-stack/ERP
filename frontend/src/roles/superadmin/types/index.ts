@@ -49,7 +49,6 @@ export interface RolePermissions {
 export interface DashboardStats {
   totalSchools: number;
   totalUsers: number;
-  messagesSent: number;
   lastLogin: string;
 }
 

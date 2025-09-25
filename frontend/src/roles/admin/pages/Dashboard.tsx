@@ -13,17 +13,51 @@ interface School {
   logoUrl?: string;
   principalName?: string;
   principalEmail?: string;
+  mobile?: string;
   address?: {
     street?: string;
+    area?: string;
     city?: string;
+    district?: string;
+    taluka?: string;
     state?: string;
+    stateId?: number;
+    districtId?: number;
+    talukaId?: number;
     country?: string;
     zipCode?: string;
+    pinCode?: string;
   };
   contact?: {
     phone?: string;
     email?: string;
     website?: string;
+  };
+  bankDetails?: {
+    bankName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    branch?: string;
+    accountHolderName?: string;
+  };
+  settings?: {
+    academicYear?: {
+      startDate?: Date;
+      endDate?: Date;
+      currentYear?: string;
+    };
+    classes?: string[];
+    sections?: string[];
+    subjects?: string[];
+    workingDays?: string[];
+    workingHours?: {
+      start?: string;
+      end?: string;
+    };
+    holidays?: Array<{
+      date?: Date;
+      description?: string;
+    }>;
   };
   stats?: {
     totalStudents: number;
@@ -31,6 +65,26 @@ interface School {
     totalParents: number;
     totalClasses: number;
   };
+  features?: {
+    hasTransport?: boolean;
+    hasCanteen?: boolean;
+    hasLibrary?: boolean;
+    hasSports?: boolean;
+    hasComputerLab?: boolean;
+  };
+  schoolType?: string;
+  establishedYear?: number;
+  affiliationBoard?: string;
+  website?: string;
+  secondaryContact?: string;
+  isActive?: boolean;
+  establishedDate?: Date;
+  admins?: string[];
+  databaseName?: string;
+  databaseCreated?: boolean;
+  databaseCreatedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 interface User {
@@ -211,11 +265,15 @@ const Dashboard: React.FC = () => {
     fetchSchoolAndUsers();
   }, [user]);
   
+  // Calculate stats from actual user data
+  const totalStudents = users.filter(user => user.role === 'student').length;
+  const totalTeachers = users.filter(user => user.role === 'teacher').length;
+  
   // Use real data from the school or fallback to sample data
   const stats = [
-    { name: 'Total Students', value: school?.stats?.totalStudents?.toString() || '0', icon: Users, color: 'bg-blue-500' },
+    { name: 'Total Students', value: totalStudents.toString(), icon: Users, color: 'bg-blue-500' },
     { name: 'Attendance Rate', value: '94.2%', icon: UserCheck, color: 'bg-green-500' },
-    { name: 'Active Assignments', value: '23', icon: BookOpen, color: 'bg-yellow-500' },
+    { name: 'Total Teachers', value: totalTeachers.toString(), icon: BookOpen, color: 'bg-purple-500' },
   ];
 
   const attendanceData = [
@@ -338,23 +396,164 @@ const Dashboard: React.FC = () => {
               <div className="flex-grow">
                 <h2 className="text-2xl font-bold text-gray-900">{school?.name || user?.schoolName || 'Your School'}</h2>
                 <p className="text-gray-500 mb-2">School Code: {school?.code || 'N/A'}</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  <div className="flex items-center">
-                    <Building className="h-5 w-5 text-gray-400 mr-2" />
-                    <span className="text-gray-600">{school?.address?.city && school?.address?.street ? 
-                      `${school.address.street}, ${school.address.city}` : 
-                      school?.address?.street || school?.address?.city || 'Address not available'}</span>
+                
+                {/* Principal Information */}
+                {school?.principalName && (
+                  <p className="text-gray-600 mb-2">
+                    <strong>Principal:</strong> {school.principalName}
+                    {school?.principalEmail && (
+                      <span className="text-gray-500 ml-2">({school.principalEmail})</span>
+                    )}
+                  </p>
+                )}
+                
+                {/* Academic Information */}
+                {(school?.settings?.academicYear?.currentYear || school?.settings?.classes?.length || school?.settings?.subjects?.length) && (
+                  <div className="bg-gray-50 p-3 rounded-lg mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Academic Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                      {school?.settings?.academicYear?.currentYear && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Academic Year:</span>
+                          <span className="text-gray-800 ml-1">{school.settings.academicYear.currentYear}</span>
+                        </div>
+                      )}
+                      {school?.settings?.classes?.length && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Classes:</span>
+                          <span className="text-gray-800 ml-1">{school.settings.classes.length} classes</span>
+                        </div>
+                      )}
+                      {school?.settings?.subjects?.length && (
+                        <div>
+                          <span className="text-gray-600 font-medium">Subjects:</span>
+                          <span className="text-gray-800 ml-1">{school.settings.subjects.length} subjects</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {school?.contact?.phone && (
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                  {/* Complete Address */}
+                  <div className="flex items-start">
+                    <Building className="h-5 w-5 text-gray-400 mr-2 mt-0.5" />
+                    <div>
+                      <span className="text-gray-600 block">
+                        {school?.address?.street && school?.address?.area && school?.address?.city ? 
+                          `${school.address.street}, ${school.address.area}, ${school.address.city}` : 
+                          school?.address?.street && school?.address?.city ? 
+                          `${school.address.street}, ${school.address.city}` : 
+                          school?.address?.street || school?.address?.city || 'Address not available'}
+                      </span>
+                      {school?.address?.district && (
+                        <span className="text-gray-500 text-sm">{school.address.district}</span>
+                      )}
+                      {school?.address?.state && (
+                        <span className="text-gray-500 text-sm block">{school.address.state}</span>
+                      )}
+                      {school?.address?.pinCode && (
+                        <span className="text-gray-500 text-sm">PIN: {school.address.pinCode}</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Primary Phone */}
+                  {(school?.contact?.phone || school?.mobile) && (
                     <div className="flex items-center">
                       <Phone className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="text-gray-600">{school.contact.phone}</span>
+                      <div>
+                        <span className="text-gray-600">{school.contact?.phone || school.mobile}</span>
+                        {school?.secondaryContact && (
+                          <span className="text-gray-500 text-sm block">Alt: {school.secondaryContact}</span>
+                        )}
+                      </div>
                     </div>
                   )}
-                  {school?.contact?.email && (
+                  
+                  {/* Email */}
+                  {(school?.contact?.email || school?.principalEmail) && (
                     <div className="flex items-center">
                       <Mail className="h-5 w-5 text-gray-400 mr-2" />
-                      <span className="text-gray-600">{school.contact.email}</span>
+                      <span className="text-gray-600">{school.contact?.email || school.principalEmail}</span>
+                    </div>
+                  )}
+                  
+                  {/* Website */}
+                  {(school?.contact?.website || school?.website) && (
+                    <div className="flex items-center">
+                      <MapPin className="h-5 w-5 text-gray-400 mr-2" />
+                      <a 
+                        href={(school.contact?.website || school.website)?.startsWith('http') ? 
+                          (school.contact?.website || school.website) : 
+                          `https://${school.contact?.website || school.website}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        {school.contact?.website || school.website}
+                      </a>
+                    </div>
+                  )}
+                  
+                  {/* School Type & Established Year */}
+                  {(school?.schoolType || school?.establishedYear) && (
+                    <div className="flex items-center">
+                      <Building className="h-5 w-5 text-gray-400 mr-2" />
+                      <div>
+                        {school?.schoolType && (
+                          <span className="text-gray-600 block">{school.schoolType} School</span>
+                        )}
+                        {school?.establishedYear && (
+                          <span className="text-gray-500 text-sm">Est. {school.establishedYear}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Affiliation Board */}
+                  {school?.affiliationBoard && (
+                    <div className="flex items-center">
+                      <TrendingUp className="h-5 w-5 text-gray-400 mr-2" />
+                      <span className="text-gray-600">{school.affiliationBoard} Affiliated</span>
+                    </div>
+                  )}
+                  
+                  {/* Working Hours */}
+                  {school?.settings?.workingHours && (
+                    <div className="flex items-center">
+                      <Clock className="h-5 w-5 text-gray-400 mr-2" />
+                      <span className="text-gray-600">
+                        {school.settings.workingHours.start} - {school.settings.workingHours.end}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Working Days */}
+                  {school?.settings?.workingDays && school.settings.workingDays.length > 0 && (
+                    <div className="flex items-center">
+                      <Calendar className="h-5 w-5 text-gray-400 mr-2" />
+                      <span className="text-gray-600">
+                        {school.settings.workingDays.join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* School Features */}
+                  {school?.features && (
+                    <div className="flex items-start">
+                      <TrendingUp className="h-5 w-5 text-gray-400 mr-2 mt-0.5" />
+                      <div>
+                        <span className="text-gray-600 text-sm">
+                          {[
+                            school.features.hasTransport && 'Transport',
+                            school.features.hasCanteen && 'Canteen',
+                            school.features.hasLibrary && 'Library',
+                            school.features.hasSports && 'Sports',
+                            school.features.hasComputerLab && 'Computer Lab'
+                          ].filter(Boolean).join(', ') || 'Basic facilities'}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -363,7 +562,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {stats.map((stat) => (
               <div key={stat.name} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center">
@@ -381,7 +580,10 @@ const Dashboard: React.FC = () => {
 
           {/* Users Section */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Associated Users</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Associated Users 
+              <span className="text-sm font-normal text-gray-500 ml-2">({users.length} total)</span>
+            </h3>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">

@@ -2,12 +2,14 @@ const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
   schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
-  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   recipients: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     readAt: Date,
     deletedAt: Date
   }],
+  sentTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Array of student IDs
+  readBy: { type: Map, of: Date, default: new Map() }, // Map of studentId -> read timestamp
   
   // Message content
   subject: { type: String, required: true },
@@ -51,12 +53,11 @@ const messageSchema = new mongoose.Schema({
   category: String, // Academic, Administrative, Sports, Events
   tags: [String],
   
-  // Recipient groups (for bulk messages)
-  recipientGroups: [{
-    type: { type: String, enum: ['class', 'section', 'role', 'custom'] },
-    value: String, // e.g., "Grade 8", "A", "teacher", "custom-list"
-    customList: [String] // For custom recipient lists
-  }],
+  // Target information
+  target: {
+    class: { type: String, required: true }, // e.g., "10", "ALL"
+    section: { type: String, default: 'ALL' } // e.g., "A", "ALL"
+  },
   
   // Message tracking
   readCount: { type: Number, default: 0 },
@@ -105,11 +106,13 @@ messageSchema.virtual('urgencyIndicator').get(function() {
 
 // Index for better query performance
 messageSchema.index({ schoolId: 1, status: 1 });
-messageSchema.index({ sender: 1 });
+messageSchema.index({ createdBy: 1 });
 messageSchema.index({ 'recipients.user': 1 });
+messageSchema.index({ sentTo: 1 });
 messageSchema.index({ messageType: 1 });
 messageSchema.index({ priority: 1 });
-messageSchema.index({ createdAt: 1 });
+messageSchema.index({ createdAt: -1 });
+messageSchema.index({ 'target.class': 1, 'target.section': 1 });
 messageSchema.index({ expiresAt: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

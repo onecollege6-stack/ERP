@@ -94,6 +94,22 @@ class SchoolDatabaseManager {
     return `${schoolCode.toUpperCase()}${role.toUpperCase()}${sequenceDoc.value.sequence_value}`;
   }
   
+  // Close a specific school database connection
+  static async closeSchoolConnection(schoolCode) {
+    const dbName = this.getDatabaseName(schoolCode);
+    
+    if (this.connections.has(dbName)) {
+      const connection = this.connections.get(dbName);
+      await connection.close();
+      this.connections.delete(dbName);
+      console.log(`🔌 Closed connection to: ${dbName}`);
+      return true;
+    }
+    
+    console.log(`🔍 No connection found for: ${dbName}`);
+    return false;
+  }
+
   // Close all school database connections
   static async closeAllConnections() {
     for (const [dbName, connection] of this.connections) {

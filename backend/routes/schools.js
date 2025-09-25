@@ -40,6 +40,7 @@ router.post('/', setMainDbContext, requireSuperAdmin, upload.single('logo'), asy
 });
 router.get('/', setMainDbContext, requireSuperAdmin, schoolController.getAllSchools);
 router.get('/stats', setMainDbContext, requireSuperAdmin, schoolController.getSchoolStats);
+router.get('/all-stats', setMainDbContext, requireSuperAdmin, schoolController.getAllSchoolsStats);
 
 // School data sync routes (Super Admin only)
 router.post('/sync/all', setMainDbContext, requireSuperAdmin, schoolController.syncAllSchoolsToDatabase);
@@ -53,6 +54,9 @@ router.delete('/:schoolId', setMainDbContext, requireSuperAdmin, schoolControlle
 // Update only bank details
 router.patch('/:schoolId/bank-details', schoolController.updateBankDetails);
 router.patch('/:schoolId/toggle-status', schoolController.toggleSchoolStatus);
+
+// Classes and sections endpoint (canonical data)
+router.get('/:schoolId/classes', schoolController.getClassesForSchool);
 
 // User management routes
 router.get('/:schoolId/users', schoolController.getSchoolUsers);

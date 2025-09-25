@@ -1639,6 +1639,129 @@ exports.getSchoolStats = async (req, res) => {
   }
 };
 
+// Get total users across all schools (Super Admin only)
+exports.getAllSchoolsStats = async (req, res) => {
+  try {
+    console.log('📊 Fetching total users across all schools...');
+    
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Only super admin can access this endpoint' 
+      });
+    }
+
+    const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+    const School = require('../models/School');
+    
+    // Get all schools
+    const schools = await School.find({ isActive: true }, 'code name');
+    console.log(`📋 Found ${schools.length} active schools`);
+    
+    let totalUsers = 0;
+    let totalStudents = 0;
+    let totalTeachers = 0;
+    let totalParents = 0;
+    let totalAdmins = 0;
+    let schoolBreakdown = [];
+    
+    // Iterate through each school and count users
+    for (const school of schools) {
+      try {
+        const connection = await SchoolDatabaseManager.getSchoolConnection(school.code);
+        const db = connection.db;
+        
+        let schoolUserCount = 0;
+        let schoolStats = {
+          schoolCode: school.code,
+          schoolName: school.name,
+          students: 0,
+          teachers: 0,
+          parents: 0,
+          admins: 0,
+          total: 0
+        };
+        
+        // Count users in each role collection
+        const collections = ['students', 'teachers', 'parents', 'admins'];
+        for (const collectionName of collections) {
+          try {
+            const collection = db.collection(collectionName);
+            // Count real users (excluding placeholder documents)
+            const count = await collection.countDocuments({ 
+              _placeholder: { $ne: true } 
+            });
+            
+            schoolUserCount += count;
+            const role = collectionName.slice(0, -1); // Remove 's' from plural
+            schoolStats[role] = count;
+            
+            // Add to totals
+            switch (role) {
+              case 'student':
+                totalStudents += count;
+                break;
+              case 'teacher':
+                totalTeachers += count;
+                break;
+              case 'parent':
+                totalParents += count;
+                break;
+              case 'admin':
+                totalAdmins += count;
+                break;
+            }
+          } catch (collectionError) {
+            console.warn(`⚠️ Error counting ${collectionName} in school ${school.code}:`, collectionError.message);
+          }
+        }
+        
+        schoolStats.total = schoolUserCount;
+        totalUsers += schoolUserCount;
+        schoolBreakdown.push(schoolStats);
+        
+        console.log(`✅ School ${school.code}: ${schoolUserCount} users`);
+        
+      } catch (schoolError) {
+        console.error(`❌ Error connecting to school ${school.code}:`, schoolError.message);
+        schoolBreakdown.push({
+          schoolCode: school.code,
+          schoolName: school.name,
+          students: 0,
+          teachers: 0,
+          parents: 0,
+          admins: 0,
+          total: 0,
+          error: schoolError.message
+        });
+      }
+    }
+    
+    console.log(`📊 Total users across all schools: ${totalUsers}`);
+    
+    res.json({
+      success: true,
+      totalUsers,
+      breakdown: {
+        totalStudents,
+        totalTeachers,
+        totalParents,
+        totalAdmins
+      },
+      schoolBreakdown,
+      totalSchools: schools.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching all schools stats:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching all schools stats', 
+      error: error.message 
+    });
+  }
+};
+
 // Deactivate/Activate school
 exports.toggleSchoolStatus = async (req, res) => {
   try {
@@ -1722,6 +1845,15 @@ exports.deleteSchool = async (req, res) => {
       dbDropInfo.attempted = true;
       dbDropInfo.derivedDbName = derivedDbName;
       dbDropInfo.dbNameToDrop = dbNameToDrop;
+      
+      // First, close any existing connection to the school database
+      try {
+        await SchoolDatabaseManager.closeSchoolConnection(school.code);
+        console.log(`[DB DROP] Closed existing connection to school database: ${dbNameToDrop}`);
+      } catch (closeErr) {
+        console.warn(`[DB DROP] Warning: Could not close school connection: ${closeErr.message}`);
+      }
+      
       try {
         const { MongoClient } = require('mongodb');
         const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017';
@@ -1740,15 +1872,15 @@ exports.deleteSchool = async (req, res) => {
           console.warn('[DB DROP DEBUG] Could not list databases before drop:', listErr.message || listErr);
         }
 
-        const adminDb = adminClient.db(school.databaseName);
+        const adminDb = adminClient.db(dbNameToDrop);
         // Attempt to drop the database and capture the result
         try {
           const dropResult = await adminDb.dropDatabase();
           dbDropInfo.dropped = !!dropResult;
-          console.log(`[DB DROP RESULT] dropDatabase(${school.databaseName}) returned:`, dropResult);
+          console.log(`[DB DROP RESULT] dropDatabase(${dbNameToDrop}) returned:`, dropResult);
         } catch (dropErr) {
           dbDropInfo.error = dropErr.message || String(dropErr);
-          console.error(`[DB DROP ERROR] Failed to drop database ${school.databaseName}:`, dbDropInfo.error);
+          console.error(`[DB DROP ERROR] Failed to drop database ${dbNameToDrop}:`, dbDropInfo.error);
         }
 
         // List databases after drop for diagnostics
@@ -1763,13 +1895,13 @@ exports.deleteSchool = async (req, res) => {
 
         await adminClient.close();
         if (dbDropInfo.dropped) {
-          console.log(`[DB DROPPED] Dropped database ${school.databaseName} for school ${school.code}`);
+          console.log(`[DB DROPPED] Dropped database ${dbNameToDrop} for school ${school.code}`);
         } else {
-          console.warn(`[DB DROP] Database ${school.databaseName} was not dropped. See dbDropInfo for details.`);
+          console.warn(`[DB DROP] Database ${dbNameToDrop} was not dropped. See dbDropInfo for details.`);
         }
       } catch (dbErr) {
         dbDropInfo.error = dbErr.message || String(dbErr);
-        console.error(`[DB DROP ERROR] Failed to drop database ${school.databaseName}:`, dbDropInfo.error);
+        console.error(`[DB DROP ERROR] Failed to drop database ${dbNameToDrop}:`, dbDropInfo.error);
         // Continue — don't block deletion if DB drop fails
       }
     }
@@ -1981,6 +2113,68 @@ exports.syncAllSchoolsToDatabase = async (req, res) => {
     res.status(500).json({ 
       message: 'Error syncing all schools to their databases', 
       error: error.message 
+    });
+  }
+};
+
+// Get classes and sections for a school (canonical endpoint)
+exports.getClassesForSchool = async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const userSchoolId = req.user.schoolId;
+    const userRole = req.user.role;
+
+    // Validate school ownership
+    if (userRole === 'admin' && userSchoolId.toString() !== schoolId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Cannot access other schools\' data'
+      });
+    }
+
+    // Get school information
+    const school = await School.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      });
+    }
+
+    // Get school database connection
+    const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(school.code);
+    const classesCollection = schoolConnection.collection('classes');
+
+    // Fetch all active classes
+    const classes = await classesCollection.find({
+      schoolId: schoolId,
+      isActive: true
+    }).sort({ className: 1 }).toArray();
+
+    // Transform to the required format
+    const transformedClasses = classes.map(cls => ({
+      classId: cls.classId || cls._id.toString(),
+      className: cls.className,
+      sections: cls.sections ? cls.sections.map((section, index) => ({
+        sectionId: `${cls.classId}_${section}`,
+        sectionName: section
+      })) : []
+    }));
+
+    // Add caching headers (30 seconds)
+    res.set('Cache-Control', 'private, max-age=30');
+    
+    res.json({
+      success: true,
+      data: transformedClasses
+    });
+
+  } catch (error) {
+    console.error('Error fetching classes for school:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching classes for school',
+      error: error.message
     });
   }
 };

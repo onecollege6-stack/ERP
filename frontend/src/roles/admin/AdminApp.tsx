@@ -11,6 +11,9 @@ import Assignments from './pages/Assignments'
 import Results from './pages/Results'
 import TestComponent from './pages/TestComponent'
 import AcademicResultsEntry from './pages/AcademicResultsEntry'
+import MessagesPage from './pages/MessagesPage'
+import FeesPage from './pages/FeesPage'
+import ReportsPage from './pages/ReportsPage'
 import ErrorBoundary from '../../components/ErrorBoundary'
 
 export function AdminApp() {
@@ -39,6 +42,10 @@ export function AdminApp() {
             <AcademicResultsEntry />
           </ErrorBoundary>
         } />
+        <Route path="messages" element={<MessagesPage />} />
+        <Route path="fees/structure" element={<FeesPage />} />
+        <Route path="fees/payments" element={<FeesPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="*" element={<Navigate to="/admin" />} />
       </Routes>
     </AdminLayout>

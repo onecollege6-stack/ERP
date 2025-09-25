@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { School, ViewType, DashboardStats, SchoolData } from '../types';
 import { schoolAPI } from '../../../services/api';
-import api from '../../../api/axios';
 
 // Initial empty values for state
 const initialSchools: School[] = [];
@@ -9,7 +8,6 @@ const initialSchoolsData: { [schoolId: string]: SchoolData } = {};
 const initialStats: DashboardStats = {
   totalSchools: 0,
   totalUsers: 0,
-  messagesSent: 0,
   lastLogin: ''
 };
 
@@ -46,7 +44,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function fetchData() {
       try {
         console.log('Fetching schools from backend...');
-  const schoolsRes = await api.get('/schools');
+        const schoolsRes = await schoolAPI.getAllSchools();
         console.log('Schools response:', schoolsRes.data);
         
         const mapped = (schoolsRes.data || []).map((created: any) => ({
@@ -66,11 +64,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         console.log('Mapped schools:', mapped);
         setSchools(mapped);
-        // Basic stats derived locally; backend aggregate may not exist
-        setStats(prev => ({
-          ...prev,
-          totalSchools: mapped.length,
-        }));
+        
+        // Fetch total users across all schools
+        console.log('Fetching total users across all schools...');
+        try {
+          const statsRes = await schoolAPI.getAllSchoolsStats();
+          console.log('All schools stats response:', statsRes.data);
+          
+          setStats(prev => ({
+            ...prev,
+            totalSchools: mapped.length,
+            totalUsers: statsRes.data?.totalUsers || 0,
+          }));
+        } catch (statsError) {
+          console.error('Error fetching all schools stats:', statsError);
+          setStats(prev => ({
+            ...prev,
+            totalSchools: mapped.length,
+            totalUsers: 0,
+          }));
+        }
+        
+        // Get last login time from auth context
+        const authData = localStorage.getItem('erp.auth');
+        if (authData) {
+          try {
+            const parsed = JSON.parse(authData);
+            const lastLogin = parsed.user?.lastLogin;
+            if (lastLogin) {
+              const loginDate = new Date(lastLogin);
+              const formattedTime = loginDate.toLocaleString();
+              setStats(prev => ({
+                ...prev,
+                lastLogin: formattedTime,
+              }));
+            }
+          } catch (authError) {
+            console.error('Error parsing auth data:', authError);
+          }
+        }
+        
       } catch (err: any) {
         console.error('Error fetching schools:', err);
         setSchools([]);
@@ -202,10 +235,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
           accessMatrix: created.accessMatrix || {},
         } as any]);
         setStats(prev => ({ ...prev, totalSchools: prev.totalSchools + 1 }));
+        
+        // Refresh total users count after adding new school
+        try {
+          const statsRes = await schoolAPI.getAllSchoolsStats();
+          setStats(prev => ({
+            ...prev,
+            totalUsers: statsRes.data?.totalUsers || 0,
+          }));
+          console.log('[ADD] Updated total users count after school addition');
+        } catch (statsError) {
+          console.error('[ADD] Error refreshing total users count:', statsError);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding school:', error);
-      throw error;
+      
+      // Extract meaningful error message from API response
+      let errorMessage = 'Failed to create school';
+      
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Create a new error with the extracted message
+      const enhancedError = new Error(errorMessage);
+      throw enhancedError;
     }
   };
 
@@ -214,8 +271,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`[DELETE] Starting deletion process for school ID: ${id}`);
       
-      // Make API call to delete school
-      const res = await api.delete(`/schools/${id}`);
+      // Make API call to delete school using schoolAPI
+      const res = await schoolAPI.deleteSchool(id);
       console.log('[DELETE] Backend response:', res.data);
       
       if (res.data?.success === false) {
@@ -232,6 +289,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       setStats(prev => ({ ...prev, totalSchools: prev.totalSchools - 1 }));
       console.log('[DELETE] School successfully deleted from UI state');
+      
+      // Refresh total users count after deletion
+      try {
+        const statsRes = await schoolAPI.getAllSchoolsStats();
+        setStats(prev => ({
+          ...prev,
+          totalUsers: statsRes.data?.totalUsers || 0,
+        }));
+        console.log('[DELETE] Updated total users count after school deletion');
+      } catch (statsError) {
+        console.error('[DELETE] Error refreshing total users count:', statsError);
+      }
       
       return res.data; // Return response data for additional info
     } catch (error: any) {
@@ -259,7 +328,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Update school (scaffold, implement as needed)
   const updateSchool = async (updatedSchool: School) => {
-  const res = await api.put(`/schools/${updatedSchool.id}`, updatedSchool);
+      const res = await schoolAPI.updateSchool(updatedSchool.id, updatedSchool);
     const returned = (res.data as any)?.school || res.data;
     setSchools(prev => prev.map(school => school.id === updatedSchool.id ? {
       ...school,
@@ -280,25 +349,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Placeholder for other update functions
   const updateSchoolAccess = async (schoolId: string, accessMatrix: any) => {
     // Persist to backend then update local cache
-  const res = await api.put(`/schools/${schoolId}`, { accessMatrix });
+      const res = await schoolAPI.updateAccessMatrix(schoolId, accessMatrix);
     const updated = (res.data as any)?.school || res.data;
     setSchools(prev => prev.map(s => s.id === schoolId ? { ...s, accessMatrix: updated.accessMatrix || accessMatrix } : s));
   };
 
   const updateBankDetails = async (schoolId: string, bankDetails: any) => {
-  const res = await api.patch(`/schools/${schoolId}/bank-details`, { bankDetails });
+    const res = await schoolAPI.updateBankDetails(schoolId, bankDetails);
     const updated = (res.data as any)?.bankDetails || (res.data as any)?.school?.bankDetails || bankDetails;
     setSchools(prev => prev.map(s => s.id === schoolId ? { ...s, bankDetails: updated } : s));
   };
 
   const updateUserRole = async (schoolId: string, userId: string, newRole: 'admin' | 'teacher' | 'student' | 'parent') => {
     // Scoped user update endpoint exists under /schools/:schoolId/users/:userId
-  await api.put(`/schools/${schoolId}/users/${userId}`, { role: newRole });
+    await schoolAPI.updateUserRole(schoolId, userId, newRole);
     // No local user list here; SchoolDetails handles refresh via its own API layer
   };
 
   const updateSchoolSettings = async (schoolId: string, settings: any) => {
-  const res = await api.put(`/schools/${schoolId}`, { settings });
+  const res = await schoolAPI.updateSchoolSettings(schoolId, settings);
     const updated = (res.data as any)?.school || res.data;
     // We don't store full settings on the dashboard list, but keep bank/access in sync if returned
     setSchools(prev => prev.map(s => s.id === schoolId ? {

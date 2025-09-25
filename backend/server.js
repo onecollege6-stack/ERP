@@ -39,6 +39,10 @@ const superadminClassRoutes = require('./routes/superadminClasses');
 const superadminTestRoutes = require('./routes/superadminTests');
 const userManagementRoutes = require('./routes/userManagement');
 const adminClassRoutes = require('./routes/adminClasses');
+const classesRoutes = require('./routes/classes');
+const messagesRoutes = require('./routes/messages');
+const feesRoutes = require('./routes/fees');
+const reportsRoutes = require('./routes/reports');
 
 // Serve uploads statically
 app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
@@ -226,6 +230,10 @@ app.use('/api/superadmin/classes', superadminClassRoutes);
 app.use('/api/superadmin/tests', superadminTestRoutes);
 app.use('/api/user-management', userManagementRoutes);
 app.use('/api/admin/classes', adminClassRoutes);
+app.use('/api/classes', classesRoutes);
+app.use('/api/messages', messagesRoutes);
+app.use('/api/fees', feesRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -311,7 +311,23 @@ export function AddSchoolForm() {
         </div>
 
         {success && <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg">{success}</div>}
-        {error && <div className="mb-4 p-3 bg-red-100 text-red-800 rounded-lg">{error}</div>}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <X className="h-5 w-5 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  {error.includes('already exists') ? 'School Code Already Used' : 'Error Creating School'}
+                </h3>
+                <div className="mt-1 text-sm text-red-700">
+                  {error}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* School Information */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -340,7 +356,7 @@ export function AddSchoolForm() {
                   placeholder="Enter school code (e.g., NPS, DAV, KVS)"
                   maxLength={10}
                 />
-                <p className="text-xs text-gray-500 mt-1">This code will be used for admin and teacher panel identification</p>
+                <p className="text-xs text-gray-500 mt-1">This code will be used for admin and teacher panel identification. Must be unique across all schools.</p>
                 {renderFieldError('code')}
               </div>
               <div className="md:col-span-2">

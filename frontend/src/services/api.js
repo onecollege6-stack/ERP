@@ -96,7 +96,13 @@ export const schoolAPI = {
   getAllSchools: () => api.get('/schools'),
   getSchoolById: (schoolId) => api.get(`/schools/${schoolId}`),
   updateSchool: (schoolId, updateData) => api.put(`/schools/${schoolId}`, updateData),
+  deleteSchool: (schoolId) => api.delete(`/schools/${schoolId}`),
+  updateAccessMatrix: (schoolId, accessMatrix) => api.put(`/schools/${schoolId}`, { accessMatrix }),
+  updateBankDetails: (schoolId, bankDetails) => api.patch(`/schools/${schoolId}/bank-details`, { bankDetails }),
+  updateUserRole: (schoolId, userId, newRole) => api.put(`/schools/${schoolId}/users/${userId}`, { role: newRole }),
+  updateSchoolSettings: (schoolId, settings) => api.put(`/schools/${schoolId}`, { settings }),
   getSchoolStats: (schoolId) => api.get(`/schools/${schoolId}/stats`),
+  getAllSchoolsStats: () => api.get('/schools/all-stats'),
   toggleSchoolStatus: (schoolId) => api.patch(`/schools/${schoolId}/toggle-status`),
 };
 
@@ -316,6 +322,42 @@ export const apiUtils = {
     });
     return searchParams.toString();
   },
+};
+
+// Messages API
+export const messagesAPI = {
+  sendMessage: (messageData) => api.post('/messages/send', messageData),
+  previewMessage: (previewData) => api.post('/messages/preview', previewData),
+  getMessages: (params) => api.get('/messages', { params }),
+  getMessageDetails: (messageId) => api.get(`/messages/${messageId}`),
+  getMessageStats: (params) => api.get('/messages/stats', { params }),
+};
+
+// Classes API
+export const classesAPI = {
+  getSchoolClasses: (schoolId) => api.get(`/schools/${schoolId}/classes`),
+  getSectionsForClass: (schoolCode, className) => api.get(`/classes/school/${schoolCode}/classes/${className}/sections`),
+};
+
+// Fees API
+export const feesAPI = {
+  createFeeStructure: (feeStructureData) => api.post('/fees/structures', feeStructureData),
+  getFeeStructures: (params) => api.get('/fees/structures', { params }),
+  getStudentFeeRecords: (params) => api.get('/fees/records', { params }),
+  recordOfflinePayment: (studentId, paymentData) => api.post(`/fees/records/${studentId}/offline-payment`, paymentData),
+  getFeeStats: (params) => api.get('/fees/stats', { params }),
+};
+
+// Reports API
+export const reportsAPI = {
+  getSchoolSummary: (params) => api.get('/reports/summary', { params }),
+  getClassSummary: (params) => api.get('/reports/class-summary', { params }),
+  getClassDetail: (className, params) => api.get(`/reports/class/${className}/detail`, { params }),
+  getStudentProfile: (studentId) => api.get(`/reports/student/${studentId}/profile`),
+  exportData: (params) => api.get('/reports/export', { params, responseType: 'blob' }),
+  getDuesList: (params) => api.get('/reports/dues', { params }),
+  getClassWiseAnalysis: (params) => api.get('/reports/class-wise', { params }),
+  getPaymentTrends: (params) => api.get('/reports/payment-trends', { params }),
 };
 
 // Export the api instance for custom requests

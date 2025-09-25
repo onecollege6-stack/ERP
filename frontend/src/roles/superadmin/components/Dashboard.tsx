@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, CreditCard, Edit, Trash2, School, Users, MessageSquare, Clock, FileText } from 'lucide-react';
+import { Eye, CreditCard, Edit, Trash2, School, Users, Clock, FileText } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export function Dashboard() {
@@ -64,7 +64,6 @@ export function Dashboard() {
   const statCards = [
     { title: 'Total Schools', value: stats.totalSchools, icon: School, color: 'text-blue-600', bg: 'bg-blue-50' },
     { title: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { title: 'Messages Sent', value: stats.messagesSent, icon: MessageSquare, color: 'text-purple-600', bg: 'bg-purple-50' },
     { title: 'Last Login', value: stats.lastLogin, icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50' },
   ];
 
@@ -82,7 +81,7 @@ export function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
           return (

@@ -43,6 +43,40 @@ Parent (School Level)
 - All models, controllers, and routes for Users, Assignments, Attendance, Results, Messages, Timetables, and Schools are set up.
 - Role-based access control is enforced via middleware.
 - API endpoints for CRUD and reporting are available and ready for frontend consumption.
+- **NEW**: Canonical classes/sections endpoint for dynamic data fetching.
+
+### API Endpoints
+
+#### Classes & Sections (Canonical Data)
+```
+GET /api/schools/:schoolId/classes
+```
+**Description**: Fetches canonical classes and sections data for a school.
+
+**Authentication**: Required (JWT token)
+
+**Authorization**:
+- `SUPER_ADMIN`: Can access any school's classes
+- `ADMIN`: Can only access their own school's classes
+
+**Response Format**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "classId": "string",
+      "className": "5",
+      "sections": [
+        { "sectionId": "string", "sectionName": "A" },
+        { "sectionId": "string", "sectionName": "B" }
+      ]
+    }
+  ]
+}
+```
+
+**Caching**: 30-second cache headers included for performance.
 
 ### Frontend (React)
 #### Admin & Teacher Features

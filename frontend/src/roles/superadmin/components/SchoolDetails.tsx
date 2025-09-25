@@ -997,9 +997,9 @@ function SchoolDetailsContent() {
                     if (searchQuery) {
                       const query = searchQuery.toLowerCase();
                       return (
-                        user.name.displayName.toLowerCase().includes(query) ||
-                        user.email.toLowerCase().includes(query) ||
-                        user.userId.toLowerCase().includes(query)
+                        (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
+                        (user.email || '').toLowerCase().includes(query) ||
+                        (user.userId || '').toLowerCase().includes(query)
                       );
                     }
                     
@@ -1011,13 +1011,14 @@ function SchoolDetailsContent() {
                       <div className="flex items-center">
                         <div className="h-10 w-10 flex-shrink-0 bg-gray-200 rounded-full overflow-hidden">
                           <div className="h-full w-full flex items-center justify-center bg-blue-100 text-blue-800 font-medium">
-                            {user.name.firstName[0].toUpperCase()}{user.name.lastName[0].toUpperCase()}
+                            {user.name?.firstName?.[0]?.toUpperCase() || user.name?.displayName?.[0]?.toUpperCase() || 'U'}
+                            {user.name?.lastName?.[0]?.toUpperCase() || user.name?.displayName?.[1]?.toUpperCase() || 'U'}
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.name.displayName}</div>
-                          <div className="text-sm text-gray-500">ID: {user.userId}</div>
-                          <div className="text-sm text-gray-500">Since {new Date(user.createdAt).toLocaleDateString()}</div>
+                          <div className="text-sm font-medium text-gray-900">{user.name?.displayName || user.name?.firstName || user.email || 'Unknown User'}</div>
+                          <div className="text-sm text-gray-500">ID: {user.userId || 'N/A'}</div>
+                          <div className="text-sm text-gray-500">Since {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}</div>
                         </div>
                       </div>
                     </td>
@@ -1028,17 +1029,17 @@ function SchoolDetailsContent() {
                         user.role === 'student' ? 'bg-green-100 text-green-800' : 
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                        {(user.role || 'unknown').charAt(0).toUpperCase() + (user.role || 'unknown').slice(1)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.email}
+                      {user.email || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
-                        user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        (user.isActive !== false) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
+                        {(user.isActive !== false) ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -1052,7 +1053,7 @@ function SchoolDetailsContent() {
                       </button>
                       <button 
                         className="text-green-600 hover:text-green-900 inline-flex items-center gap-1"
-                        onClick={() => handleResetPassword(user._id, user.userId)}
+                        onClick={() => handleResetPassword(user._id || '', user.userId || '')}
                         title="Reset Password"
                       >
                         <Key size={16} />
@@ -1078,9 +1079,9 @@ function SchoolDetailsContent() {
                   if (searchQuery) {
                     const query = searchQuery.toLowerCase();
                     return (
-                      user.name.displayName.toLowerCase().includes(query) ||
-                      user.email.toLowerCase().includes(query) ||
-                      user.userId.toLowerCase().includes(query)
+                      (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
+                      (user.email || '').toLowerCase().includes(query) ||
+                      (user.userId || '').toLowerCase().includes(query)
                     );
                   }
                   return true;
