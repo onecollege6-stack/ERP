@@ -504,22 +504,25 @@ const ManageUsers: React.FC = () => {
     }
     
     // Address validation - check both new structure and legacy fields
-    const streetToValidate = data.permanentStreet || data.address;
-    const cityToValidate = data.permanentCity || data.city;
-    const stateToValidate = data.permanentState || data.state;
-    const pincodeToValidate = data.permanentPincode || data.pinCode;
-    
-    if (!streetToValidate || streetToValidate.trim() === '') {
-      errors.push('Address/Street is required');
-    }
-    if (!cityToValidate || cityToValidate.trim() === '') {
-      errors.push('City is required');
-    }
-    if (!stateToValidate || stateToValidate.trim() === '') {
-      errors.push('State is required');
-    }
-    if (!pincodeToValidate || !/^\d{6}$/.test(pincodeToValidate)) {
-      errors.push('A valid 6-digit PIN code is required');
+    // Skip address requirements for teachers to make user addition more flexible
+    if (data.role !== 'teacher') {
+      const streetToValidate = data.permanentStreet || data.address;
+      const cityToValidate = data.permanentCity || data.city;
+      const stateToValidate = data.permanentState || data.state;
+      const pincodeToValidate = data.permanentPincode || data.pinCode;
+      
+      if (!streetToValidate || streetToValidate.trim() === '') {
+        errors.push('Address/Street is required');
+      }
+      if (!cityToValidate || cityToValidate.trim() === '') {
+        errors.push('City is required');
+      }
+      if (!stateToValidate || stateToValidate.trim() === '') {
+        errors.push('State is required');
+      }
+      if (!pincodeToValidate || !/^\d{6}$/.test(pincodeToValidate)) {
+        errors.push('A valid 6-digit PIN code is required');
+      }
     }
 
     // Role-specific validation
@@ -613,9 +616,10 @@ const ManageUsers: React.FC = () => {
       if (experience === undefined || experience < 0) {
         errors.push('Total experience is required for teachers (minimum 0 years)');
       }
-      if (!subjects || subjects.length === 0 || (Array.isArray(subjects) && subjects.filter(s => s.trim()).length === 0)) {
-        errors.push('At least one subject is required for teachers');
-      }
+      // Subjects are optional for teachers to allow flexible user creation
+      // if (!subjects || subjects.length === 0 || (Array.isArray(subjects) && subjects.filter(s => s.trim()).length === 0)) {
+      //   errors.push('At least one subject is required for teachers');
+      // }
       
       // Employee ID validation if provided
       const employeeId = teacherDetails?.employeeId || formData.employeeId;
@@ -685,6 +689,54 @@ const ManageUsers: React.FC = () => {
     // Aadhaar validation for identity section
     if (formData.aadharNumber && !/^\d{12}$/.test(formData.aadharNumber)) {
       errors.push('Aadhaar number must be 12 digits');
+    }
+
+    // Additional validation for new essential fields
+    if (data.role === 'student') {
+      // Nationality validation
+      if (!data.nationality || data.nationality.trim() === '') {
+        errors.push('Nationality is required for students');
+      }
+      
+      // Emergency contact validation
+      if (data.alternatePhone && !/^[6-9]\d{9}$/.test(data.alternatePhone)) {
+        errors.push('Emergency contact phone must be a valid 10-digit mobile number');
+      }
+      
+      // TC Number validation if previous school is mentioned
+      if (data.previousSchool && data.previousSchool.trim() !== '' && (!data.tcNumber || data.tcNumber.trim() === '')) {
+        errors.push('TC Number is required when previous school is mentioned');
+      }
+      
+      // Birth certificate validation if provided
+      if (data.birthCertificateNumber && data.birthCertificateNumber.trim().length < 5) {
+        errors.push('Birth certificate number must be at least 5 characters');
+      }
+      
+      // Ration card validation if provided
+      if (data.rationCardNumber && data.rationCardNumber.trim().length < 5) {
+        errors.push('Ration card number must be at least 5 characters');
+      }
+      
+      // Family income validation
+      if (data.familyIncome && !['Below 1 Lakh', '1-2 Lakhs', '2-5 Lakhs', '5-10 Lakhs', 'Above 10 Lakhs'].includes(data.familyIncome)) {
+        errors.push('Please select a valid family income range');
+      }
+      
+      // BPL card validation if BPL status is mentioned
+      if (data.economicStatus === 'BPL' && (!data.bplCardNumber || data.bplCardNumber.trim() === '')) {
+        errors.push('BPL card number is required when economic status is BPL');
+      }
+      
+      // Guardian relationship validation if guardian name is provided
+      if (data.guardianName && data.guardianName.trim() !== '' && (!data.guardianRelation || data.guardianRelation.trim() === '')) {
+        errors.push('Guardian relationship is required when guardian name is provided');
+      }
+      
+      // Transport validation
+      if (data.transportMode === 'School Bus' && (!data.busRoute || data.busRoute.trim() === '')) {
+        errors.push('Bus route is required when school bus transport is selected');
+      }
     }
 
     return errors;
@@ -3900,18 +3952,20 @@ const ManageUsers: React.FC = () => {
         }
       }
 
-      // Common address validations
-      if (!row['Current Address Line 1*']) {
-        rowErrors.push('Current Address Line 1 is required');
-      }
-      if (!row['Current City*']) {
-        rowErrors.push('Current City is required');
-      }
-      if (!row['Current State*']) {
-        rowErrors.push('Current State is required');
-      }
-      if (!row['Current Pin Code*'] || !/^\d{6}$/.test(row['Current Pin Code*'])) {
-        rowErrors.push('Valid 6-digit pin code is required for Current Address');
+      // Common address validations - skip for teachers to make user addition more flexible
+      if (role !== 'teacher') {
+        if (!row['Current Address Line 1*']) {
+          rowErrors.push('Current Address Line 1 is required');
+        }
+        if (!row['Current City*']) {
+          rowErrors.push('Current City is required');
+        }
+        if (!row['Current State*']) {
+          rowErrors.push('Current State is required');
+        }
+        if (!row['Current Pin Code*'] || !/^\d{6}$/.test(row['Current Pin Code*'])) {
+          rowErrors.push('Valid 6-digit pin code is required for Current Address');
+        }
       }
 
       // Optional field validations
@@ -6361,6 +6415,322 @@ const ManageUsers: React.FC = () => {
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter roll number"
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Essential Information - Missing Fields */}
+                  <div className="bg-rose-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Essential Information</h4>
+                    
+                    {/* Personal Details */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Personal Details</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
+                          <select
+                            value={formData.bloodGroup || ''}
+                            onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Blood Group</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nationality *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.nationality || 'Indian'}
+                            onChange={(e) => setFormData({...formData, nationality: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter nationality"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Place of Birth</label>
+                          <input
+                            type="text"
+                            value={formData.placeOfBirth || ''}
+                            onChange={(e) => setFormData({...formData, placeOfBirth: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter place of birth"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Previous School Details */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Previous School Details</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Previous School Name</label>
+                          <input
+                            type="text"
+                            value={formData.previousSchool || ''}
+                            onChange={(e) => setFormData({...formData, previousSchool: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter previous school name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">TC Number</label>
+                          <input
+                            type="text"
+                            value={formData.tcNumber || ''}
+                            onChange={(e) => setFormData({...formData, tcNumber: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter TC number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Migration Certificate</label>
+                          <input
+                            type="text"
+                            value={formData.migrationCertificate || ''}
+                            onChange={(e) => setFormData({...formData, migrationCertificate: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter migration certificate number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Last Class Passed</label>
+                          <input
+                            type="text"
+                            value={formData.previousClass || ''}
+                            onChange={(e) => setFormData({...formData, previousClass: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter last class passed"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Guardian/Emergency Contact Details */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Guardian & Emergency Contact</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Name</label>
+                          <input
+                            type="text"
+                            value={formData.guardianName || ''}
+                            onChange={(e) => setFormData({...formData, guardianName: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter guardian name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Relationship</label>
+                          <select
+                            value={formData.guardianRelation || ''}
+                            onChange={(e) => setFormData({...formData, guardianRelation: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Relationship</option>
+                            <option value="Father">Father</option>
+                            <option value="Mother">Mother</option>
+                            <option value="Uncle">Uncle</option>
+                            <option value="Aunt">Aunt</option>
+                            <option value="Grandfather">Grandfather</option>
+                            <option value="Grandmother">Grandmother</option>
+                            <option value="Elder Brother">Elder Brother</option>
+                            <option value="Elder Sister">Elder Sister</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.alternatePhone || ''}
+                            onChange={(e) => setFormData({...formData, alternatePhone: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="10-digit emergency contact"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Medical Information */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Medical Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Medical Conditions</label>
+                          <textarea
+                            value={formData.medicalConditions || ''}
+                            onChange={(e) => setFormData({...formData, medicalConditions: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter any chronic medical conditions"
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Special Needs</label>
+                          <textarea
+                            value={formData.specialNeeds || ''}
+                            onChange={(e) => setFormData({...formData, specialNeeds: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter any special educational needs"
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Transport Details */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Transport Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Transport Required</label>
+                          <select
+                            value={formData.transportMode || 'Own'}
+                            onChange={(e) => setFormData({...formData, transportMode: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="Own">Own Transport</option>
+                            <option value="School Bus">School Bus</option>
+                            <option value="Public Transport">Public Transport</option>
+                            <option value="Walking">Walking</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bus Route</label>
+                          <input
+                            type="text"
+                            value={formData.busRoute || ''}
+                            onChange={(e) => setFormData({...formData, busRoute: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter bus route (if applicable)"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Point</label>
+                          <input
+                            type="text"
+                            value={formData.pickupPoint || ''}
+                            onChange={(e) => setFormData({...formData, pickupPoint: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter pickup point"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Document Information */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Additional Documents</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Birth Certificate Number</label>
+                          <input
+                            type="text"
+                            value={formData.birthCertificateNumber || ''}
+                            onChange={(e) => setFormData({...formData, birthCertificateNumber: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter birth certificate number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Ration Card Number</label>
+                          <input
+                            type="text"
+                            value={formData.rationCardNumber || ''}
+                            onChange={(e) => setFormData({...formData, rationCardNumber: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter ration card number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Scholarship Details</label>
+                          <input
+                            type="text"
+                            value={formData.scholarshipDetails || ''}
+                            onChange={(e) => setFormData({...formData, scholarshipDetails: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter scholarship information"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Family Economic Information */}
+                    <div className="mb-6">
+                      <h5 className="text-md font-medium text-gray-800 mb-3">Family Economic Information</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Education</label>
+                          <input
+                            type="text"
+                            value={formData.fatherEducation || ''}
+                            onChange={(e) => setFormData({...formData, fatherEducation: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's education"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Education</label>
+                          <input
+                            type="text"
+                            value={formData.motherEducation || ''}
+                            onChange={(e) => setFormData({...formData, motherEducation: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's education"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Family Income (Annual)</label>
+                          <select
+                            value={formData.familyIncome || ''}
+                            onChange={(e) => setFormData({...formData, familyIncome: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Income Range</option>
+                            <option value="Below 1 Lakh">Below ₹1 Lakh</option>
+                            <option value="1-2 Lakhs">₹1-2 Lakhs</option>
+                            <option value="2-5 Lakhs">₹2-5 Lakhs</option>
+                            <option value="5-10 Lakhs">₹5-10 Lakhs</option>
+                            <option value="Above 10 Lakhs">Above ₹10 Lakhs</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Economic Status</label>
+                          <select
+                            value={formData.economicStatus || ''}
+                            onChange={(e) => setFormData({...formData, economicStatus: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Status</option>
+                            <option value="BPL">Below Poverty Line (BPL)</option>
+                            <option value="APL">Above Poverty Line (APL)</option>
+                            <option value="EWS">Economically Weaker Section (EWS)</option>
+                            <option value="General">General</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">BPL Card Number</label>
+                          <input
+                            type="text"
+                            value={formData.bplCardNumber || ''}
+                            onChange={(e) => setFormData({...formData, bplCardNumber: e.target.value})}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter BPL card number"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
