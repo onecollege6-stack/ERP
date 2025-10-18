@@ -106,6 +106,70 @@ exports.importUsers = async (req, res) => {
   const db = connection.db;
   const studentCollection = db.collection('students');
 
+  // --- CSV Header Mappings ---
+  // Maps flexible CSV headers (lowercase, no spaces) to our rigid normalized keys.
+  const headerMappings = {
+    // Basic Info
+    'firstname': 'firstname',
+    'middlename': 'middlename',
+    'lastname': 'lastname',
+    'email': 'email',
+    'phone': 'primaryphone', // Catches 'Phone' from sample
+    'primaryphone': 'primaryphone',
+    'dateofbirth': 'dateofbirth', // Catches 'Date of Birth' from sample
+    'dob': 'dateofbirth',
+    'birthdate': 'dateofbirth',
+    'gender': 'gender',
+    // Address Info
+    'address': 'permanentstreet', // Catches 'Address' from sample
+    'permanentstreet': 'permanentstreet',
+    'city': 'permanentcity', // Catches 'City' from sample
+    'permanentcity': 'permanentcity',
+    'state': 'permanentstate', // Catches 'State' from sample
+    'permanentstate': 'permanentstate',
+    'pincode': 'permanentpincode', // Catches 'Pin Code' from sample
+    'permanentpincode': 'permanentpincode',
+    'country': 'permanentcountry',
+    'permanentcountry': 'permanentcountry',
+    // Academic Info
+    'status': 'isactive',
+    'isactive': 'isactive',
+    'studentid': 'studentid',
+    'admissionnumber': 'admissionnumber', // Catches 'Admission Number'
+    'rollnumber': 'rollnumber', // Catches 'Roll Number'
+    'class': 'currentclass', // Catches 'Class'
+    'currentclass': 'currentclass',
+    'section': 'currentsection', // Catches 'Section'
+    'currentsection': 'currentsection',
+    'academicyear': 'academicyear', // Catches 'Academic Year'
+    'admissiondate': 'admissiondate',
+    // Parent Info
+    'fathername': 'fathername', // Catches 'Father Name'
+    'mothername': 'mothername', // Catches 'Mother Name'
+    'guardianname': 'guardianname', // Catches 'Guardian Name'
+    'fatherphone': 'fatherphone', // Catches 'Father Phone'
+    'motherphone': 'motherphone', // Catches 'Mother Phone'
+    'fatheremail': 'fatheremail',
+    'motheremail': 'motheremail',
+    // Other Details
+    'aadharnumber': 'aadharnumber', // Catches 'Aadhaar Number'
+    'religion': 'religion', // Catches 'Religion'
+    'caste': 'caste', // Catches 'Caste'
+    'category': 'category', // Catches 'Category'
+    'disability': 'disability', // Catches 'Disability'
+    'isrtecandidate': 'isrtcandidate', // Catches 'Is RTE Candidate'
+    'previousschool': 'previousschoolname', // Catches 'Previous School'
+    'previousschoolname': 'previousschoolname',
+    'transportmode': 'transportmode', // Catches 'Transport Mode'
+    // Bank Details
+    'bankname': 'bankname', // Catches 'Bank Name'
+    'accountnumber': 'bankaccountno', // Catches 'Account Number'
+    'bankaccountno': 'bankaccountno',
+    'ifscode': 'bankifsc', // Catches 'IFSC Code'
+    'bankifsc': 'bankifsc',
+  };
+
+
   // --- Parse CSV with Improved Normalization ---
   let csvData;
   try {
@@ -116,12 +180,20 @@ exports.importUsers = async (req, res) => {
       on_record: (record) => {
         const normalizedRecord = {};
         for (const key in record) {
-          let normalizedKey = key.toLowerCase().replace('*', '').split(' (')[0].replace(/\s+/g, '').trim();
-          if (normalizedKey === 'phone') normalizedKey = 'primaryphone';
-          else if (normalizedKey === 'class') normalizedKey = 'currentclass';
-          else if (normalizedKey === 'section') normalizedKey = 'currentsection';
-          else if (normalizedKey === 'dob' || normalizedKey === 'dateofbirth(dd/mm/yyyy)' || normalizedKey === 'birthdate') normalizedKey = 'dateofbirth';
-          normalizedRecord[normalizedKey] = record[key];
+          // Normalize the CSV header: lowercase, remove spaces, *, and (dd/mm/yyyy) text
+          const normalizedKey = key.toLowerCase()
+            .replace('*', '')
+            .split(' (')[0]
+            .replace(/\s+/g, '')
+            .trim();
+
+          // Map to the internal key name
+          const internalKey = headerMappings[normalizedKey];
+
+          if (internalKey) {
+            // Only add if the mapping exists
+            normalizedRecord[internalKey] = record[key];
+          }
         }
         return normalizedRecord;
       }
@@ -146,7 +218,7 @@ exports.importUsers = async (req, res) => {
   const studentsToInsert = [];
   const processedEmails = new Set();
 
-  let rowNumber = 1;
+  let rowNumber = 1; // CSV rows are 1-indexed, plus header
   console.log('Starting row processing...');
   for (const row of csvData) {
     rowNumber++;
@@ -164,6 +236,7 @@ exports.importUsers = async (req, res) => {
         throw new Error(validationErrors.map(e => `${e.field}: ${e.error}`).join('; '));
       }
 
+      // Check against the school-specific student collection
       const existingUser = await studentCollection.findOne({ email: email });
       if (existingUser) {
         throw new Error(`User already exists in database with this email: ${email}`);
@@ -175,11 +248,17 @@ exports.importUsers = async (req, res) => {
       const studentData = await createStudentFromRowRobust(row, school._id, userId, upperSchoolCode, creatingUserId);
 
       studentsToInsert.push(studentData);
-      results.success.push({ row: rowNumber, userId: studentData.userId, email: studentData.email, name: studentData.name.displayName });
+      results.success.push({
+        row: rowNumber,
+        userId: studentData.userId,
+        email: studentData.email,
+        name: studentData.name.displayName,
+        password: studentData.temporaryPassword // Include password for credentials file
+      });
 
     } catch (error) {
       console.error(`❌ Error processing row ${rowNumber}: ${error.message}`);
-      results.errors.push({ row: rowNumber, error: error.message || 'Unknown error processing row.' });
+      results.errors.push({ row: rowNumber, data: row, error: error.message || 'Unknown error processing row.' });
     }
   } // --- End of Loop ---
   console.log(`Row processing finished. ${studentsToInsert.length} students prepared for insertion.`);
@@ -201,7 +280,17 @@ exports.importUsers = async (req, res) => {
       insertedCount = bulkError.result?.nInserted || bulkError.insertedCount || 0;
       if (bulkError.writeErrors) {
         bulkError.writeErrors.forEach(err => {
-          results.errors.push({ row: `N/A (Index ${err.index})`, error: `Insert Error: ${err.errmsg}` });
+          // Try to find the original row data that failed
+          const failedStudentEmail = err.op?.email;
+          const originalRow = results.success.find(s => s.email === failedStudentEmail);
+          results.errors.push({
+            row: originalRow ? originalRow.row : `N/A (Index ${err.index})`,
+            error: `Insert Error: ${err.errmsg}`
+          });
+          // Remove from success list
+          if (originalRow) {
+            results.success = results.success.filter(s => s.email !== failedStudentEmail);
+          }
         });
       }
     }
@@ -217,8 +306,8 @@ exports.importUsers = async (req, res) => {
   finalMessage += ` Rows successfully processed: ${finalSuccessCount}. Rows with errors: ${finalErrorCount}.`;
   if (studentsToInsert.length > 0) {
     finalMessage += ` Actual documents inserted: ${insertedCount}.`;
-    if (insertedCount < studentsToInsert.length) {
-      finalMessage += ` Some processed rows may have failed during bulk insert (check errors list).`;
+    if (insertedCount < studentsToInsert.length && finalSuccessCount > insertedCount) {
+      finalMessage += ` Some processed rows failed during bulk insert due to database constraints (e.g., duplicate email). ${finalSuccessCount - insertedCount} successsful rows were rolled back. Check errors list.`;
     }
   } else if (finalSuccessCount === 0 && results.total > 0) {
     finalMessage += ` No students were inserted. Please review the errors list and ensure your CSV file headers match required fields (e.g., 'firstname', 'lastname', 'email', 'primaryphone', 'dateofbirth', 'gender', 'currentclass', 'currentsection', 'fathername', 'mothername'). Header variations like 'Phone' or 'Class' should be mapped automatically.`;
@@ -444,7 +533,13 @@ async function createStudentFromRowRobust(normalizedRow, schoolIdAsObjectId, use
     }
     // *** END ADDED CHECK ***
     else {
-      throw new Error('Unrecognized date format.');
+      // Try parsing as a generic date string (fallback, e.g., from Excel)
+      parsedDate = new Date(dateOfBirthString);
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error('Unrecognized date format.');
+      }
+      // Re-create as UTC
+      parsedDate = new Date(Date.UTC(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate()));
     }
 
     if (!parsedDate || isNaN(parsedDate.getTime())) throw new Error('Resulting date is invalid.');
@@ -465,14 +560,20 @@ async function createStudentFromRowRobust(normalizedRow, schoolIdAsObjectId, use
   // --- 3. Fix Enum Values and Booleans ---
   let gender = normalizedRow['gender']?.toLowerCase();
   if (!['male', 'female', 'other'].includes(gender)) gender = 'other';
+
   const isActiveValue = normalizedRow['isactive']?.toLowerCase();
-  const isActive = !(isActiveValue === 'false');
+  // Default to true. Only set to false if CSV explicitly says "false" or "inactive"
+  let isActive = true;
+  if (isActiveValue === 'false' || isActiveValue === 'inactive' || isActiveValue === 'no') {
+    isActive = false;
+  }
+
   const isRTECandidateValue = normalizedRow['isrtcandidate']?.toLowerCase();
   const isRTECandidate = isRTECandidateValue === 'yes' ? 'Yes' : 'No';
 
   // --- 4. Fix Pincode ---
   let pincode = normalizedRow['permanentpincode'] || '';
-  if (pincode && !/^\d{6}$/.test(pincode)) pincode = '';
+  if (pincode && !/^\d{6}$/.test(pincode)) pincode = ''; // Clear invalid pincodes
 
   // --- 5. Build userData object ---
   const firstName = normalizedRow['firstname'] || '';

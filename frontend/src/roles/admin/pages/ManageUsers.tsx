@@ -22,16 +22,16 @@ interface School {
 interface OldAddUserFormData {
   // Core Fields
   role: 'admin' | 'teacher' | 'student';
-  
+
   // Enhanced Name Structure (matching backend)
   firstName: string;
   middleName?: string;
   lastName: string;
-  
+
   // Basic Contact (legacy compatibility)
   email: string;
   phone: string;
-  
+
   // Enhanced Contact Information (matching backend)
   primaryPhone: string;
   secondaryPhone?: string;
@@ -39,7 +39,7 @@ interface OldAddUserFormData {
   emergencyContactName?: string;
   emergencyContactRelation?: string;
   emergencyContactPhone?: string;
-  
+
   // Enhanced Address Information (matching backend)
   permanentStreet: string;
   permanentArea?: string;
@@ -48,7 +48,7 @@ interface OldAddUserFormData {
   permanentCountry: string;
   permanentPincode: string;
   permanentLandmark?: string;
-  
+
   currentStreet?: string;
   currentArea?: string;
   currentCity?: string;
@@ -57,14 +57,14 @@ interface OldAddUserFormData {
   currentPincode?: string;
   currentLandmark?: string;
   sameAsPermanent: boolean;
-  
+
   // Identity Information (matching backend)
   aadharNumber?: string;
   panNumber?: string;
   voterIdNumber?: string;
   drivingLicenseNumber?: string;
   passportNumber?: string;
-  
+
   // Student Specific Fields (comprehensive Karnataka SATS)
   studentDetails?: {
     // Academic Information
@@ -77,7 +77,7 @@ interface OldAddUserFormData {
     admissionNumber?: string;
     enrollmentNo?: string;
     tcNo?: string;
-    
+
     // Previous School
     previousSchoolName?: string;
     previousBoard?: string;
@@ -85,7 +85,7 @@ interface OldAddUserFormData {
     tcNumber?: string;
     tcDate?: string;
     reasonForTransfer?: string;
-    
+
     // Personal Information - Karnataka SATS
     dateOfBirth: string;
     placeOfBirth?: string;
@@ -100,7 +100,7 @@ interface OldAddUserFormData {
     categoryOther?: string;
     motherTongue?: string;
     motherTongueOther?: string;
-    
+
     // Karnataka SATS Specific
     ageYears: number;
     ageMonths: number;
@@ -110,19 +110,19 @@ interface OldAddUserFormData {
     studentCasteOther?: string;
     studentAadhaar?: string;
     studentCasteCertNo?: string;
-    
+
     // Economic Status
     belongingToBPL: string;
     bplCardNo?: string;
     bhagyalakshmiBondNo?: string;
-    
+
     // Special Needs
     disability: string;
     disabilityOther?: string;
-    
+
     // RTE (Right to Education) Status
     isRTECandidate: string;
-    
+
     // Family Information - Father
     fatherName: string;
     fatherOccupation?: string;
@@ -134,7 +134,7 @@ interface OldAddUserFormData {
     fatherCasteOther?: string;
     fatherCasteCertNo?: string;
     fatherAnnualIncome?: number;
-    
+
     // Family Information - Mother
     motherName: string;
     motherOccupation?: string;
@@ -146,14 +146,14 @@ interface OldAddUserFormData {
     motherCasteOther?: string;
     motherCasteCertNo?: string;
     motherAnnualIncome?: number;
-    
+
     // Guardian Information
     guardianName?: string;
     guardianRelationship?: string;
     guardianPhone?: string;
     guardianEmail?: string;
     isEmergencyContact?: boolean;
-    
+
     // Transportation
     transportMode?: string;
     busRoute?: string;
@@ -161,7 +161,7 @@ interface OldAddUserFormData {
     dropPoint?: string;
     pickupTime?: string;
     dropTime?: string;
-    
+
     // Financial Information
     feeCategory?: string;
     concessionType?: string;
@@ -169,13 +169,13 @@ interface OldAddUserFormData {
     scholarshipName?: string;
     scholarshipAmount?: number;
     scholarshipProvider?: string;
-    
+
     // Banking Information
     bankName?: string;
     bankAccountNo?: string;
     bankIFSC?: string;
     bankAccountHolderName?: string;
-    
+
     // Medical Information
     allergies?: string[];
     chronicConditions?: string[];
@@ -185,22 +185,22 @@ interface OldAddUserFormData {
     doctorPhone?: string;
     lastMedicalCheckup?: string;
   };
-  
+
   // Teacher Specific Fields (comprehensive)
   teacherDetails?: {
     employeeId?: string;
     joiningDate?: string;
-    
+
     // Qualification
     highestQualification: string;
     specialization?: string;
     university?: string;
     graduationYear?: number;
-    
+
     // Experience
     totalExperience: number;
     experienceAtCurrentSchool?: number;
-    
+
     // Previous Experience
     previousSchools?: Array<{
       schoolName: string;
@@ -208,35 +208,35 @@ interface OldAddUserFormData {
       position: string;
       reasonForLeaving?: string;
     }>;
-    
+
     // Subjects and Responsibilities
     subjects: string[];
     primarySubjects?: string[];
     classTeacherOf?: string;
     responsibilities?: string[];
     department?: string;
-    
+
     // Work Schedule
     workingDays?: string[];
     workingHoursStart?: string;
     workingHoursEnd?: string;
     maxPeriodsPerDay?: number;
     maxPeriodsPerWeek?: number;
-    
+
     // Salary Information
     basicSalary?: number;
     allowances?: Array<{
       type: string;
       amount: number;
     }>;
-    
+
     // Banking Information
     bankAccountNumber?: string;
     bankIFSC?: string;
     bankName?: string;
     bankBranchName?: string;
   };
-  
+
   // Admin Specific Fields (comprehensive)
   adminDetails?: {
     adminType: string;
@@ -244,7 +244,7 @@ interface OldAddUserFormData {
     joiningDate?: string;
     designation?: string;
     department?: string;
-    
+
     // Permissions
     userManagement: boolean;
     academicManagement: boolean;
@@ -254,19 +254,19 @@ interface OldAddUserFormData {
     schoolSettings: boolean;
     dataExport: boolean;
     auditLogs: boolean;
-    
+
     // Work Schedule
     workingDays?: string[];
     workingHoursStart?: string;
     workingHoursEnd?: string;
-    
+
     // Salary Information
     basicSalary?: number;
     allowances?: Array<{
       type: string;
       amount: number;
     }>;
-    
+
     // Banking Information
     bankAccountNumber?: string;
     bankIFSC?: string;
@@ -274,7 +274,7 @@ interface OldAddUserFormData {
     bankBranchName?: string;
     bankAccountHolderName?: string;
   };
-  
+
   // Legacy Compatibility Fields (for backward compatibility and existing forms)
   name?: string;
   address?: string;
@@ -292,11 +292,11 @@ interface OldAddUserFormData {
   subjects?: string[];
   adminLevel?: string;
   accessLevel?: string;
-  
+
   // Generated Information
   userId?: string;
   generatedPassword?: string;
-  
+
   // Additional SATS fields for backward compatibility
   ageYears?: number;
   ageMonths?: number;
@@ -379,11 +379,11 @@ interface OldAddUserFormData {
 
 const ManageUsers: React.FC = () => {
   const { user } = useAuth();
-  
+
   // Use the school classes hook to get dynamic data
-  const { 
-    classesData, 
-    loading: classesLoading, 
+  const {
+    classesData,
+    loading: classesLoading,
     error: classesError,
     getClassOptions,
     getSectionsByClass,
@@ -408,14 +408,14 @@ const ManageUsers: React.FC = () => {
   const generateUserId = async (role: string, schoolCode: string): Promise<string> => {
     const roleCode = role.charAt(0).toUpperCase(); // A for admin, T for teacher, S for student
     const prefix = `${schoolCode.toUpperCase()}-${roleCode}-`;
-    
+
     // Find existing users with the same role to determine next sequence number
-    const existingUsers = users.filter(user => 
-      user.role === role && 
-      user._id && 
+    const existingUsers = users.filter(user =>
+      user.role === role &&
+      user._id &&
       user._id.toString().startsWith(prefix)
     );
-    
+
     // Extract sequence numbers and find the highest
     const sequenceNumbers = existingUsers
       .map(user => {
@@ -423,28 +423,28 @@ const ManageUsers: React.FC = () => {
         return match ? parseInt(match[1]) : 0;
       })
       .filter(num => !isNaN(num));
-    
+
     // Start from the next sequence after the highest existing number
     let nextSequence = sequenceNumbers.length > 0 ? Math.max(...sequenceNumbers) + 1 : 1;
-    
+
     // Keep checking if the generated ID already exists and increment if needed
     let userId: string;
     let isUnique = false;
-    
+
     while (!isUnique) {
       const sequenceStr = nextSequence.toString().padStart(4, '0'); // 4 digits with leading zeros
       userId = `${prefix}${sequenceStr}`;
-      
+
       // Check if this ID already exists in the current users list
       const exists = users.some(user => user._id === userId);
-      
+
       if (!exists) {
         isUnique = true;
       } else {
         nextSequence++;
       }
     }
-    
+
     return userId!;
   };
 
@@ -455,20 +455,20 @@ const ManageUsers: React.FC = () => {
     const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const numbers = "0123456789";
     const symbols = "!@#$%^&*";
-    
+
     // Ensure at least one character from each category
     let password = "";
     password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
     password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
     password += numbers.charAt(Math.floor(Math.random() * numbers.length));
     password += symbols.charAt(Math.floor(Math.random() * symbols.length));
-    
+
     // Fill the rest with random characters from all categories
     const allChars = lowercase + uppercase + numbers + symbols;
     for (let i = password.length; i < length; i++) {
       password += allChars.charAt(Math.floor(Math.random() * allChars.length));
     }
-    
+
     // Shuffle the password to randomize character positions
     return password.split('').sort(() => Math.random() - 0.5).join('');
   };
@@ -496,13 +496,13 @@ const ManageUsers: React.FC = () => {
     if (!data.email || !data.email.includes('@')) {
       errors.push('A valid email is required');
     }
-    
+
     // Phone validation - check both primaryPhone and legacy phone field
     const phoneToValidate = data.primaryPhone || data.phone;
     if (!phoneToValidate || phoneToValidate.replace(/\D/g, '').length < 10) {
       errors.push('A valid 10-digit phone number is required');
     }
-    
+
     // Address validation - check both new structure and legacy fields
     // Skip address requirements for teachers to make user addition more flexible
     if (data.role !== 'teacher') {
@@ -510,7 +510,7 @@ const ManageUsers: React.FC = () => {
       const cityToValidate = data.permanentCity || data.city;
       const stateToValidate = data.permanentState || data.state;
       const pincodeToValidate = data.permanentPincode || data.pinCode;
-      
+
       if (!streetToValidate || streetToValidate.trim() === '') {
         errors.push('Address/Street is required');
       }
@@ -529,13 +529,13 @@ const ManageUsers: React.FC = () => {
     if (data.role === 'student') {
       // Check nested studentDetails or fallback to legacy fields
       const studentDetails = data.studentDetails;
-      
+
       // Academic Information
       const classValue = studentDetails?.currentClass || data.class;
       const sectionValue = studentDetails?.currentSection || data.section;
       const dobValue = studentDetails?.dateOfBirth || data.dateOfBirth;
       const genderValue = studentDetails?.gender || data.gender;
-      
+
       if (!classValue || classValue === '') {
         errors.push('Class selection is required for students');
       }
@@ -548,33 +548,33 @@ const ManageUsers: React.FC = () => {
       if (!genderValue) {
         errors.push('Gender is required for students');
       }
-      
+
       // Family Information - Karnataka SATS Standards
       const fatherName = studentDetails?.fatherName || data.fatherName;
       const motherName = studentDetails?.motherName || data.motherName;
-      
+
       if (!fatherName || fatherName.trim() === '') {
         errors.push("Father's name is required for students");
       }
       if (!motherName || motherName.trim() === '') {
         errors.push("Mother's name is required for students");
       }
-      
+
       // Karnataka SATS Specific Validations
       const ageYears = studentDetails?.ageYears || data.ageYears;
       const socialCategory = studentDetails?.socialCategory || data.socialCategory;
       const belongingToBPL = studentDetails?.belongingToBPL || data.belongingToBPL;
       const disability = studentDetails?.disability || data.disability;
-      
+
       if (ageYears && (ageYears < 3 || ageYears > 25)) {
         errors.push('Student age must be between 3 and 25 years');
       }
-      
+
       // Aadhaar validation for Karnataka SATS
       const studentAadhaar = studentDetails?.studentAadhaar || data.studentAadhaar;
       const fatherAadhaar = studentDetails?.fatherAadhaar || data.fatherAadhaar;
       const motherAadhaar = studentDetails?.motherAadhaar || data.motherAadhaar;
-      
+
       if (studentAadhaar && !/^\d{12}$/.test(studentAadhaar)) {
         errors.push('Student Aadhaar number must be 12 digits');
       }
@@ -584,32 +584,32 @@ const ManageUsers: React.FC = () => {
       if (motherAadhaar && !/^\d{12}$/.test(motherAadhaar)) {
         errors.push('Mother Aadhaar number must be 12 digits');
       }
-      
+
       // Phone number validation for family
       const fatherPhone = studentDetails?.fatherPhone || data.fatherPhone || data.fatherMobile;
       const motherPhone = studentDetails?.motherPhone || data.motherPhone || data.motherMobile;
-      
+
       if (fatherPhone && !/^[6-9]\d{9}$/.test(fatherPhone)) {
         errors.push('Father phone number must be a valid 10-digit mobile number');
       }
       if (motherPhone && !/^[6-9]\d{9}$/.test(motherPhone)) {
         errors.push('Mother phone number must be a valid 10-digit mobile number');
       }
-      
+
       // IFSC Code validation for banking
       const bankIFSC = studentDetails?.bankIFSC || formData.bankIFSC;
       if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
         errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
       }
-      
+
     } else if (formData.role === 'teacher') {
       // Teacher-specific validation
       const teacherDetails = formData.teacherDetails;
-      
+
       const qualification = teacherDetails?.highestQualification || formData.qualification;
       const experience = teacherDetails?.totalExperience || Number(formData.experience);
       const subjects = teacherDetails?.subjects || (typeof formData.subjects === 'string' ? formData.subjects.split(',') : formData.subjects);
-      
+
       if (!qualification || qualification.trim() === '') {
         errors.push('Highest qualification is required for teachers');
       }
@@ -620,36 +620,36 @@ const ManageUsers: React.FC = () => {
       // if (!subjects || subjects.length === 0 || (Array.isArray(subjects) && subjects.filter(s => s.trim()).length === 0)) {
       //   errors.push('At least one subject is required for teachers');
       // }
-      
+
       // Employee ID validation if provided
       const employeeId = teacherDetails?.employeeId || formData.employeeId;
       if (employeeId && employeeId.trim() === '') {
         errors.push('Employee ID cannot be empty if provided');
       }
-      
+
       // IFSC validation for teacher banking
       const bankIFSC = teacherDetails?.bankIFSC || formData.bankIFSC;
       if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
         errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
       }
-      
+
     } else if (formData.role === 'admin') {
       // Admin-specific validation
       const adminDetails = formData.adminDetails;
-      
+
       const adminType = adminDetails?.adminType || formData.adminLevel;
       const designation = adminDetails?.designation || '';
-      
+
       if (!adminType || adminType.trim() === '') {
         errors.push('Admin type/level is required for administrators');
       }
-      
+
       // Employee ID validation if provided
       const employeeId = adminDetails?.employeeId || formData.employeeId;
       if (employeeId && employeeId.trim() === '') {
         errors.push('Employee ID cannot be empty if provided');
       }
-      
+
       // At least one permission should be granted
       if (adminDetails) {
         const hasAnyPermission = Object.values({
@@ -662,30 +662,30 @@ const ManageUsers: React.FC = () => {
           dataExport: adminDetails.dataExport,
           auditLogs: adminDetails.auditLogs
         }).some(permission => permission === true);
-        
+
         if (!hasAnyPermission) {
           errors.push('At least one permission must be granted to admin users');
         }
       }
-      
+
       // IFSC validation for admin banking
       const bankIFSC = adminDetails?.bankIFSC || formData.bankIFSC;
       if (bankIFSC && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIFSC)) {
         errors.push('Bank IFSC code must be in valid format (e.g., SBIN0012345)');
       }
     }
-    
+
     // Email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (formData.email && !emailRegex.test(formData.email)) {
       errors.push('Please enter a valid email address');
     }
-    
+
     // PAN validation if provided
     if (formData.panNumber && !/^[A-Z]{5}\d{4}[A-Z]$/.test(formData.panNumber)) {
       errors.push('PAN number must be in valid format (e.g., ABCDE1234F)');
     }
-    
+
     // Aadhaar validation for identity section
     if (formData.aadharNumber && !/^\d{12}$/.test(formData.aadharNumber)) {
       errors.push('Aadhaar number must be 12 digits');
@@ -697,42 +697,42 @@ const ManageUsers: React.FC = () => {
       if (!data.nationality || data.nationality.trim() === '') {
         errors.push('Nationality is required for students');
       }
-      
+
       // Emergency contact validation
       if (data.alternatePhone && !/^[6-9]\d{9}$/.test(data.alternatePhone)) {
         errors.push('Emergency contact phone must be a valid 10-digit mobile number');
       }
-      
+
       // TC Number validation if previous school is mentioned
       if (data.previousSchool && data.previousSchool.trim() !== '' && (!data.tcNumber || data.tcNumber.trim() === '')) {
         errors.push('TC Number is required when previous school is mentioned');
       }
-      
+
       // Birth certificate validation if provided
       if (data.birthCertificateNumber && data.birthCertificateNumber.trim().length < 5) {
         errors.push('Birth certificate number must be at least 5 characters');
       }
-      
+
       // Ration card validation if provided
       if (data.rationCardNumber && data.rationCardNumber.trim().length < 5) {
         errors.push('Ration card number must be at least 5 characters');
       }
-      
+
       // Family income validation
       if (data.familyIncome && !['Below 1 Lakh', '1-2 Lakhs', '2-5 Lakhs', '5-10 Lakhs', 'Above 10 Lakhs'].includes(data.familyIncome)) {
         errors.push('Please select a valid family income range');
       }
-      
+
       // BPL card validation if BPL status is mentioned
       if (data.economicStatus === 'BPL' && (!data.bplCardNumber || data.bplCardNumber.trim() === '')) {
         errors.push('BPL card number is required when economic status is BPL');
       }
-      
+
       // Guardian relationship validation if guardian name is provided
       if (data.guardianName && data.guardianName.trim() !== '' && (!data.guardianRelation || data.guardianRelation.trim() === '')) {
         errors.push('Guardian relationship is required when guardian name is provided');
       }
-      
+
       // Transport validation
       if (data.transportMode === 'School Bus' && (!data.busRoute || data.busRoute.trim() === '')) {
         errors.push('Bus route is required when school bus transport is selected');
@@ -745,11 +745,11 @@ const ManageUsers: React.FC = () => {
   // Function to handle role change and auto-generate password and ID
   const handleRoleChange = async (role: 'student' | 'teacher' | 'admin') => {
     console.log(`🔄 Role changed to: ${role}`);
-    
+
     // For students, don't generate password until DOB is entered
     // For other roles, generate random password
     const password = role === 'student' ? '' : generatePassword();
-    
+
     // Auto-fetch next ID for the selected role
     setFormData(prev => ({
       ...prev,
@@ -757,14 +757,14 @@ const ManageUsers: React.FC = () => {
       userId: '', // will be updated when fetch completes
       generatedPassword: password
     }));
-    
+
     // Clear any existing next ID state
     setNextUserId('');
-    
+
     try {
       console.log(`🚀 Auto-fetching next ID for role: ${role}`);
       const fetchedId = await fetchNextUserId(role);
-      
+
       if (fetchedId) {
         console.log(`✅ Auto-generated ID for ${role}: ${fetchedId}`);
         toast.success(`Role set to ${role.charAt(0).toUpperCase() + role.slice(1)}. Next available ID: ${fetchedId}`);
@@ -782,7 +782,7 @@ const ManageUsers: React.FC = () => {
   const handleDOBChange = (dob: string) => {
     setFormData(prev => {
       const newFormData = { ...prev, dateOfBirth: dob };
-      
+
       // Auto-generate DOB-based password for students in DDMMYYYY format
       if (prev.role === 'student' && dob) {
         // Always parse the date to ensure DDMMYYYY format
@@ -794,7 +794,7 @@ const ManageUsers: React.FC = () => {
           newFormData.generatedPassword = `${day}${month}${year}`;
         }
       }
-      
+
       return newFormData;
     });
   };
@@ -803,14 +803,14 @@ const ManageUsers: React.FC = () => {
   const handleDOBChangeWithStudentDetails = (dob: string) => {
     setFormData(prev => {
       const newFormData = {
-        ...prev, 
+        ...prev,
         dateOfBirth: dob,
         studentDetails: {
           ...prev.studentDetails,
           dateOfBirth: dob
         }
       };
-      
+
       // Auto-generate DOB-based password for students in DDMMYYYY format
       if (prev.role === 'student' && dob) {
         // Always parse the date to ensure DDMMYYYY format
@@ -822,7 +822,7 @@ const ManageUsers: React.FC = () => {
           newFormData.generatedPassword = `${day}${month}${year}`;
         }
       }
-      
+
       return newFormData;
     });
   };
@@ -832,21 +832,21 @@ const ManageUsers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
 
-  const [showCredentials, setShowCredentials] = useState<{userId: string, password: string, email: string, role: string} | null>(null);
+  const [showCredentials, setShowCredentials] = useState<{ userId: string, password: string, email: string, role: string } | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'admin' | 'teacher' | 'student'>('student');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedSection, setSelectedSection] = useState<string>('all');
-  const [showResetCredentials, setShowResetCredentials] = useState<{userId: string, password: string, email: string, role: string} | null>(null);
+  const [showResetCredentials, setShowResetCredentials] = useState<{ userId: string, password: string, email: string, role: string } | null>(null);
   const [nextUserId, setNextUserId] = useState<string>('');
   const [loadingNextId, setLoadingNextId] = useState(false);
-  
+
   // New state for hierarchical student display
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'table' | 'hierarchy'>('table');
-  
+
   // Import functionality state
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -854,23 +854,23 @@ const ManageUsers: React.FC = () => {
   const [importProgress, setImportProgress] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<{
-    success: Array<{userId: string, email: string, password: string, role: string}>,
-    errors: Array<{row: number, error: string, data: any}>
+    success: Array<{ userId: string, email: string, password: string, role: string }>,
+    errors: Array<{ row: number, error: string, data: any }>
   } | null>(null);
-  
+
   const [formData, setFormData] = useState<AddUserFormData>({
     // Core Fields
     role: 'student',
-    
+
     // Enhanced Name Structure (matching backend)
     firstName: '',
     middleName: '',
     lastName: '',
-    
+
     // Basic Contact (legacy compatibility)
     email: '',
     phone: '',
-    
+
     // Enhanced Contact Information (matching backend)
     primaryPhone: '',
     secondaryPhone: '',
@@ -878,7 +878,7 @@ const ManageUsers: React.FC = () => {
     emergencyContactName: '',
     emergencyContactRelation: '',
     emergencyContactPhone: '',
-    
+
     // Enhanced Address Information (matching backend)
     permanentStreet: '',
     permanentArea: '',
@@ -887,7 +887,7 @@ const ManageUsers: React.FC = () => {
     permanentCountry: 'India',
     permanentPincode: '',
     permanentLandmark: '',
-    
+
     currentStreet: '',
     currentArea: '',
     currentCity: '',
@@ -896,14 +896,14 @@ const ManageUsers: React.FC = () => {
     currentPincode: '',
     currentLandmark: '',
     sameAsPermanent: true,
-    
+
     // Identity Information (matching backend)
     aadharNumber: '',
     panNumber: '',
     voterIdNumber: '',
     drivingLicenseNumber: '',
     passportNumber: '',
-    
+
     // Student Specific Fields (comprehensive Karnataka SATS)
     studentDetails: {
       // Academic Information
@@ -916,7 +916,7 @@ const ManageUsers: React.FC = () => {
       admissionNumber: '',
       enrollmentNo: '',
       tcNo: '',
-      
+
       // Previous School
       previousSchoolName: '',
       previousBoard: '',
@@ -924,7 +924,7 @@ const ManageUsers: React.FC = () => {
       tcNumber: '',
       tcDate: '',
       reasonForTransfer: '',
-      
+
       // Personal Information - Karnataka SATS
       dateOfBirth: '',
       placeOfBirth: '',
@@ -939,7 +939,7 @@ const ManageUsers: React.FC = () => {
       categoryOther: '',
       motherTongue: '',
       motherTongueOther: '',
-      
+
       // Karnataka SATS Specific
       ageYears: 0,
       ageMonths: 0,
@@ -949,17 +949,17 @@ const ManageUsers: React.FC = () => {
       studentCasteOther: '',
       studentAadhaar: '',
       studentCasteCertNo: '',
-      
+
       // Economic Status
       belongingToBPL: 'No',
       bplCardNo: '',
       bhagyalakshmiBondNo: '',
-      
+
       // Special Needs
       disability: 'Not Applicable',
       disabilityOther: '',
       isRTECandidate: 'No',
-      
+
       // Family Information - Father
       fatherName: '',
       fatherOccupation: '',
@@ -971,7 +971,7 @@ const ManageUsers: React.FC = () => {
       fatherCasteOther: '',
       fatherCasteCertNo: '',
       fatherAnnualIncome: 0,
-      
+
       // Family Information - Mother
       motherName: '',
       motherOccupation: '',
@@ -983,14 +983,14 @@ const ManageUsers: React.FC = () => {
       motherCasteOther: '',
       motherCasteCertNo: '',
       motherAnnualIncome: 0,
-      
+
       // Guardian Information
       guardianName: '',
       guardianRelationship: '',
       guardianPhone: '',
       guardianEmail: '',
       isEmergencyContact: false,
-      
+
       // Transportation
       transportMode: '',
       busRoute: '',
@@ -998,7 +998,7 @@ const ManageUsers: React.FC = () => {
       dropPoint: '',
       pickupTime: '',
       dropTime: '',
-      
+
       // Financial Information
       feeCategory: '',
       concessionType: '',
@@ -1006,13 +1006,13 @@ const ManageUsers: React.FC = () => {
       scholarshipName: '',
       scholarshipAmount: 0,
       scholarshipProvider: '',
-      
+
       // Banking Information
       bankName: '',
       bankAccountNo: '',
       bankIFSC: '',
       bankAccountHolderName: '',
-      
+
       // Medical Information
       allergies: [],
       chronicConditions: [],
@@ -1022,50 +1022,50 @@ const ManageUsers: React.FC = () => {
       doctorPhone: '',
       lastMedicalCheckup: '',
     },
-    
+
     // Teacher Specific Fields (comprehensive)
     teacherDetails: {
       employeeId: '',
       joiningDate: '',
-      
+
       // Qualification
       highestQualification: '',
       specialization: '',
       university: '',
       graduationYear: 0,
-      
+
       // Experience
       totalExperience: 0,
       experienceAtCurrentSchool: 0,
-      
+
       // Previous Experience
       previousSchools: [],
-      
+
       // Subjects and Responsibilities
       subjects: [],
       primarySubjects: [],
       classTeacherOf: '',
       responsibilities: [],
       department: '',
-      
+
       // Work Schedule
       workingDays: [],
       workingHoursStart: '',
       workingHoursEnd: '',
       maxPeriodsPerDay: 0,
       maxPeriodsPerWeek: 0,
-      
+
       // Salary Information
       basicSalary: 0,
       allowances: [],
-      
+
       // Banking Information
       bankAccountNumber: '',
       bankIFSC: '',
       bankName: '',
       bankBranchName: '',
     },
-    
+
     // Admin Specific Fields (comprehensive)
     adminDetails: {
       adminType: '',
@@ -1073,7 +1073,7 @@ const ManageUsers: React.FC = () => {
       joiningDate: '',
       designation: '',
       department: '',
-      
+
       // Permissions
       userManagement: false,
       academicManagement: false,
@@ -1083,16 +1083,16 @@ const ManageUsers: React.FC = () => {
       schoolSettings: false,
       dataExport: false,
       auditLogs: false,
-      
+
       // Work Schedule
       workingDays: [],
       workingHoursStart: '',
       workingHoursEnd: '',
-      
+
       // Salary Information
       basicSalary: 0,
       allowances: [],
-      
+
       // Banking Information
       bankAccountNumber: '',
       bankIFSC: '',
@@ -1100,7 +1100,7 @@ const ManageUsers: React.FC = () => {
       bankBranchName: '',
       bankAccountHolderName: '',
     },
-    
+
     // Legacy Compatibility Fields (for backward compatibility)
     name: '',
     address: '',
@@ -1118,11 +1118,11 @@ const ManageUsers: React.FC = () => {
     subjects: [],
     adminLevel: '',
     accessLevel: '',
-    
+
     // Generated Information
     userId: '',
     generatedPassword: '',
-    
+
     // Additional SATS fields for backward compatibility
     studentNameKannada: '',
     ageYears: 0,
@@ -1212,16 +1212,16 @@ const ManageUsers: React.FC = () => {
     setFormData({
       // Core Fields
       role: 'student',
-      
+
       // Enhanced Name Structure (matching backend)
       firstName: '',
       middleName: '',
       lastName: '',
-      
+
       // Basic Contact (legacy compatibility)
       email: '',
       phone: '',
-      
+
       // Enhanced Contact Information (matching backend)
       primaryPhone: '',
       secondaryPhone: '',
@@ -1229,7 +1229,7 @@ const ManageUsers: React.FC = () => {
       emergencyContactName: '',
       emergencyContactRelation: '',
       emergencyContactPhone: '',
-      
+
       // Enhanced Address Information (matching backend)
       permanentStreet: '',
       permanentArea: '',
@@ -1238,7 +1238,7 @@ const ManageUsers: React.FC = () => {
       permanentCountry: 'India',
       permanentPincode: '',
       permanentLandmark: '',
-      
+
       currentStreet: '',
       currentArea: '',
       currentCity: '',
@@ -1247,14 +1247,14 @@ const ManageUsers: React.FC = () => {
       currentPincode: '',
       currentLandmark: '',
       sameAsPermanent: true,
-      
+
       // Identity Information (matching backend)
       aadharNumber: '',
       panNumber: '',
       voterIdNumber: '',
       drivingLicenseNumber: '',
       passportNumber: '',
-      
+
       // Student Specific Fields (comprehensive Karnataka SATS)
       studentDetails: {
         // Academic Information
@@ -1267,7 +1267,7 @@ const ManageUsers: React.FC = () => {
         admissionNumber: '',
         enrollmentNo: '',
         tcNo: '',
-        
+
         // Previous School
         previousSchoolName: '',
         previousBoard: '',
@@ -1275,7 +1275,7 @@ const ManageUsers: React.FC = () => {
         tcNumber: '',
         tcDate: '',
         reasonForTransfer: '',
-        
+
         // Personal Information - Karnataka SATS
         dateOfBirth: '',
         placeOfBirth: '',
@@ -1290,7 +1290,7 @@ const ManageUsers: React.FC = () => {
         categoryOther: '',
         motherTongue: '',
         motherTongueOther: '',
-        
+
         // Karnataka SATS Specific
         studentNameKannada: '',
         ageYears: 0,
@@ -1301,17 +1301,17 @@ const ManageUsers: React.FC = () => {
         studentCasteOther: '',
         studentAadhaar: '',
         studentCasteCertNo: '',
-        
+
         // Economic Status
         belongingToBPL: 'No',
         bplCardNo: '',
         bhagyalakshmiBondNo: '',
-        
+
         // Special Needs
         disability: 'Not Applicable',
         disabilityOther: '',
         isRTECandidate: 'No',
-        
+
         // Family Information - Father
         fatherName: '',
         fatherNameKannada: '',
@@ -1325,7 +1325,7 @@ const ManageUsers: React.FC = () => {
         fatherCasteCertNo: '',
         fatherWorkAddress: '',
         fatherAnnualIncome: 0,
-        
+
         // Family Information - Mother
         motherName: '',
         motherNameKannada: '',
@@ -1339,7 +1339,7 @@ const ManageUsers: React.FC = () => {
         motherCasteCertNo: '',
         motherWorkAddress: '',
         motherAnnualIncome: 0,
-        
+
         // Guardian Information
         guardianName: '',
         guardianRelationship: '',
@@ -1347,7 +1347,7 @@ const ManageUsers: React.FC = () => {
         guardianEmail: '',
         guardianAddress: '',
         isEmergencyContact: false,
-        
+
         // Transportation
         transportMode: '',
         busRoute: '',
@@ -1355,7 +1355,7 @@ const ManageUsers: React.FC = () => {
         dropPoint: '',
         pickupTime: '',
         dropTime: '',
-        
+
         // Financial Information
         feeCategory: '',
         concessionType: '',
@@ -1363,13 +1363,13 @@ const ManageUsers: React.FC = () => {
         scholarshipName: '',
         scholarshipAmount: 0,
         scholarshipProvider: '',
-        
+
         // Banking Information
         bankName: '',
         bankAccountNo: '',
         bankIFSC: '',
         bankAccountHolderName: '',
-        
+
         // Medical Information
         allergies: [],
         chronicConditions: [],
@@ -1379,50 +1379,50 @@ const ManageUsers: React.FC = () => {
         doctorPhone: '',
         lastMedicalCheckup: '',
       },
-      
+
       // Teacher Specific Fields (comprehensive)
       teacherDetails: {
         employeeId: '',
         joiningDate: '',
-        
+
         // Qualification
         highestQualification: '',
         specialization: '',
         university: '',
         graduationYear: 0,
-        
+
         // Experience
         totalExperience: 0,
         experienceAtCurrentSchool: 0,
-        
+
         // Previous Experience
         previousSchools: [],
-        
+
         // Subjects and Responsibilities
         subjects: [],
         primarySubjects: [],
         classTeacherOf: '',
         responsibilities: [],
         department: '',
-        
+
         // Work Schedule
         workingDays: [],
         workingHoursStart: '',
         workingHoursEnd: '',
         maxPeriodsPerDay: 0,
         maxPeriodsPerWeek: 0,
-        
+
         // Salary Information
         basicSalary: 0,
         allowances: [],
-        
+
         // Banking Information
         bankAccountNumber: '',
         bankIFSC: '',
         bankName: '',
         bankBranchName: '',
       },
-      
+
       // Admin Specific Fields (comprehensive)
       adminDetails: {
         adminType: '',
@@ -1430,7 +1430,7 @@ const ManageUsers: React.FC = () => {
         joiningDate: '',
         designation: '',
         department: '',
-        
+
         // Permissions
         userManagement: false,
         academicManagement: false,
@@ -1440,16 +1440,16 @@ const ManageUsers: React.FC = () => {
         schoolSettings: false,
         dataExport: false,
         auditLogs: false,
-        
+
         // Work Schedule
         workingDays: [],
         workingHoursStart: '',
         workingHoursEnd: '',
-        
+
         // Salary Information
         basicSalary: 0,
         allowances: [],
-        
+
         // Banking Information
         bankAccountNumber: '',
         bankIFSC: '',
@@ -1457,7 +1457,7 @@ const ManageUsers: React.FC = () => {
         bankBranchName: '',
         bankAccountHolderName: '',
       },
-      
+
       // Legacy Compatibility Fields (for backward compatibility)
       name: '',
       address: '',
@@ -1475,11 +1475,11 @@ const ManageUsers: React.FC = () => {
       subjects: [],
       adminLevel: '',
       accessLevel: '',
-      
+
       // Generated Information
       userId: '',
       generatedPassword: '',
-      
+
       // Additional SATS fields for backward compatibility
       studentNameKannada: '',
       ageYears: 0,
@@ -1601,23 +1601,23 @@ const ManageUsers: React.FC = () => {
   // Debug function to test API endpoints
   const debugNextIdAPI = async () => {
     console.log('=== 🐛 DEBUG: Testing Next ID API ===');
-    
+
     const roles = ['student', 'teacher', 'admin'];
     const authData = localStorage.getItem('erp.auth');
     const token = authData ? JSON.parse(authData).token : null;
-    
+
     if (!token) {
       console.log('❌ No authentication token found');
       return;
     }
-    
+
     console.log('🔑 Using token:', token.substring(0, 20) + '...');
     console.log('👤 User context:', { schoolCode: user?.schoolCode, role: user?.role });
-    
+
     for (const role of roles) {
       try {
         console.log(`\n🔍 Testing ${role.toUpperCase()} endpoint...`);
-        
+
         const headers: Record<string, string> = {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1626,14 +1626,14 @@ const ManageUsers: React.FC = () => {
         if (user?.schoolCode) {
           headers['x-school-code'] = user.schoolCode;
         }
-        
+
         const response = await fetch(`http://localhost:5050/api/users/next-id/${role}`, {
           method: 'GET',
           headers
         });
-        
+
         console.log(`📊 ${role} Response Status:`, response.status, response.statusText);
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log(`✅ ${role.toUpperCase()} Next ID:`, data);
@@ -1641,12 +1641,12 @@ const ManageUsers: React.FC = () => {
           const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
           console.log(`❌ ${role.toUpperCase()} Error:`, errorData);
         }
-        
+
       } catch (error) {
         console.error(`❌ ${role.toUpperCase()} Network Error:`, error);
       }
     }
-    
+
     console.log('=== 🐛 DEBUG COMPLETE ===\n');
   };
 
@@ -1703,7 +1703,7 @@ const ManageUsers: React.FC = () => {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P'; // Use 'P' as fallback since we saw it in the database
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
@@ -1712,14 +1712,14 @@ const ManageUsers: React.FC = () => {
       console.log('Fetching users for school:', schoolCode);
       console.log('API URL will be:', `http://localhost:5050/api/school-users/${schoolCode}/users`);
       console.log('Token being used:', token ? 'Present' : 'Missing');
-      
+
       try {
         // Fetch all users from the school-specific collections
         const response = await schoolUserAPI.getAllUsers(schoolCode, token);
         console.log('API Response:', response);
-        
+
         const allUsers: User[] = [];
-        
+
         // Extract users from each role collection based on the actual response structure
         if (response.data && Array.isArray(response.data)) {
           // If response.data is a flat array of users
@@ -1727,10 +1727,10 @@ const ManageUsers: React.FC = () => {
             const processedUser: User = {
               _id: userData._id || userData.userId,
               userId: userData.userId, // Add the userId field
-              name: userData.name?.displayName || 
-                    (userData.name?.firstName && userData.name?.lastName 
-                      ? `${userData.name.firstName} ${userData.name.lastName}` 
-                      : userData.name?.firstName || userData.name?.lastName || userData.name || 'Unknown'),
+              name: userData.name?.displayName ||
+                (userData.name?.firstName && userData.name?.lastName
+                  ? `${userData.name.firstName} ${userData.name.lastName}`
+                  : userData.name?.firstName || userData.name?.lastName || userData.name || 'Unknown'),
               email: userData.email || 'No email',
               role: userData.role,
               phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
@@ -1766,10 +1766,10 @@ const ManageUsers: React.FC = () => {
                 const processedUser: User = {
                   _id: userData._id || userData.userId,
                   userId: userData.userId, // Add the userId field
-                  name: userData.name?.displayName || 
-                        (userData.name?.firstName && userData.name?.lastName 
-                          ? `${userData.name.firstName} ${userData.name.lastName}` 
-                          : userData.name?.firstName || userData.name?.lastName || userData.name || 'Unknown'),
+                  name: userData.name?.displayName ||
+                    (userData.name?.firstName && userData.name?.lastName
+                      ? `${userData.name.firstName} ${userData.name.lastName}`
+                      : userData.name?.firstName || userData.name?.lastName || userData.name || 'Unknown'),
                   email: userData.email || 'No email',
                   role: role,
                   phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
@@ -1799,16 +1799,16 @@ const ManageUsers: React.FC = () => {
             }
           });
         }
-        
+
         console.log('Processed users:', allUsers);
         setUsers(allUsers);
-        
+
       } catch (apiError) {
         console.error('API Error:', apiError);
         toast.error('Failed to fetch users from API');
         setUsers([]); // Set empty array instead of mock data
       }
-      
+
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to fetch users');
@@ -1824,14 +1824,14 @@ const ManageUsers: React.FC = () => {
       setNextUserId('');
       return '';
     }
-    
+
     try {
       setLoadingNextId(true);
       console.log(`🔍 Fetching next user ID for role: ${role}`);
-      
+
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
-      
+
       if (!token) {
         console.error('❌ No authentication token available');
         toast.error('Authentication required. Please login again.');
@@ -1865,7 +1865,7 @@ const ManageUsers: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('✅ API Response data:', data);
-        
+
         if (data.success && data.nextUserId) {
           const fetchedId = data.nextUserId;
           setNextUserId(fetchedId);
@@ -1911,10 +1911,10 @@ const ManageUsers: React.FC = () => {
     try {
       // For now, use the user's school information
       if (user?.schoolCode) {
-        setSchool({ 
-          _id: '1', 
-          name: user.schoolName || 'School', 
-          code: user.schoolCode 
+        setSchool({
+          _id: '1',
+          name: user.schoolName || 'School',
+          code: user.schoolCode
         });
       }
       console.log('School details set from user context');
@@ -1924,13 +1924,13 @@ const ManageUsers: React.FC = () => {
   };
 
   // Function to check if email already exists across all roles
-  const checkEmailExists = async (email: string): Promise<{exists: boolean, role?: string, name?: string}> => {
+  const checkEmailExists = async (email: string): Promise<{ exists: boolean, role?: string, name?: string }> => {
     try {
       // Check against the current users list first (in memory check)
-      const existingUser = users.find(user => 
+      const existingUser = users.find(user =>
         user.email.toLowerCase() === email.toLowerCase()
       );
-      
+
       if (existingUser) {
         return {
           exists: true,
@@ -1938,31 +1938,31 @@ const ManageUsers: React.FC = () => {
           name: existingUser.name
         };
       }
-      
+
       // If not found in current list, make API call to double-check
       // This ensures we catch any users that might not be in the current filtered list
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P';
-      
+
       if (token) {
         try {
           const response = await schoolUserAPI.getAllUsers(schoolCode, token);
-          
+
           // Check across all users in the response
           if (response.data && Array.isArray(response.data)) {
-            const emailConflict = response.data.find((userData: any) => 
+            const emailConflict = response.data.find((userData: any) =>
               userData.email && userData.email.toLowerCase() === email.toLowerCase()
             );
-            
+
             if (emailConflict) {
               return {
                 exists: true,
                 role: emailConflict.role,
-                name: emailConflict.name?.displayName || 
-                      (emailConflict.name?.firstName && emailConflict.name?.lastName 
-                        ? `${emailConflict.name.firstName} ${emailConflict.name.lastName}` 
-                        : emailConflict.name?.firstName || emailConflict.name?.lastName || emailConflict.name || 'Unknown')
+                name: emailConflict.name?.displayName ||
+                  (emailConflict.name?.firstName && emailConflict.name?.lastName
+                    ? `${emailConflict.name.firstName} ${emailConflict.name.lastName}`
+                    : emailConflict.name?.firstName || emailConflict.name?.lastName || emailConflict.name || 'Unknown')
               };
             }
           }
@@ -1970,7 +1970,7 @@ const ManageUsers: React.FC = () => {
           console.warn('Could not verify email uniqueness via API, proceeding with form validation only');
         }
       }
-      
+
       return { exists: false };
     } catch (error) {
       console.error('Error checking email existence:', error);
@@ -2003,23 +2003,23 @@ const ManageUsers: React.FC = () => {
         isSubmittingRef.current = false;
         return;
       }
-      
+
       // Use the same token retrieval method as Dashboard
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'NPS';
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
       }
 
       // Generate password based on role
-      const generatedPassword = formData.role === 'student' && formData.dateOfBirth 
+      const generatedPassword = formData.role === 'student' && formData.dateOfBirth
         ? (() => {
-            const dobDate = new Date(formData.dateOfBirth);
-            return `${dobDate.getDate().toString().padStart(2, '0')}${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${dobDate.getFullYear()}`;
-          })()
+          const dobDate = new Date(formData.dateOfBirth);
+          return `${dobDate.getDate().toString().padStart(2, '0')}${(dobDate.getMonth() + 1).toString().padStart(2, '0')}${dobDate.getFullYear()}`;
+        })()
         : formData.generatedPassword || 'defaultPassword123';
 
       // Build comprehensive request data based on backend User model structure
@@ -2031,7 +2031,7 @@ const ManageUsers: React.FC = () => {
         lastName: formData.lastName,
         phone: formData.primaryPhone || formData.phone,
         password: generatedPassword,
-        
+
         // Additional flat fields that might be expected
         dateOfBirth: formData.dateOfBirth,
         gender: formData.gender,
@@ -2039,7 +2039,7 @@ const ManageUsers: React.FC = () => {
         city: formData.cityVillageTown || formData.city,
         state: formData.state,
         pinCode: formData.pinCode,
-        
+
         // Enhanced Name Structure (matching backend)
         name: {
           firstName: formData.firstName,
@@ -2047,11 +2047,11 @@ const ManageUsers: React.FC = () => {
           lastName: formData.lastName,
           displayName: `${formData.firstName} ${formData.lastName}`.trim()
         },
-        
+
         // Basic Contact
         temporaryPassword: generatedPassword,
         passwordChangeRequired: true,
-        
+
         // Enhanced Contact Information (matching backend)
         contact: {
           primaryPhone: formData.primaryPhone || formData.phone,
@@ -2063,7 +2063,7 @@ const ManageUsers: React.FC = () => {
             phone: formData.emergencyContactPhone || ''
           }
         },
-        
+
         // Enhanced Address Information (matching backend)
         addressDetails: {
           permanent: {
@@ -2086,7 +2086,7 @@ const ManageUsers: React.FC = () => {
             sameAsPermanent: formData.sameAsPermanent
           }
         },
-        
+
         // Identity Information (matching backend)
         identity: {
           aadharNumber: formData.aadharNumber || formData.studentAadhaar || formData.aadhaarNumber || '',
@@ -2095,7 +2095,7 @@ const ManageUsers: React.FC = () => {
           drivingLicenseNumber: formData.drivingLicenseNumber || '',
           passportNumber: formData.passportNumber || ''
         },
-        
+
         // System Fields
         isActive: true,
         isVerified: false,
@@ -2121,7 +2121,7 @@ const ManageUsers: React.FC = () => {
             admissionNumber: formData.studentDetails?.admissionNumber || formData.admissionNumber || '',
             enrollmentNo: formData.studentDetails?.enrollmentNo || '',
             tcNo: formData.studentDetails?.tcNo || '',
-            
+
             previousSchool: {
               name: formData.studentDetails?.previousSchoolName || formData.previousSchool || '',
               board: formData.studentDetails?.previousBoard || '',
@@ -2131,11 +2131,11 @@ const ManageUsers: React.FC = () => {
               reasonForTransfer: formData.studentDetails?.reasonForTransfer || ''
             }
           },
-          
+
           // Personal Information - Karnataka SATS Standard
           personal: {
-            dateOfBirth: formData.studentDetails?.dateOfBirth ? new Date(formData.studentDetails.dateOfBirth) : 
-                           (formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined),
+            dateOfBirth: formData.studentDetails?.dateOfBirth ? new Date(formData.studentDetails.dateOfBirth) :
+              (formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined),
             placeOfBirth: formData.studentDetails?.placeOfBirth || '',
             gender: formData.studentDetails?.gender || formData.gender || 'male',
             bloodGroup: formData.studentDetails?.bloodGroup || formData.bloodGroup || '',
@@ -2148,7 +2148,7 @@ const ManageUsers: React.FC = () => {
             categoryOther: formData.studentDetails?.categoryOther || formData.categoryOther || '',
             motherTongue: formData.studentDetails?.motherTongue || formData.motherTongue || '',
             motherTongueOther: formData.studentDetails?.motherTongueOther || formData.motherTongueOther || '',
-            
+
             // Karnataka SATS Specific Fields
             studentNameKannada: formData.studentDetails?.studentNameKannada || formData.studentNameKannada || '',
             ageYears: formData.studentDetails?.ageYears || formData.ageYears || 0,
@@ -2159,18 +2159,18 @@ const ManageUsers: React.FC = () => {
             studentCasteOther: formData.studentDetails?.studentCasteOther || formData.studentCasteOther || '',
             studentAadhaar: formData.studentDetails?.studentAadhaar || formData.studentAadhaar || '',
             studentCasteCertNo: formData.studentDetails?.studentCasteCertNo || formData.studentCasteCertNo || '',
-            
+
             // Economic Status
             belongingToBPL: formData.studentDetails?.belongingToBPL || formData.belongingToBPL || 'No',
             bplCardNo: formData.studentDetails?.bplCardNo || formData.bplCardNo || '',
             bhagyalakshmiBondNo: formData.studentDetails?.bhagyalakshmiBondNo || formData.bhagyalakshmiBondNo || '',
-            
+
             // Special Needs
             disability: formData.studentDetails?.disability || formData.disability || 'Not Applicable',
             disabilityOther: formData.studentDetails?.disabilityOther || formData.disabilityOther || '',
             isRTECandidate: formData.studentDetails?.isRTECandidate || formData.isRTECandidate || 'No'
           },
-          
+
           // Family Information - Karnataka SATS Standard
           family: {
             father: {
@@ -2210,7 +2210,7 @@ const ManageUsers: React.FC = () => {
               isEmergencyContact: formData.studentDetails.isEmergencyContact || false
             } : undefined
           },
-          
+
           // Transportation
           transport: {
             mode: formData.studentDetails?.transportMode || '',
@@ -2220,7 +2220,7 @@ const ManageUsers: React.FC = () => {
             pickupTime: formData.studentDetails?.pickupTime || '',
             dropTime: formData.studentDetails?.dropTime || ''
           },
-          
+
           // Financial Information - Karnataka SATS Standard
           financial: {
             feeCategory: formData.studentDetails?.feeCategory || '',
@@ -2231,7 +2231,7 @@ const ManageUsers: React.FC = () => {
               amount: formData.studentDetails.scholarshipAmount || 0,
               provider: formData.studentDetails.scholarshipProvider || ''
             } : undefined,
-            
+
             // Karnataka SATS Banking Information
             bankDetails: {
               bankName: formData.studentDetails?.bankName || formData.bankName || '',
@@ -2240,7 +2240,7 @@ const ManageUsers: React.FC = () => {
               accountHolderName: formData.studentDetails?.bankAccountHolderName || ''
             }
           },
-          
+
           // Medical Information
           medical: formData.studentDetails?.allergies?.length ? {
             allergies: formData.studentDetails.allergies,
@@ -2258,20 +2258,20 @@ const ManageUsers: React.FC = () => {
         userData.teacherDetails = {
           employeeId: formData.teacherDetails?.employeeId || formData.employeeId || '',
           joiningDate: formData.teacherDetails?.joiningDate ? new Date(formData.teacherDetails.joiningDate) : undefined,
-          
+
           qualification: {
             highest: formData.teacherDetails?.highestQualification || formData.qualification || '',
             specialization: formData.teacherDetails?.specialization || '',
             university: formData.teacherDetails?.university || '',
             year: formData.teacherDetails?.graduationYear || 0
           },
-          
+
           experience: {
             total: formData.teacherDetails?.totalExperience || Number(formData.experience) || 0,
             atCurrentSchool: formData.teacherDetails?.experienceAtCurrentSchool || 0,
             previousSchools: formData.teacherDetails?.previousSchools || []
           },
-          
+
           subjects: formData.teacherDetails?.subjects?.map(subject => ({
             subjectCode: subject,
             subjectName: subject,
@@ -2283,10 +2283,10 @@ const ManageUsers: React.FC = () => {
             classes: [],
             isPrimary: true
           })) : []),
-          
+
           classTeacherOf: formData.teacherDetails?.classTeacherOf || '',
           responsibilities: formData.teacherDetails?.responsibilities || [],
-          
+
           workSchedule: {
             workingDays: formData.teacherDetails?.workingDays || [],
             workingHours: {
@@ -2296,13 +2296,13 @@ const ManageUsers: React.FC = () => {
             maxPeriodsPerDay: formData.teacherDetails?.maxPeriodsPerDay || 0,
             maxPeriodsPerWeek: formData.teacherDetails?.maxPeriodsPerWeek || 0
           },
-          
+
           salary: formData.teacherDetails?.basicSalary ? {
             basic: formData.teacherDetails.basicSalary,
             allowances: formData.teacherDetails.allowances || [],
             currency: 'INR'
           } : undefined,
-          
+
           bankDetails: formData.teacherDetails?.bankAccountNumber ? {
             accountNumber: formData.teacherDetails.bankAccountNumber,
             ifscCode: formData.teacherDetails.bankIFSC || '',
@@ -2317,7 +2317,7 @@ const ManageUsers: React.FC = () => {
           joiningDate: formData.adminDetails?.joiningDate ? new Date(formData.adminDetails.joiningDate) : undefined,
           designation: formData.adminDetails?.designation || '',
           department: formData.adminDetails?.department || formData.department || '',
-          
+
           permissions: {
             userManagement: formData.adminDetails?.userManagement || false,
             academicManagement: formData.adminDetails?.academicManagement || false,
@@ -2328,7 +2328,7 @@ const ManageUsers: React.FC = () => {
             dataExport: formData.adminDetails?.dataExport || false,
             auditLogs: formData.adminDetails?.auditLogs || false
           },
-          
+
           workSchedule: {
             workingDays: formData.adminDetails?.workingDays || [],
             workingHours: {
@@ -2336,13 +2336,13 @@ const ManageUsers: React.FC = () => {
               end: formData.adminDetails?.workingHoursEnd || ''
             }
           },
-          
+
           salary: formData.adminDetails?.basicSalary ? {
             basic: formData.adminDetails.basicSalary,
             allowances: formData.adminDetails.allowances || [],
             currency: 'INR'
           } : undefined,
-          
+
           bankDetails: formData.adminDetails?.bankAccountNumber ? {
             accountNumber: formData.adminDetails.bankAccountNumber,
             ifscCode: formData.adminDetails.bankIFSC || '',
@@ -2354,7 +2354,7 @@ const ManageUsers: React.FC = () => {
       }
 
       console.log('Creating user with comprehensive data:', userData);
-      
+
       // Final check: ensure we have a generated userId (if not, fetch one now)
       if (!formData.userId) {
         try {
@@ -2387,7 +2387,7 @@ const ManageUsers: React.FC = () => {
         email: serverEmail,
         role: serverRole
       });
-      
+
       toast.success('User created successfully with comprehensive details');
       setShowAddModal(false);
       resetForm();
@@ -2404,20 +2404,20 @@ const ManageUsers: React.FC = () => {
   const handleEditClick = (user: User) => {
     console.log('Editing user:', user); // Debug log to see the user structure
     setEditingUser(user);
-    
+
     // Extract user data based on the actual backend structure
     const userData = user as any;
-    
+
     setFormData({
       // Generated Information - show existing user ID
       userId: userData.userId || userData._id || '',
       generatedPassword: '', // Never show password
-      
+
       // Basic Information (SATS Standard)
       enrollmentNo: userData.enrollmentNo || '',
       tcNo: userData.tcNo || '',
       role: userData.role || 'student',
-      
+
       // Admission Details (SATS Standard)
       class: userData.academicInfo?.class || userData.studentDetails?.class || '',
       academicYear: userData.academicYear || '2024-2025',
@@ -2425,7 +2425,7 @@ const ManageUsers: React.FC = () => {
       mediumOfInstruction: userData.mediumOfInstruction || 'English',
       motherTongue: userData.motherTongue || '',
       motherTongueOther: userData.motherTongueOther || '',
-      
+
       // Student Details (SATS Standard)
       name: userData.name?.displayName || userData.name?.firstName + ' ' + userData.name?.lastName || userData.name || '',
       studentNameKannada: userData.studentNameKannada || '',
@@ -2435,7 +2435,7 @@ const ManageUsers: React.FC = () => {
       ageYears: userData.ageYears || 0,
       ageMonths: userData.ageMonths || 0,
       gender: userData.gender || 'male',
-      
+
       // Family Details (SATS Standard)
       fatherName: userData.fatherName || '',
       fatherNameKannada: userData.fatherNameKannada || '',
@@ -2443,13 +2443,13 @@ const ManageUsers: React.FC = () => {
       motherName: userData.motherName || '',
       motherNameKannada: userData.motherNameKannada || '',
       motherAadhaar: userData.motherAadhaar || '',
-      
+
       // Identity Documents (SATS Standard)
       studentAadhaar: userData.studentAadhaar || userData.aadhaarNumber || '',
       studentCasteCertNo: userData.studentCasteCertNo || '',
       fatherCasteCertNo: userData.fatherCasteCertNo || '',
       motherCasteCertNo: userData.motherCasteCertNo || '',
-      
+
       // Caste and Category (SATS Standard)
       studentCaste: userData.studentCaste || userData.caste || '',
       studentCasteOther: userData.studentCasteOther || '',
@@ -2461,17 +2461,17 @@ const ManageUsers: React.FC = () => {
       socialCategoryOther: userData.socialCategoryOther || '',
       religion: userData.religion || '',
       religionOther: userData.religionOther || '',
-      
+
       // Economic Status (SATS Standard)
       belongingToBPL: userData.belongingToBPL || 'No',
       bplCardNo: userData.bplCardNo || userData.bplCardNumber || '',
       bhagyalakshmiBondNo: userData.bhagyalakshmiBondNo || '',
-      
+
       // Special Needs (SATS Standard)
       disability: userData.disability || userData.specialNeeds || 'Not Applicable',
       disabilityOther: userData.disabilityOther || '',
       isRTECandidate: userData.isRTECandidate || 'No',
-      
+
       // Address Information (SATS Standard)
       address: userData.address?.permanent?.street || userData.address || '',
       cityVillageTown: userData.cityVillageTown || userData.city || userData.address?.permanent?.city || '',
@@ -2480,7 +2480,7 @@ const ManageUsers: React.FC = () => {
       district: userData.district || userData.address?.permanent?.district || '',
       pinCode: userData.pinCode || userData.address?.permanent?.pincode || '',
       state: userData.state || userData.address?.permanent?.state || '',
-      
+
       // Communication Details (SATS Standard)
       studentMobile: userData.studentMobile || userData.contact?.primaryPhone || userData.phone || '',
       studentEmail: userData.studentEmail || userData.email || '',
@@ -2488,20 +2488,20 @@ const ManageUsers: React.FC = () => {
       fatherEmail: userData.fatherEmail || '',
       motherMobile: userData.motherMobile || userData.motherPhone || '',
       motherEmail: userData.motherEmail || '',
-      
+
       // School and Banking (SATS Standard)
       schoolAdmissionDate: userData.schoolAdmissionDate || userData.admissionDate || '',
       bankName: userData.bankName || '',
       bankAccountNo: userData.bankAccountNo || userData.bankAccountNumber || '',
       bankIFSC: userData.bankIFSC || userData.ifscCode || '',
-      
+
       // Legacy Compatibility Fields
       email: userData.email || '',
       phone: userData.contact?.primaryPhone || userData.phone || '',
       city: userData.address?.permanent?.city || '',
       nationality: userData.nationality || 'Indian',
       bloodGroup: userData.bloodGroup || '',
-      
+
       // Family Information (Legacy)
       fatherPhone: userData.fatherPhone || '',
       fatherOccupation: userData.fatherOccupation || '',
@@ -2512,75 +2512,75 @@ const ManageUsers: React.FC = () => {
       fatherEducation: userData.fatherEducation || '',
       motherEducation: userData.motherEducation || '',
       familyIncome: userData.familyIncome || '',
-      
+
       // Emergency Contact
       emergencyContactName: userData.emergencyContactName || '',
       emergencyContactPhone: userData.contact?.emergencyContact || '',
       emergencyContactRelation: userData.emergencyContactRelation || '',
       alternatePhone: userData.contact?.secondaryPhone || '',
       parentEmail: userData.parentEmail || '',
-      
+
       // Academic Information (Legacy)
       rollNumber: userData.academicInfo?.rollNumber || userData.rollNumber || '',
       admissionNumber: userData.academicInfo?.admissionNumber || userData.admissionNumber || '',
-      admissionDate: userData.academicInfo?.admissionDate ? 
-        new Date(userData.academicInfo.admissionDate).toISOString().split('T')[0] : 
+      admissionDate: userData.academicInfo?.admissionDate ?
+        new Date(userData.academicInfo.admissionDate).toISOString().split('T')[0] :
         userData.admissionDate || '',
       previousSchool: userData.previousSchool || '',
       previousClass: userData.previousClass || '',
       tcNumber: userData.tcNumber || '',
       migrationCertificate: userData.migrationCertificate || '',
-      
+
       // Legacy Identity Documents
       aadhaarNumber: userData.aadhaarNumber || '',
       birthCertificateNumber: userData.birthCertificateNumber || '',
       rationCardNumber: userData.rationCardNumber || '',
       voterIdNumber: userData.voterIdNumber || '',
       passportNumber: userData.passportNumber || '',
-      
+
       // Legacy Caste and Category
       caste: userData.caste || '',
       casteOther: userData.casteOther || '',
       category: userData.category || '',
       categoryOther: userData.categoryOther || '',
       subCaste: userData.subCaste || '',
-      
+
       // Economic Status (Legacy)
       economicStatus: userData.economicStatus || '',
       bplCardNumber: userData.bplCardNumber || '',
       scholarshipDetails: userData.scholarshipDetails || '',
-      
+
       // Special Needs (Legacy)
       specialNeeds: userData.specialNeeds || '',
       disabilityType: userData.disabilityType || '',
       disabilityCertificate: userData.disabilityCertificate || '',
       medicalConditions: userData.medicalConditions || '',
-      
+
       // Address Information (Additional)
       permanentAddress: userData.address?.permanent?.street || '',
       currentAddress: userData.address?.current?.street || '',
       village: userData.village || '',
-      
+
       // Banking Information (Legacy)
       bankAccountNumber: userData.bankAccountNumber || '',
       ifscCode: userData.ifscCode || '',
       accountHolderName: userData.accountHolderName || '',
-      
+
       // Teacher Information
-      subjects: Array.isArray(userData.teacherDetails?.subjects) ? 
-        userData.teacherDetails.subjects.join(', ') : 
+      subjects: Array.isArray(userData.teacherDetails?.subjects) ?
+        userData.teacherDetails.subjects.join(', ') :
         userData.teacherDetails?.subjects || userData.subjects || '',
       qualification: userData.teacherDetails?.qualification || userData.qualification || '',
       experience: userData.teacherDetails?.experience || userData.experience || 0,
       employeeId: userData.teacherDetails?.employeeId || userData.employeeId || '',
       department: userData.department || '',
       joiningDate: userData.joiningDate || '',
-      
+
       // Admin Information
       adminLevel: userData.adminLevel || '',
       accessLevel: userData.accessLevel || ''
     });
-    
+
     setShowEditModal(true);
   };
 
@@ -2590,7 +2590,7 @@ const ManageUsers: React.FC = () => {
 
     try {
       setLoading(true);
-      
+
       // Check if email is being changed and if it already exists
       if (formData.email !== editingUser.email) {
         const emailExists = await checkEmailExists(formData.email);
@@ -2600,17 +2600,17 @@ const ManageUsers: React.FC = () => {
           return;
         }
       }
-      
+
       // Use the same token retrieval method as Dashboard
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P';
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
       }
-      
+
       // Build comprehensive update data
       const updateData: any = {
         firstName: formData.firstName,
@@ -2630,11 +2630,11 @@ const ManageUsers: React.FC = () => {
         updateData.gender = formData.gender;
         updateData.admissionDate = formData.admissionDate;
         updateData.admissionNumber = formData.admissionNumber;
-        
+
         // Admission Details
         updateData.motherTongue = formData.motherTongue;
         updateData.motherTongueOther = formData.motherTongueOther;
-        
+
         // Family Information
         updateData.fatherName = formData.fatherName;
         updateData.motherName = formData.motherName;
@@ -2647,7 +2647,7 @@ const ManageUsers: React.FC = () => {
         updateData.fatherEducation = formData.fatherEducation;
         updateData.motherEducation = formData.motherEducation;
         updateData.familyIncome = formData.familyIncome;
-        
+
         // Karnataka SATS fields - Caste and Category
         updateData.studentCaste = formData.studentCaste;
         updateData.studentCasteOther = formData.studentCasteOther;
@@ -2659,12 +2659,12 @@ const ManageUsers: React.FC = () => {
         updateData.socialCategoryOther = formData.socialCategoryOther;
         updateData.religion = formData.religion;
         updateData.religionOther = formData.religionOther;
-        
+
         // Special Needs
         updateData.disability = formData.disability;
         updateData.disabilityOther = formData.disabilityOther;
         updateData.isRTECandidate = formData.isRTECandidate;
-        
+
         // Karnataka SATS fields
         updateData.aadhaarNumber = formData.aadhaarNumber;
         updateData.birthCertificateNumber = formData.birthCertificateNumber;
@@ -2735,7 +2735,7 @@ const ManageUsers: React.FC = () => {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P';
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
@@ -2743,7 +2743,7 @@ const ManageUsers: React.FC = () => {
 
       const newStatus = !currentStatus;
       const action = newStatus ? 'activate' : 'deactivate';
-      
+
       await schoolUserAPI.toggleStatus(schoolCode, userId, newStatus, token);
       toast.success(`User ${action}d successfully`);
       fetchUsers();
@@ -2755,7 +2755,7 @@ const ManageUsers: React.FC = () => {
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     console.log('Delete button clicked for user:', userId, userName);
-    
+
     if (!window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
       console.log('User cancelled deletion');
       return;
@@ -2766,9 +2766,9 @@ const ManageUsers: React.FC = () => {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P';
-      
+
       console.log('Delete request details:', { schoolCode, userId, hasToken: !!token });
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
@@ -2777,7 +2777,7 @@ const ManageUsers: React.FC = () => {
       console.log('Calling delete API...');
       await schoolUserAPI.deleteUser(schoolCode, userId, token);
       console.log('Delete API successful');
-      
+
       toast.success('User deleted successfully');
       fetchUsers();
     } catch (error: any) {
@@ -2791,38 +2791,38 @@ const ManageUsers: React.FC = () => {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
       const schoolCode = user?.schoolCode || 'P';
-      
+
       if (!token) {
         toast.error('Authentication required');
         return;
       }
-      
+
       // Make API call to reset password
       const response = await schoolUserAPI.resetPassword(schoolCode, userId, token);
-      
+
       // Find the user to get email and role (try both userId and _id)
       const resetUser = users.find(u => u.userId === userId || u._id === userId);
-      
+
       console.log('Reset password - userId passed:', userId);
       console.log('Reset password - found user:', resetUser);
-      
+
       // Show credentials modal with new password from response
       if (response.data && resetUser) {
         // Always prioritize the actual userId from the user object
         const displayUserId = resetUser.userId || resetUser._id;
-        
+
         setShowResetCredentials({
           userId: displayUserId,
           password: response.data.password,
           email: response.data.email || resetUser.email || 'No email provided',
           role: resetUser.role || 'Unknown'
         });
-        
+
         console.log('Reset password - showing credentials for userId:', displayUserId);
       } else {
         toast.success('Password reset successfully. New password sent to user email.');
       }
-      
+
       console.log('Password reset for user:', userId);
     } catch (error: any) {
       console.error('Error resetting password:', error);
@@ -2832,7 +2832,7 @@ const ManageUsers: React.FC = () => {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = user.role === activeTab;
     const matchesGrade = activeTab !== 'student' || selectedGrade === 'all' || user.studentDetails?.class === selectedGrade;
     const matchesSection = activeTab !== 'student' || selectedSection === 'all' || user.studentDetails?.section === selectedSection;
@@ -2936,24 +2936,24 @@ const ManageUsers: React.FC = () => {
   const exportUsers = async () => {
     try {
       const schoolCode = user?.schoolCode || 'P';
-      const response = await exportImportAPI.exportUsers(schoolCode, { 
+      const response = await exportImportAPI.exportUsers(schoolCode, {
         role: activeTab,
         format: 'csv'
       });
-      
+
       // Create blob and download
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
-    const currentDate = new Date().toISOString().split('T')[0];
+
+      const currentDate = new Date().toISOString().split('T')[0];
       link.download = `${activeTab}_users_${currentDate}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success(`${filteredUsers.length} ${activeTab} records exported successfully!`);
     } catch (error) {
       console.error('Export error:', error);
@@ -2966,20 +2966,20 @@ const ManageUsers: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'P';
       const response = await exportImportAPI.generateTemplate(schoolCode, role);
-      
+
       // Create blob and download
       const blob = new Blob([response.data], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      
+
       const currentDate = new Date().toISOString().split('T')[0];
       link.download = `${role}_import_template_${currentDate}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success(`${role} template downloaded successfully!`);
     } catch (error) {
       console.error('Template generation error:', error);
@@ -2991,7 +2991,7 @@ const ManageUsers: React.FC = () => {
   const generateTemplateOld = (role: 'student' | 'teacher' | 'admin') => {
     const currentDate = new Date().toISOString().split('T')[0];
     const filename = `${role}_import_template_${currentDate}.csv`;
-    
+
     let headers: string[] = [];
     let sampleRow: string[] = [];
 
@@ -3000,68 +3000,68 @@ const ManageUsers: React.FC = () => {
       headers = [
         // Basic Information
         'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
-        
+
         // Student Academic Details
         'Student ID', 'Admission Number', 'Roll Number', 'Class', 'Section', 'Academic Year', 'Admission Date', 'Admission Class',
         'Stream', 'Electives', 'Enrollment No', 'TC No',
-        
+
         // Personal Information - Basic
         'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Religion Other',
         'Caste', 'Caste Other', 'Category', 'Category Other', 'Mother Tongue', 'Mother Tongue Other', 'Languages Known',
-        
+
         // Karnataka SATS Specific Personal Fields
         'Student Name Kannada', 'Age Years', 'Age Months', 'Social Category', 'Social Category Other',
         'Student Caste', 'Student Caste Other', 'Student Aadhaar', 'Student Caste Certificate No',
         'Belonging to BPL', 'BPL Card No', 'Bhagyalakshmi Bond No',
         'Disability', 'Disability Other', 'Is RTE Candidate*',
-        
+
         // Address Information - Current
         'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
         'Current Taluka', 'Current Urban Rural',
-        
+
         // Address Information - Permanent  
         'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
         'Permanent Taluka', 'Permanent Urban Rural',
-        
+
         // Father Information
         'Father Name', 'Father Name Kannada', 'Father Occupation', 'Father Qualification', 'Father Phone', 'Father Email',
         'Father Work Address', 'Father Annual Income', 'Father Aadhaar', 'Father Caste', 'Father Caste Other', 'Father Caste Certificate No',
-        
+
         // Mother Information
         'Mother Name', 'Mother Name Kannada', 'Mother Occupation', 'Mother Qualification', 'Mother Phone', 'Mother Email',
         'Mother Work Address', 'Mother Annual Income', 'Mother Aadhaar', 'Mother Caste', 'Mother Caste Other', 'Mother Caste Certificate No',
-        
+
         // Guardian Information
         'Guardian Name', 'Guardian Relationship', 'Guardian Phone', 'Guardian Email', 'Guardian Address', 'Guardian Is Emergency Contact',
-        
+
         // Siblings Information (up to 3 siblings)
         'Sibling 1 Name', 'Sibling 1 Age', 'Sibling 1 Relationship', 'Sibling 1 School', 'Sibling 1 Class',
         'Sibling 2 Name', 'Sibling 2 Age', 'Sibling 2 Relationship', 'Sibling 2 School', 'Sibling 2 Class',
         'Sibling 3 Name', 'Sibling 3 Age', 'Sibling 3 Relationship', 'Sibling 3 School', 'Sibling 3 Class',
-        
+
         // Medical Information
         'Allergies', 'Chronic Conditions', 'Medications', 'Emergency Doctor Name', 'Emergency Hospital Name', 'Emergency Hospital Phone',
         'Last Medical Checkup', 'Vaccination Status',
-        
+
         // Transportation
         'Transport Mode', 'Bus Route', 'Pickup Point', 'Drop Point', 'Pickup Time', 'Drop Time',
-        
+
         // Financial Information
         'Fee Category', 'Concession Type', 'Concession Percentage', 'Scholarship Name', 'Scholarship Amount', 'Scholarship Provider',
-        
+
         // Banking Information
         'Bank Name', 'Account Number', 'IFSC Code', 'Account Holder Name',
-        
+
         // Previous School Information
         'Previous School Name', 'Previous School Board', 'Previous School Last Class', 'Previous School TC Number', 'Previous School TC Date', 'Reason for Transfer',
-        
+
         // Emergency Contacts (additional)
         'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address', 'Emergency Contact 1 Is Primary',
         'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address', 'Emergency Contact 2 Is Primary',
-        
+
         // Academic History (current year)
         'Current Academic Year', 'Current Class Result', 'Current Percentage', 'Current Rank', 'Current Attendance',
-        
+
         // System Information
         'Status', 'Created Date', 'Last Modified', 'Source', 'Import Batch', 'Tags', 'Notes'
       ];
@@ -3086,7 +3086,7 @@ const ManageUsers: React.FC = () => {
         const previousSchool = academic.previousSchool || {};
         const academicHistory = studentDetails.academicHistory || [];
         const currentAcademic = academicHistory[0] || {};
-        
+
         return [
           // Basic Information
           userData.userId || user._id || '',
@@ -3095,7 +3095,7 @@ const ManageUsers: React.FC = () => {
           name.lastName || '',
           user.email || '',
           contact.primaryPhone || contact.phone || user.phone || '',
-          
+
           // Student Academic Details
           studentDetails.studentId || '',
           studentDetails.admissionNumber || academic.admissionNumber || '',
@@ -3109,7 +3109,7 @@ const ManageUsers: React.FC = () => {
           Array.isArray(academic.electives) ? academic.electives.join(', ') : '',
           academic.enrollmentNo || '',
           academic.tcNo || '',
-          
+
           // Personal Information - Basic
           personal.dateOfBirth ? new Date(personal.dateOfBirth).toISOString().split('T')[0] : '',
           personal.placeOfBirth || '',
@@ -3125,7 +3125,7 @@ const ManageUsers: React.FC = () => {
           personal.motherTongue || '',
           personal.motherTongueOther || '',
           Array.isArray(personal.languagesKnown) ? personal.languagesKnown.join(', ') : '',
-          
+
           // Karnataka SATS Specific Personal Fields
           personal.studentNameKannada || '',
           personal.ageYears || '',
@@ -3141,7 +3141,7 @@ const ManageUsers: React.FC = () => {
           personal.bhagyalakshmiBondNo || '',
           personal.disability || '',
           personal.disabilityOther || '',
-          
+
           // Address Information - Current
           address.current?.addressLine1 || address.addressLine1 || '',
           address.current?.addressLine2 || address.addressLine2 || '',
@@ -3151,7 +3151,7 @@ const ManageUsers: React.FC = () => {
           address.current?.pinCode || address.pinCode || '',
           address.current?.taluka || address.taluka || '',
           address.current?.urbanRural || '',
-          
+
           // Address Information - Permanent  
           address.permanent?.addressLine1 || '',
           address.permanent?.addressLine2 || '',
@@ -3161,7 +3161,7 @@ const ManageUsers: React.FC = () => {
           address.permanent?.pinCode || '',
           address.permanent?.taluka || '',
           address.permanent?.urbanRural || '',
-          
+
           // Father Information
           father.name || '',
           father.nameKannada || '',
@@ -3175,7 +3175,7 @@ const ManageUsers: React.FC = () => {
           father.caste || '',
           father.casteOther || '',
           father.casteCertNo || '',
-          
+
           // Mother Information
           mother.name || '',
           mother.nameKannada || '',
@@ -3189,7 +3189,7 @@ const ManageUsers: React.FC = () => {
           mother.caste || '',
           mother.casteOther || '',
           mother.casteCertNo || '',
-          
+
           // Guardian Information
           guardian.name || '',
           guardian.relationship || '',
@@ -3197,7 +3197,7 @@ const ManageUsers: React.FC = () => {
           guardian.email || '',
           guardian.address || '',
           guardian.isEmergencyContact || '',
-          
+
           // Siblings Information (up to 3 siblings)
           siblings[0]?.name || '',
           siblings[0]?.age || '',
@@ -3214,7 +3214,7 @@ const ManageUsers: React.FC = () => {
           siblings[2]?.relationship || '',
           siblings[2]?.school || '',
           siblings[2]?.class || '',
-          
+
           // Medical Information
           Array.isArray(medical.allergies) ? medical.allergies.join(', ') : '',
           Array.isArray(medical.chronicConditions) ? medical.chronicConditions.join(', ') : '',
@@ -3224,7 +3224,7 @@ const ManageUsers: React.FC = () => {
           medical.emergencyMedicalContact?.phone || '',
           medical.lastMedicalCheckup ? new Date(medical.lastMedicalCheckup).toISOString().split('T')[0] : '',
           Array.isArray(medical.vaccinationStatus) ? medical.vaccinationStatus.map((v: any) => v.vaccine).join(', ') : '',
-          
+
           // Transportation
           transport.mode || '',
           transport.busRoute || '',
@@ -3232,7 +3232,7 @@ const ManageUsers: React.FC = () => {
           transport.dropPoint || '',
           transport.pickupTime || '',
           transport.dropTime || '',
-          
+
           // Financial Information
           financial.feeCategory || '',
           financial.concessionType || '',
@@ -3240,13 +3240,13 @@ const ManageUsers: React.FC = () => {
           financial.scholarshipDetails?.name || '',
           financial.scholarshipDetails?.amount || '',
           financial.scholarshipDetails?.provider || '',
-          
+
           // Banking Information
           bankDetails.bankName || '',
           bankDetails.accountNumber || '',
           bankDetails.ifscCode || '',
           bankDetails.accountHolderName || '',
-          
+
           // Previous School Information
           previousSchool.name || '',
           previousSchool.board || '',
@@ -3254,7 +3254,7 @@ const ManageUsers: React.FC = () => {
           previousSchool.tcNumber || '',
           previousSchool.tcDate ? new Date(previousSchool.tcDate).toISOString().split('T')[0] : '',
           previousSchool.reasonForTransfer || '',
-          
+
           // Emergency Contacts (additional - getting from parentDetails if available)
           userData.parentDetails?.emergencyContacts?.[0]?.name || '',
           userData.parentDetails?.emergencyContacts?.[0]?.relationship || '',
@@ -3266,14 +3266,14 @@ const ManageUsers: React.FC = () => {
           userData.parentDetails?.emergencyContacts?.[1]?.phone || '',
           userData.parentDetails?.emergencyContacts?.[1]?.address || '',
           userData.parentDetails?.emergencyContacts?.[1]?.isPrimary || '',
-          
+
           // Academic History (current year)
           currentAcademic.academicYear || '',
           currentAcademic.result || '',
           currentAcademic.percentage || '',
           currentAcademic.rank || '',
           currentAcademic.attendance || '',
-          
+
           // System Information
           user.isActive ? 'Active' : 'Inactive',
           new Date(user.createdAt).toLocaleDateString(),
@@ -3290,64 +3290,64 @@ const ManageUsers: React.FC = () => {
       headers = [
         // Basic Information
         'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
-        
+
         // Personal Information
         'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Caste', 'Category',
         'Mother Tongue', 'Languages Known', 'Marital Status', 'Spouse Name',
-        
+
         // Address Information - Current
         'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
-        
+
         // Address Information - Permanent  
         'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
-        
+
         // Identity Documents
         'Aadhaar Number', 'PAN Number', 'Passport Number', 'Driving License',
-        
+
         // Professional Information
         'Employee ID', 'Joining Date', 'Designation', 'Department',
-        
+
         // Qualification Information
         'Highest Qualification', 'Specialization', 'University', 'Qualification Year', 'Teaching License',
-        
+
         // Additional Certificates (up to 3)
         'Certificate 1 Name', 'Certificate 1 Institution', 'Certificate 1 Year',
         'Certificate 2 Name', 'Certificate 2 Institution', 'Certificate 2 Year',
         'Certificate 3 Name', 'Certificate 3 Institution', 'Certificate 3 Year',
-        
+
         // Experience Information
-        'Total Experience (Years)', 'Experience at Current School (Years)', 
-        
+        'Total Experience (Years)', 'Experience at Current School (Years)',
+
         // Previous Schools (up to 3)
         'Previous School 1 Name', 'Previous School 1 Duration', 'Previous School 1 Position', 'Previous School 1 Reason for Leaving',
         'Previous School 2 Name', 'Previous School 2 Duration', 'Previous School 2 Position', 'Previous School 2 Reason for Leaving',
         'Previous School 3 Name', 'Previous School 3 Duration', 'Previous School 3 Position', 'Previous School 3 Reason for Leaving',
-        
+
         // Subject and Class Information
         'Primary Subject 1 Code', 'Primary Subject 1 Name', 'Primary Subject 1 Classes', 'Primary Subject 1 Is Primary',
         'Secondary Subject 2 Code', 'Secondary Subject 2 Name', 'Secondary Subject 2 Classes', 'Secondary Subject 2 Is Primary',
         'Secondary Subject 3 Code', 'Secondary Subject 3 Name', 'Secondary Subject 3 Classes', 'Secondary Subject 3 Is Primary',
         'Class Teacher Of', 'Responsibilities',
-        
+
         // Work Schedule
         'Working Days', 'Working Hours Start', 'Working Hours End', 'Max Periods Per Day', 'Max Periods Per Week',
-        
+
         // Performance Review (Latest)
         'Latest Review Academic Year', 'Latest Review Rating', 'Latest Review Comments',
-        
+
         // Salary Information
         'Basic Salary', 'HRA Allowance', 'Transport Allowance', 'Medical Allowance', 'Other Allowances', 'Currency',
-        
+
         // Banking Information
         'Bank Name', 'Account Number', 'IFSC Code', 'Branch Name', 'Account Holder Name',
-        
+
         // Emergency Contact Information
         'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address',
         'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address',
-        
+
         // Administrative
         'Assigned By', 'Admin Role Level', 'Permissions', 'Last Login',
-        
+
         // System Information
         'Status', 'Created Date', 'Last Modified', 'Source', 'Import Batch', 'Tags', 'Notes'
       ];
@@ -3373,7 +3373,7 @@ const ManageUsers: React.FC = () => {
         const allowances = salary.allowances || [];
         const bankDetails = teacherDetails.bankDetails || {};
         const emergencyContacts = userData.emergencyContacts || [];
-        
+
         return [
           // Basic Information
           userData.userId || user._id || '',
@@ -3382,7 +3382,7 @@ const ManageUsers: React.FC = () => {
           name.lastName || '',
           user.email || '',
           contact.primaryPhone || contact.phone || user.phone || '',
-          
+
           // Personal Information
           personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth).toISOString().split('T')[0] : '',
           personalInfo.placeOfBirth || '',
@@ -3396,7 +3396,7 @@ const ManageUsers: React.FC = () => {
           Array.isArray(personalInfo.languagesKnown) ? personalInfo.languagesKnown.join(', ') : '',
           personalInfo.maritalStatus || '',
           personalInfo.spouseName || '',
-          
+
           // Address Information - Current
           address.current?.addressLine1 || address.addressLine1 || '',
           address.current?.addressLine2 || address.addressLine2 || '',
@@ -3404,7 +3404,7 @@ const ManageUsers: React.FC = () => {
           address.current?.district || address.district || '',
           address.current?.state || address.state || '',
           address.current?.pinCode || address.pinCode || '',
-          
+
           // Address Information - Permanent  
           address.permanent?.addressLine1 || '',
           address.permanent?.addressLine2 || '',
@@ -3412,26 +3412,26 @@ const ManageUsers: React.FC = () => {
           address.permanent?.district || '',
           address.permanent?.state || '',
           address.permanent?.pinCode || '',
-          
+
           // Identity Documents
           identityDocs.aadhaarNumber || '',
           identityDocs.panNumber || '',
           identityDocs.passportNumber || '',
           identityDocs.drivingLicense || '',
-          
+
           // Professional Information
           teacherDetails.employeeId || '',
           teacherDetails.joiningDate ? new Date(teacherDetails.joiningDate).toISOString().split('T')[0] : '',
           userData.designation || '',
           userData.department || '',
-          
+
           // Qualification Information
           qualification.highest || '',
           qualification.specialization || '',
           qualification.university || '',
           qualification.year || '',
           qualification.teachingLicense || '',
-          
+
           // Additional Certificates (up to 3)
           certificates[0]?.name || '',
           certificates[0]?.institution || '',
@@ -3442,11 +3442,11 @@ const ManageUsers: React.FC = () => {
           certificates[2]?.name || '',
           certificates[2]?.institution || '',
           certificates[2]?.year || '',
-          
+
           // Experience Information
           experience.total || '',
           experience.atCurrentSchool || '',
-          
+
           // Previous Schools (up to 3)
           previousSchools[0]?.schoolName || '',
           previousSchools[0]?.duration || '',
@@ -3460,7 +3460,7 @@ const ManageUsers: React.FC = () => {
           previousSchools[2]?.duration || '',
           previousSchools[2]?.position || '',
           previousSchools[2]?.reasonForLeaving || '',
-          
+
           // Subject and Class Information
           subjects[0]?.subjectCode || '',
           subjects[0]?.subjectName || '',
@@ -3476,19 +3476,19 @@ const ManageUsers: React.FC = () => {
           subjects[2]?.isPrimary || '',
           teacherDetails.classTeacherOf || '',
           Array.isArray(responsibilities) ? responsibilities.join(', ') : '',
-          
+
           // Work Schedule
           Array.isArray(workSchedule.workingDays) ? workSchedule.workingDays.join(', ') : '',
           workSchedule.workingHours?.start || '',
           workSchedule.workingHours?.end || '',
           workSchedule.maxPeriodsPerDay || '',
           workSchedule.maxPeriodsPerWeek || '',
-          
+
           // Performance Review (Latest)
           latestReview.academicYear || '',
           latestReview.rating || '',
           latestReview.comments || '',
-          
+
           // Salary Information
           salary.basic || '',
           allowances.find((a: any) => a.type === 'HRA')?.amount || '',
@@ -3496,14 +3496,14 @@ const ManageUsers: React.FC = () => {
           allowances.find((a: any) => a.type === 'Medical')?.amount || '',
           allowances.filter((a: any) => !['HRA', 'Transport', 'Medical'].includes(a.type)).map((a: any) => `${a.type}: ${a.amount}`).join(', ') || '',
           salary.currency || '',
-          
+
           // Banking Information
           bankDetails.bankName || '',
           bankDetails.accountNumber || '',
           bankDetails.ifscCode || '',
           bankDetails.branchName || '',
           bankDetails.accountHolderName || name.firstName && name.lastName ? `${name.firstName} ${name.lastName}` : '',
-          
+
           // Emergency Contact Information
           emergencyContacts[0]?.name || '',
           emergencyContacts[0]?.relationship || '',
@@ -3513,13 +3513,13 @@ const ManageUsers: React.FC = () => {
           emergencyContacts[1]?.relationship || '',
           emergencyContacts[1]?.phone || '',
           emergencyContacts[1]?.address || '',
-          
+
           // Administrative
           teacherDetails.assignedBy || '',
           userData.adminRole || 'teacher',
           Array.isArray(userData.permissions) ? userData.permissions.join(', ') : '',
           userData.lastLogin ? new Date(userData.lastLogin).toLocaleDateString() : '',
-          
+
           // System Information
           user.isActive ? 'Active' : 'Inactive',
           new Date(user.createdAt).toLocaleDateString(),
@@ -3536,58 +3536,58 @@ const ManageUsers: React.FC = () => {
       headers = [
         // Basic Information
         'User ID', 'First Name', 'Middle Name', 'Last Name', 'Email', 'Phone',
-        
+
         // Personal Information
         'Date of Birth', 'Place of Birth', 'Gender', 'Blood Group', 'Nationality', 'Religion', 'Caste', 'Category',
         'Mother Tongue', 'Languages Known', 'Marital Status', 'Spouse Name',
-        
+
         // Address Information - Current
         'Current Address Line 1', 'Current Address Line 2', 'Current City', 'Current District', 'Current State', 'Current Pin Code',
-        
+
         // Address Information - Permanent  
         'Permanent Address Line 1', 'Permanent Address Line 2', 'Permanent City', 'Permanent District', 'Permanent State', 'Permanent Pin Code',
-        
+
         // Identity Documents
         'Aadhaar Number', 'PAN Number', 'Passport Number', 'Driving License',
-        
+
         // Administrative Information
         'Admin ID', 'Admin Level', 'Designation', 'Department', 'Joining Date', 'Reporting Manager',
-        
+
         // Permissions and Access
         'Permissions', 'Access Level', 'Can Manage Users', 'Can Manage Academics', 'Can Manage Finance', 'Can Manage Reports',
         'Can Manage School Settings', 'Can View All Data', 'Can Export Data', 'Can Import Data',
-        
+
         // Responsibilities
         'Primary Responsibilities', 'Secondary Responsibilities', 'Committees', 'Special Duties',
-        
+
         // Professional Background
         'Highest Qualification', 'Specialization', 'University', 'Qualification Year', 'Total Experience (Years)',
         'Administrative Experience (Years)', 'Education Sector Experience (Years)',
-        
+
         // Previous Experience (up to 3)
         'Previous Organization 1', 'Previous Position 1', 'Previous Duration 1', 'Previous Responsibilities 1',
         'Previous Organization 2', 'Previous Position 2', 'Previous Duration 2', 'Previous Responsibilities 2',
         'Previous Organization 3', 'Previous Position 3', 'Previous Duration 3', 'Previous Responsibilities 3',
-        
+
         // Work Schedule and Availability
         'Working Days', 'Working Hours Start', 'Working Hours End', 'Overtime Eligible', 'On-Call Duties',
-        
+
         // Salary Information
         'Basic Salary', 'HRA Allowance', 'Transport Allowance', 'Medical Allowance', 'Management Allowance', 'Other Allowances', 'Currency',
-        
+
         // Banking Information
         'Bank Name', 'Account Number', 'IFSC Code', 'Branch Name', 'Account Holder Name',
-        
+
         // Emergency Contact Information
         'Emergency Contact 1 Name', 'Emergency Contact 1 Relationship', 'Emergency Contact 1 Phone', 'Emergency Contact 1 Address',
         'Emergency Contact 2 Name', 'Emergency Contact 2 Relationship', 'Emergency Contact 2 Phone', 'Emergency Contact 2 Address',
-        
+
         // System Access
         'Login Permissions', 'System Role', 'Multi-School Access', 'API Access', 'Reporting Access',
-        
+
         // Performance and Review
         'Latest Review Date', 'Latest Review Rating', 'Latest Review Comments', 'Goals and Targets',
-        
+
         // System Information
         'Status', 'Created Date', 'Last Modified', 'Last Login', 'Source', 'Import Batch', 'Tags', 'Notes'
       ];
@@ -3612,7 +3612,7 @@ const ManageUsers: React.FC = () => {
         const emergencyContacts = userData.emergencyContacts || [];
         const systemAccess = adminDetails.systemAccess || {};
         const performanceReview = adminDetails.performanceReview || {};
-        
+
         return [
           // Basic Information
           userData.userId || user._id || '',
@@ -3621,7 +3621,7 @@ const ManageUsers: React.FC = () => {
           name.lastName || '',
           user.email || '',
           contact.primaryPhone || contact.phone || user.phone || '',
-          
+
           // Personal Information
           personalInfo.dateOfBirth ? new Date(personalInfo.dateOfBirth).toISOString().split('T')[0] : '',
           personalInfo.placeOfBirth || '',
@@ -3635,7 +3635,7 @@ const ManageUsers: React.FC = () => {
           Array.isArray(personalInfo.languagesKnown) ? personalInfo.languagesKnown.join(', ') : '',
           personalInfo.maritalStatus || '',
           personalInfo.spouseName || '',
-          
+
           // Address Information - Current
           address.current?.addressLine1 || address.addressLine1 || '',
           address.current?.addressLine2 || address.addressLine2 || '',
@@ -3643,7 +3643,7 @@ const ManageUsers: React.FC = () => {
           address.current?.district || address.district || '',
           address.current?.state || address.state || '',
           address.current?.pinCode || address.pinCode || '',
-          
+
           // Address Information - Permanent  
           address.permanent?.addressLine1 || '',
           address.permanent?.addressLine2 || '',
@@ -3651,13 +3651,13 @@ const ManageUsers: React.FC = () => {
           address.permanent?.district || '',
           address.permanent?.state || '',
           address.permanent?.pinCode || '',
-          
+
           // Identity Documents
           identityDocs.aadhaarNumber || '',
           identityDocs.panNumber || '',
           identityDocs.passportNumber || '',
           identityDocs.drivingLicense || '',
-          
+
           // Administrative Information
           adminDetails.adminId || '',
           adminDetails.adminLevel || 'Admin',
@@ -3665,7 +3665,7 @@ const ManageUsers: React.FC = () => {
           adminDetails.department || '',
           adminDetails.joiningDate ? new Date(adminDetails.joiningDate).toISOString().split('T')[0] : '',
           adminDetails.reportingManager || '',
-          
+
           // Permissions and Access
           Array.isArray(permissions.list) ? permissions.list.join(', ') : '',
           permissions.accessLevel || '',
@@ -3677,13 +3677,13 @@ const ManageUsers: React.FC = () => {
           permissions.canViewAllData || '',
           permissions.canExportData || '',
           permissions.canImportData || '',
-          
+
           // Responsibilities
           Array.isArray(responsibilities.primary) ? responsibilities.primary.join(', ') : '',
           Array.isArray(responsibilities.secondary) ? responsibilities.secondary.join(', ') : '',
           Array.isArray(responsibilities.committees) ? responsibilities.committees.join(', ') : '',
           Array.isArray(responsibilities.specialDuties) ? responsibilities.specialDuties.join(', ') : '',
-          
+
           // Professional Background
           qualification.highest || '',
           qualification.specialization || '',
@@ -3692,7 +3692,7 @@ const ManageUsers: React.FC = () => {
           experience.totalYears || '',
           experience.administrativeYears || '',
           experience.educationSectorYears || '',
-          
+
           // Previous Experience (up to 3)
           previousExperience[0]?.organization || '',
           previousExperience[0]?.position || '',
@@ -3706,14 +3706,14 @@ const ManageUsers: React.FC = () => {
           previousExperience[2]?.position || '',
           previousExperience[2]?.duration || '',
           previousExperience[2]?.responsibilities || '',
-          
+
           // Work Schedule and Availability
           Array.isArray(workSchedule.workingDays) ? workSchedule.workingDays.join(', ') : '',
           workSchedule.workingHours?.start || '',
           workSchedule.workingHours?.end || '',
           workSchedule.overtimeEligible || '',
           Array.isArray(workSchedule.onCallDuties) ? workSchedule.onCallDuties.join(', ') : '',
-          
+
           // Salary Information
           salary.basic || '',
           allowances.find((a: any) => a.type === 'HRA')?.amount || '',
@@ -3722,14 +3722,14 @@ const ManageUsers: React.FC = () => {
           allowances.find((a: any) => a.type === 'Management')?.amount || '',
           allowances.filter((a: any) => !['HRA', 'Transport', 'Medical', 'Management'].includes(a.type)).map((a: any) => `${a.type}: ${a.amount}`).join(', ') || '',
           salary.currency || '',
-          
+
           // Banking Information
           bankDetails.bankName || '',
           bankDetails.accountNumber || '',
           bankDetails.ifscCode || '',
           bankDetails.branchName || '',
           bankDetails.accountHolderName || name.firstName && name.lastName ? `${name.firstName} ${name.lastName}` : '',
-          
+
           // Emergency Contact Information
           emergencyContacts[0]?.name || '',
           emergencyContacts[0]?.relationship || '',
@@ -3739,20 +3739,20 @@ const ManageUsers: React.FC = () => {
           emergencyContacts[1]?.relationship || '',
           emergencyContacts[1]?.phone || '',
           emergencyContacts[1]?.address || '',
-          
+
           // System Access
           systemAccess.loginPermissions || '',
           systemAccess.systemRole || '',
           systemAccess.multiSchoolAccess || '',
           systemAccess.apiAccess || '',
           systemAccess.reportingAccess || '',
-          
+
           // Performance and Review
           performanceReview.latestReviewDate ? new Date(performanceReview.latestReviewDate).toISOString().split('T')[0] : '',
           performanceReview.latestReviewRating || '',
           performanceReview.latestReviewComments || '',
           Array.isArray(performanceReview.goalsAndTargets) ? performanceReview.goalsAndTargets.join(', ') : '',
-          
+
           // System Information
           user.isActive ? 'Active' : 'Inactive',
           new Date(user.createdAt).toLocaleDateString(),
@@ -3767,7 +3767,7 @@ const ManageUsers: React.FC = () => {
     }
 
     // Create CSV content
-    const csvContent = "data:text/csv;charset=utf-8," + 
+    const csvContent = "data:text/csv;charset=utf-8," +
       headers.join(',') + '\n' +
       csvRows.join('\n');
 
@@ -3805,7 +3805,7 @@ const ManageUsers: React.FC = () => {
       try {
         const text = e.target?.result as string;
         const lines = text.split('\n').filter(line => line.trim());
-        
+
         if (lines.length < 2) {
           toast.error('CSV file must have at least a header row and one data row');
           return;
@@ -3813,12 +3813,12 @@ const ManageUsers: React.FC = () => {
 
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
         const dataRows = lines.slice(1);
-        
+
         const parsedData = dataRows.map((line, index) => {
           const values: string[] = [];
           let current = '';
           let inQuotes = false;
-          
+
           for (let i = 0; i < line.length; i++) {
             const char = line[i];
             if (char === '"') {
@@ -3850,11 +3850,11 @@ const ManageUsers: React.FC = () => {
   };
 
   const validateImportData = (data: any[], role: string) => {
-    const errors: Array<{row: number, error: string, data: any}> = [];
-    
+    const errors: Array<{ row: number, error: string, data: any }> = [];
+
     data.forEach((row, index) => {
       const rowErrors: string[] = [];
-      
+
       // Common validations
       if (!row['First Name*']) {
         rowErrors.push('First Name is required');
@@ -3886,7 +3886,7 @@ const ManageUsers: React.FC = () => {
         if (!row['Mother Name*']) {
           rowErrors.push('Mother Name is required for students');
         }
-        
+
         // Karnataka SATS specific validations
         if (row['Student Aadhaar'] && !/^\d{12}$/.test(row['Student Aadhaar'])) {
           rowErrors.push('Student Aadhaar must be 12 digits');
@@ -3909,7 +3909,7 @@ const ManageUsers: React.FC = () => {
         if (row['Age Months'] && (isNaN(parseInt(row['Age Months'])) || parseInt(row['Age Months']) < 0 || parseInt(row['Age Months']) > 11)) {
           rowErrors.push('Age Months must be a number between 0 and 11');
         }
-        
+
       } else if (role === 'teacher') {
         if (!row['Highest Qualification*']) {
           rowErrors.push('Highest Qualification is required for teachers');
@@ -3920,7 +3920,7 @@ const ManageUsers: React.FC = () => {
         if (row['Total Experience (Years)*'] && isNaN(parseInt(row['Total Experience (Years)*']))) {
           rowErrors.push('Total Experience must be a valid number');
         }
-        
+
         // Teacher specific validations
         if (row['Employee ID'] && !/^[A-Z]{3}_[A-Z]{3}\d{3}$/.test(row['Employee ID'])) {
           rowErrors.push('Employee ID should follow format: SCH_TEA001');
@@ -3928,7 +3928,7 @@ const ManageUsers: React.FC = () => {
         if (row['Joining Date (YYYY-MM-DD)'] && !/^\d{4}-\d{2}-\d{2}$/.test(row['Joining Date (YYYY-MM-DD)'])) {
           rowErrors.push('Joining Date must be in YYYY-MM-DD format');
         }
-        
+
       } else if (role === 'admin') {
         if (!row['Admin Level*']) {
           rowErrors.push('Admin Level is required for admins');
@@ -3942,7 +3942,7 @@ const ManageUsers: React.FC = () => {
         if (!row['Highest Qualification*']) {
           rowErrors.push('Highest Qualification is required for admins');
         }
-        
+
         // Admin specific validations
         if (row['Admin ID'] && !/^[A-Z]{3}_[A-Z]{3}\d{3}$/.test(row['Admin ID'])) {
           rowErrors.push('Admin ID should follow format: SCH_ADM001');
@@ -3981,14 +3981,14 @@ const ManageUsers: React.FC = () => {
       if (row['Permanent Pin Code'] && row['Permanent Pin Code'] !== '' && !/^\d{6}$/.test(row['Permanent Pin Code'])) {
         rowErrors.push('Permanent Pin Code must be 6 digits');
       }
-      
+
       // Date validations for optional date fields
       const dateFields = [
-        'Admission Date (YYYY-MM-DD)', 'Last Medical Checkup (YYYY-MM-DD)', 
+        'Admission Date (YYYY-MM-DD)', 'Last Medical Checkup (YYYY-MM-DD)',
         'Previous School TC Date (YYYY-MM-DD)', 'Joining Date (YYYY-MM-DD)',
         'Latest Review Date'
       ];
-      
+
       dateFields.forEach(field => {
         if (row[field] && row[field] !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(row[field])) {
           rowErrors.push(`${field} must be in YYYY-MM-DD format`);
@@ -4011,7 +4011,7 @@ const ManageUsers: React.FC = () => {
         'Concession Percentage', 'Scholarship Amount', 'Current Percentage', 'Current Rank',
         'Current Attendance', 'Latest Review Rating'
       ];
-      
+
       numericFields.forEach(field => {
         if (row[field] && row[field] !== '' && isNaN(Number(row[field]))) {
           rowErrors.push(`${field} must be a valid number`);
@@ -4028,7 +4028,7 @@ const ManageUsers: React.FC = () => {
 
       // Phone number validations for family/emergency contacts
       const phoneFields = [
-        'Father Phone', 'Mother Phone', 'Guardian Phone', 
+        'Father Phone', 'Mother Phone', 'Guardian Phone',
         'Emergency Contact 1 Phone', 'Emergency Contact 2 Phone',
         'Emergency Hospital Phone'
       ];
@@ -4078,20 +4078,20 @@ const ManageUsers: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'P';
       const response = await exportImportAPI.importUsers(schoolCode, importFile);
-      
+
       setImportProgress(100);
       setImportResults(response.data.results);
-      
+
       if (response.data.results.success.length > 0) {
         toast.success(`Successfully imported ${response.data.results.success.length} users`);
         // Refresh the user list
         fetchUsers();
       }
-      
+
       if (response.data.results.errors.length > 0) {
         toast.error(`${response.data.results.errors.length} users failed to import`);
       }
-      
+
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.response?.data?.message || 'Failed to import users. Please try again.');
@@ -4113,7 +4113,7 @@ const ManageUsers: React.FC = () => {
     try {
       // Validate data
       const validationErrors = validateImportData(importPreview, activeTab);
-      
+
       if (validationErrors.length > 0) {
         setImportResults({
           success: [],
@@ -4123,9 +4123,9 @@ const ManageUsers: React.FC = () => {
         return;
       }
 
-      const successResults: Array<{userId: string, email: string, password: string, role: string}> = [];
-      const errorResults: Array<{row: number, error: string, data: any}> = [];
-      
+      const successResults: Array<{ userId: string, email: string, password: string, role: string }> = [];
+      const errorResults: Array<{ row: number, error: string, data: any }> = [];
+
       // Process each row
       for (let i = 0; i < importPreview.length; i++) {
         const row = importPreview[i];
@@ -4135,7 +4135,7 @@ const ManageUsers: React.FC = () => {
           // Generate user ID and password
           const schoolCode = user?.schoolCode || 'P';
           const userId = await generateUserId(activeTab, schoolCode);
-          
+
           // Use DOB as password (format: DDMMYYYY)
           const dobStr = row['Date of Birth* (YYYY-MM-DD)'];
           const dobDate = new Date(dobStr);
@@ -4147,7 +4147,7 @@ const ManageUsers: React.FC = () => {
             generatedPassword: dobPassword,
             role: activeTab,
             email: row['Email*'],
-            
+
             // Name structure
             name: {
               firstName: row['First Name*'],
@@ -4155,13 +4155,13 @@ const ManageUsers: React.FC = () => {
               lastName: row['Last Name*'],
               displayName: `${row['First Name*']} ${row['Last Name*']}`
             },
-            
+
             // Contact information
             contact: {
               primaryPhone: row['Phone*'].replace(/\D/g, ''),
               phone: row['Phone*'].replace(/\D/g, '')
             },
-            
+
             // Personal information
             personalInfo: {
               dateOfBirth: row['Date of Birth* (YYYY-MM-DD)'],
@@ -4181,7 +4181,7 @@ const ManageUsers: React.FC = () => {
               maritalStatus: row['Marital Status'] || '',
               spouseName: row['Spouse Name'] || ''
             },
-            
+
             // Address information
             address: {
               current: {
@@ -4205,7 +4205,7 @@ const ManageUsers: React.FC = () => {
                 urbanRural: row['Permanent Urban Rural'] || ''
               }
             },
-            
+
             // Identity documents
             identityDocs: {
               aadhaarNumber: row['Aadhaar Number'] || '',
@@ -4213,7 +4213,7 @@ const ManageUsers: React.FC = () => {
               passportNumber: row['Passport Number'] || '',
               drivingLicense: row['Driving License'] || ''
             },
-            
+
             // Emergency contacts
             emergencyContacts: []
           };
@@ -4228,7 +4228,7 @@ const ManageUsers: React.FC = () => {
               isPrimary: ['true', 'yes'].includes((row['Emergency Contact 1 Is Primary'] || '').toLowerCase())
             });
           }
-          
+
           if (row['Emergency Contact 2 Name']) {
             userData.emergencyContacts.push({
               name: row['Emergency Contact 2 Name'],
@@ -4253,7 +4253,7 @@ const ManageUsers: React.FC = () => {
               studentId: row['Student ID'] || '',
               admissionNumber: row['Admission Number'] || '',
               rollNumber: row['Roll Number'] || '',
-              
+
               // Academic information
               academic: {
                 currentClass: row['Class*'],
@@ -4274,7 +4274,7 @@ const ManageUsers: React.FC = () => {
                   reasonForTransfer: row['Reason for Transfer'] || ''
                 }
               },
-              
+
               // Personal information (Karnataka SATS)
               personal: {
                 ...userData.personalInfo,
@@ -4293,7 +4293,7 @@ const ManageUsers: React.FC = () => {
                 disability: row['Disability'] || 'Not Applicable',
                 disabilityOther: row['Disability Other'] || ''
               },
-              
+
               // Family information
               family: {
                 father: {
@@ -4334,7 +4334,7 @@ const ManageUsers: React.FC = () => {
                 },
                 siblings: []
               },
-              
+
               // Medical information
               medical: {
                 allergies: row['Allergies'] ? row['Allergies'].split(',').map((s: string) => s.trim()) : [],
@@ -4348,7 +4348,7 @@ const ManageUsers: React.FC = () => {
                 lastMedicalCheckup: row['Last Medical Checkup (YYYY-MM-DD)'] ? new Date(row['Last Medical Checkup (YYYY-MM-DD)']) : null,
                 vaccinationStatus: row['Vaccination Status'] ? row['Vaccination Status'].split(',').map((v: string) => ({ vaccine: v.trim(), date: new Date(), nextDue: null })) : []
               },
-              
+
               // Transportation
               transport: {
                 mode: row['Transport Mode'] || '',
@@ -4358,7 +4358,7 @@ const ManageUsers: React.FC = () => {
                 pickupTime: row['Pickup Time'] || '',
                 dropTime: row['Drop Time'] || ''
               },
-              
+
               // Financial information
               financial: {
                 feeCategory: row['Fee Category'] || 'regular',
@@ -4376,7 +4376,7 @@ const ManageUsers: React.FC = () => {
                   accountHolderName: row['Account Holder Name'] || ''
                 }
               },
-              
+
               // Academic history
               academicHistory: row['Current Academic Year'] ? [{
                 academicYear: row['Current Academic Year'],
@@ -4409,7 +4409,7 @@ const ManageUsers: React.FC = () => {
               joiningDate: row['Joining Date (YYYY-MM-DD)'] ? new Date(row['Joining Date (YYYY-MM-DD)']) : new Date(),
               designation: row['Designation'] || '',
               department: row['Department'] || '',
-              
+
               // Qualification
               qualification: {
                 highest: row['Highest Qualification*'],
@@ -4419,21 +4419,21 @@ const ManageUsers: React.FC = () => {
                 teachingLicense: row['Teaching License'] || '',
                 certificates: []
               },
-              
+
               // Experience
               experience: {
                 total: row['Total Experience (Years)*'] ? parseInt(row['Total Experience (Years)*']) : 0,
                 atCurrentSchool: row['Experience at Current School (Years)'] ? parseInt(row['Experience at Current School (Years)']) : 0,
                 previousSchools: []
               },
-              
+
               // Subjects
               subjects: [],
-              
+
               // Class teacher and responsibilities
               classTeacherOf: row['Class Teacher Of'] || '',
               responsibilities: row['Responsibilities'] ? row['Responsibilities'].split(',').map((s: string) => s.trim()) : [],
-              
+
               // Work schedule
               workSchedule: {
                 workingDays: row['Working Days'] ? row['Working Days'].split(',').map((s: string) => s.trim()) : [],
@@ -4444,7 +4444,7 @@ const ManageUsers: React.FC = () => {
                 maxPeriodsPerDay: row['Max Periods Per Day'] ? parseInt(row['Max Periods Per Day']) : null,
                 maxPeriodsPerWeek: row['Max Periods Per Week'] ? parseInt(row['Max Periods Per Week']) : null
               },
-              
+
               // Performance reviews
               performanceReviews: row['Latest Review Academic Year'] ? [{
                 academicYear: row['Latest Review Academic Year'],
@@ -4453,14 +4453,14 @@ const ManageUsers: React.FC = () => {
                 reviewedBy: null,
                 reviewDate: new Date()
               }] : [],
-              
+
               // Salary
               salary: {
                 basic: row['Basic Salary'] ? parseFloat(row['Basic Salary']) : null,
                 allowances: [],
                 currency: row['Currency'] || 'INR'
               },
-              
+
               // Bank details
               bankDetails: {
                 bankName: row['Bank Name'] || '',
@@ -4501,7 +4501,7 @@ const ManageUsers: React.FC = () => {
               const nameField = i === 1 ? 'Primary Subject 1 Name' : `Secondary Subject ${i} Name`;
               const classesField = i === 1 ? 'Primary Subject 1 Classes' : `Secondary Subject ${i} Classes`;
               const isPrimaryField = i === 1 ? 'Primary Subject 1 Is Primary' : `Secondary Subject ${i} Is Primary`;
-              
+
               if (row[codeField] || row[nameField]) {
                 userData.teacherDetails.subjects.push({
                   subjectCode: row[codeField] || '',
@@ -4546,7 +4546,7 @@ const ManageUsers: React.FC = () => {
               department: row['Department*'],
               joiningDate: row['Joining Date (YYYY-MM-DD)'] ? new Date(row['Joining Date (YYYY-MM-DD)']) : new Date(),
               reportingManager: row['Reporting Manager'] || '',
-              
+
               // Permissions
               permissions: {
                 list: row['Permissions'] ? row['Permissions'].split(',').map((s: string) => s.trim()) : [],
@@ -4560,7 +4560,7 @@ const ManageUsers: React.FC = () => {
                 canExportData: ['true', 'yes'].includes((row['Can Export Data'] || '').toLowerCase()),
                 canImportData: ['true', 'yes'].includes((row['Can Import Data'] || '').toLowerCase())
               },
-              
+
               // Responsibilities
               responsibilities: {
                 primary: row['Primary Responsibilities'] ? row['Primary Responsibilities'].split(',').map((s: string) => s.trim()) : [],
@@ -4568,7 +4568,7 @@ const ManageUsers: React.FC = () => {
                 committees: row['Committees'] ? row['Committees'].split(',').map((s: string) => s.trim()) : [],
                 specialDuties: row['Special Duties'] ? row['Special Duties'].split(',').map((s: string) => s.trim()) : []
               },
-              
+
               // Qualification
               qualification: {
                 highest: row['Highest Qualification*'],
@@ -4576,7 +4576,7 @@ const ManageUsers: React.FC = () => {
                 university: row['University'] || '',
                 year: row['Qualification Year'] ? parseInt(row['Qualification Year']) : null
               },
-              
+
               // Experience
               experience: {
                 totalYears: row['Total Experience (Years)'] ? parseInt(row['Total Experience (Years)']) : null,
@@ -4584,7 +4584,7 @@ const ManageUsers: React.FC = () => {
                 educationSectorYears: row['Education Sector Experience (Years)'] ? parseInt(row['Education Sector Experience (Years)']) : null,
                 previousExperience: []
               },
-              
+
               // Work schedule
               workSchedule: {
                 workingDays: row['Working Days'] ? row['Working Days'].split(',').map((s: string) => s.trim()) : [],
@@ -4595,14 +4595,14 @@ const ManageUsers: React.FC = () => {
                 overtimeEligible: ['true', 'yes'].includes((row['Overtime Eligible'] || '').toLowerCase()),
                 onCallDuties: row['On-Call Duties'] ? row['On-Call Duties'].split(',').map((s: string) => s.trim()) : []
               },
-              
+
               // Salary
               salary: {
                 basic: row['Basic Salary'] ? parseFloat(row['Basic Salary']) : null,
                 allowances: [],
                 currency: row['Currency'] || 'INR'
               },
-              
+
               // Bank details
               bankDetails: {
                 bankName: row['Bank Name'] || '',
@@ -4611,7 +4611,7 @@ const ManageUsers: React.FC = () => {
                 branchName: row['Branch Name'] || '',
                 accountHolderName: row['Account Holder Name'] || `${row['First Name*']} ${row['Last Name*']}`
               },
-              
+
               // System access
               systemAccess: {
                 loginPermissions: row['Login Permissions'] || '',
@@ -4620,7 +4620,7 @@ const ManageUsers: React.FC = () => {
                 apiAccess: ['true', 'yes'].includes((row['API Access'] || '').toLowerCase()),
                 reportingAccess: row['Reporting Access'] || ''
               },
-              
+
               // Performance review
               performanceReview: {
                 latestReviewDate: row['Latest Review Date'] ? new Date(row['Latest Review Date']) : null,
@@ -4670,7 +4670,7 @@ const ManageUsers: React.FC = () => {
 
           // Create user via API
           const response = await schoolUserAPI.createUser(userData);
-          
+
           successResults.push({
             userId: userId,
             email: row['Email*'],
@@ -4719,7 +4719,7 @@ const ManageUsers: React.FC = () => {
 
     const currentDate = new Date().toISOString().split('T')[0];
     const filename = `imported_user_credentials_${currentDate}.csv`;
-    
+
     const headers = ['User ID', 'Email', 'Password', 'Role', 'Login Instructions'];
     const rows = importResults.success.map(user => [
       user.userId,
@@ -4729,7 +4729,7 @@ const ManageUsers: React.FC = () => {
       'Use Date of Birth (DDMMYYYY) as password, change on first login'
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + 
+    const csvContent = "data:text/csv;charset=utf-8," +
       headers.join(',') + '\n' +
       rows.map(row => row.map(field => `"${field}"`).join(',')).join('\n');
 
@@ -4750,11 +4750,11 @@ const ManageUsers: React.FC = () => {
 
     // Define class order
     const classOrder = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-    
+
     students.forEach(student => {
       const className = student.studentDetails?.class || 'Unassigned';
       const section = student.studentDetails?.section || 'A';
-      
+
       if (!organized[className]) {
         organized[className] = {};
       }
@@ -4768,7 +4768,7 @@ const ManageUsers: React.FC = () => {
     const sortedClasses = Object.keys(organized).sort((a, b) => {
       const indexA = classOrder.indexOf(a);
       const indexB = classOrder.indexOf(b);
-      
+
       if (indexA === -1 && indexB === -1) return a.localeCompare(b);
       if (indexA === -1) return 1;
       if (indexB === -1) return -1;
@@ -4842,11 +4842,10 @@ const ManageUsers: React.FC = () => {
                   handleRoleChange('student');
                 }
               }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'student'
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'student'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Students ({users.filter(u => u.role === 'student').length})
             </button>
@@ -4859,11 +4858,10 @@ const ManageUsers: React.FC = () => {
                   handleRoleChange('teacher');
                 }
               }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'teacher'
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'teacher'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Teachers ({users.filter(u => u.role === 'teacher').length})
             </button>
@@ -4876,11 +4874,10 @@ const ManageUsers: React.FC = () => {
                   handleRoleChange('admin');
                 }
               }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'admin'
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'admin'
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               Admins ({users.filter(u => u.role === 'admin').length})
             </button>
@@ -4925,7 +4922,7 @@ const ManageUsers: React.FC = () => {
                     <option value="11">Class 11</option>
                     <option value="12">Class 12</option>
                   </select>
-                  
+
                   {/* Section Dropdown - only show when a specific class is selected */}
                   {selectedGrade !== 'all' && (
                     <select
@@ -4943,26 +4940,24 @@ const ManageUsers: React.FC = () => {
                     </select>
                   )}
                 </div>
-                
+
                 {/* View Mode Toggle */}
                 <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setViewMode('table')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                      viewMode === 'table' 
-                        ? 'bg-white text-blue-600 shadow-sm' 
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'table'
+                        ? 'bg-white text-blue-600 shadow-sm'
                         : 'text-gray-600 hover:text-gray-800'
-                    }`}
+                      }`}
                   >
                     Table View
                   </button>
                   <button
                     onClick={() => setViewMode('hierarchy')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                      viewMode === 'hierarchy' 
-                        ? 'bg-white text-blue-600 shadow-sm' 
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'hierarchy'
+                        ? 'bg-white text-blue-600 shadow-sm'
                         : 'text-gray-600 hover:text-gray-800'
-                    }`}
+                      }`}
                   >
                     Class View
                   </button>
@@ -5035,7 +5030,7 @@ const ManageUsers: React.FC = () => {
                 {Object.entries(organizeStudentsByClass()).map(([className, sections]) => (
                   <div key={className} className="border border-gray-200 rounded-lg">
                     {/* Class Header */}
-                    <div 
+                    <div
                       className="bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
                       onClick={() => toggleClassExpansion(className)}
                     >
@@ -5051,7 +5046,7 @@ const ManageUsers: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    
+
                     {/* Sections */}
                     {expandedClasses.has(className) && (
                       <div className="border-t border-gray-200">
@@ -5066,7 +5061,7 @@ const ManageUsers: React.FC = () => {
                                 </span>
                               </h4>
                             </div>
-                            
+
                             {/* Students in Section */}
                             <div className="divide-y divide-gray-100">
                               {students.map((student) => (
@@ -5137,155 +5132,155 @@ const ManageUsers: React.FC = () => {
         ) : (
           /* Table View */
           <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                {activeTab === 'student' && (
-                  <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
-                  </>
-                )}
-                {activeTab === 'teacher' && (
-                  <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subjects</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
-                  </>
-                )}
-                {activeTab === 'admin' && (
-                  <>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Level</th>
-                  </>
-                )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">Loading users...</td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                  {activeTab === 'student' && (
+                    <>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
+                    </>
+                  )}
+                  {activeTab === 'teacher' && (
+                    <>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subjects</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                    </>
+                  )}
+                  {activeTab === 'admin' && (
+                    <>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Level</th>
+                    </>
+                  )}
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">No users found</td>
-                </tr>
-              ) : (
-                filteredUsers.map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {(user as any).name?.displayName || 
-                           ((user as any).name?.firstName && (user as any).name?.lastName 
-                             ? `${(user as any).name.firstName} ${(user as any).name.lastName}` 
-                             : (user as any).name?.firstName || user.name || 'No name')}
-                        </div>
-                        <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>
-                        <div>{user.email}</div>
-                        <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
-                      </div>
-                    </td>
-                    {activeTab === 'student' && (
-                      <>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {(user as any).academicInfo?.class || user.studentDetails?.class || 'Not assigned'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {(user as any).academicInfo?.section || user.studentDetails?.section || 'Not assigned'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {(user as any).userId || user._id || 'Not assigned'}
-                        </td>
-                      </>
-                    )}
-                    {activeTab === 'teacher' && (
-                      <>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {user.teacherDetails?.employeeId || 'Not assigned'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="max-w-32 truncate">
-                            {user.teacherDetails?.subjects?.join(', ') || 'Not assigned'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {user.teacherDetails?.experience ? `${user.teacherDetails.experience} years` : 'Not provided'}
-                        </td>
-                      </>
-                    )}
-                    {activeTab === 'admin' && (
-                      <>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          Employee ID
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          Administration
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          Full Access
-                        </td>
-                      </>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {user.isActive ? (
-                          <UserCheck className="h-4 w-4 text-green-500 mr-1" />
-                        ) : (
-                          <UserX className="h-4 w-4 text-red-500 mr-1" />
-                        )}
-                        <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
-                          {user.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(user.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => handleEditClick(user)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                          title="Edit User"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleResetPassword(user.userId || user._id)}
-                          className="text-purple-600 hover:text-purple-900 p-1 rounded hover:bg-purple-50"
-                          title="Reset Password"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </button>
-                        {/* Delete button - prevent self-deletion */}
-                        <button
-                          onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete User"
-                          disabled={false} // Temporarily allow all deletions for testing
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  <tr>
+                    <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">Loading users...</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">No users found</td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <tr key={user._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {(user as any).name?.displayName ||
+                              ((user as any).name?.firstName && (user as any).name?.lastName
+                                ? `${(user as any).name.firstName} ${(user as any).name.lastName}`
+                                : (user as any).name?.firstName || user.name || 'No name')}
+                          </div>
+                          <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div>
+                          <div>{user.email}</div>
+                          <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
+                        </div>
+                      </td>
+                      {activeTab === 'student' && (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {(user as any).academicInfo?.class || user.studentDetails?.class || 'Not assigned'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {(user as any).academicInfo?.section || user.studentDetails?.section || 'Not assigned'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {(user as any).userId || user._id || 'Not assigned'}
+                          </td>
+                        </>
+                      )}
+                      {activeTab === 'teacher' && (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.teacherDetails?.employeeId || 'Not assigned'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="max-w-32 truncate">
+                              {user.teacherDetails?.subjects?.join(', ') || 'Not assigned'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {user.teacherDetails?.experience ? `${user.teacherDetails.experience} years` : 'Not provided'}
+                          </td>
+                        </>
+                      )}
+                      {activeTab === 'admin' && (
+                        <>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            Employee ID
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            Administration
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            Full Access
+                          </td>
+                        </>
+                      )}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          {user.isActive ? (
+                            <UserCheck className="h-4 w-4 text-green-500 mr-1" />
+                          ) : (
+                            <UserX className="h-4 w-4 text-red-500 mr-1" />
+                          )}
+                          <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
+                            {user.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEditClick(user)}
+                            className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                            title="Edit User"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleResetPassword(user.userId || user._id)}
+                            className="text-purple-600 hover:text-purple-900 p-1 rounded hover:bg-purple-50"
+                            title="Reset Password"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                          {/* Delete button - prevent self-deletion */}
+                          <button
+                            onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete User"
+                            disabled={false} // Temporarily allow all deletions for testing
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -5297,7 +5292,7 @@ const ManageUsers: React.FC = () => {
               Add New {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - Enrollment Form
             </h3>
             <form onSubmit={handleAddUser} onKeyDown={handleFormKeyDown} className="space-y-6">
-              
+
               {/* Role Selection */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Selected Role</label>
@@ -5313,7 +5308,7 @@ const ManageUsers: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Next User ID 
+                      Next User ID
                       {loadingNextId && <span className="text-blue-500 ml-1">(Loading...)</span>}
                       {!loadingNextId && formData.userId && <span className="text-green-600 ml-1">✅</span>}
                     </label>
@@ -5399,22 +5394,21 @@ const ManageUsers: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                    <input
-                      type="text"
-                      value={formData.generatedPassword || 'Password will be generated when role is selected'}
-                      readOnly
-                      className={`w-full border rounded-lg px-3 py-2 font-mono ${
-                        formData.generatedPassword 
-                          ? 'bg-green-50 border-green-300 text-green-800' 
-                          : 'bg-gray-100 border-gray-300 text-gray-500'
-                      }`}
-                      placeholder="8-character secure password will appear here"
-                    />
+                      <input
+                        type="text"
+                        value={formData.generatedPassword || 'Password will be generated when role is selected'}
+                        readOnly
+                        className={`w-full border rounded-lg px-3 py-2 font-mono ${formData.generatedPassword
+                            ? 'bg-green-50 border-green-300 text-green-800'
+                            : 'bg-gray-100 border-gray-300 text-gray-500'
+                          }`}
+                        placeholder="8-character secure password will appear here"
+                      />
                     )}
                     {formData.generatedPassword && formData.role !== 'student' && (
                       <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
                         <p className="text-xs text-green-700 font-medium">
-                          ✅ 8-character secure password generated: 
+                          ✅ 8-character secure password generated:
                           <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
                         </p>
                         <p className="text-xs text-green-600 mt-1">
@@ -5446,7 +5440,7 @@ const ManageUsers: React.FC = () => {
                       type="text"
                       required
                       value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim()})}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter first name"
                     />
@@ -5457,7 +5451,7 @@ const ManageUsers: React.FC = () => {
                       type="text"
                       required
                       value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim()})}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter last name"
                     />
@@ -5468,7 +5462,7 @@ const ManageUsers: React.FC = () => {
                       type="email"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter email address"
                     />
@@ -5479,7 +5473,7 @@ const ManageUsers: React.FC = () => {
                       type="tel"
                       required
                       value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter phone number (10 digits)"
                       pattern="[0-9]{10}"
@@ -5504,7 +5498,7 @@ const ManageUsers: React.FC = () => {
                       onChange={(e) => {
                         const newGender = e.target.value;
                         setFormData({
-                          ...formData, 
+                          ...formData,
                           gender: newGender as any,
                           studentDetails: {
                             ...formData.studentDetails,
@@ -5525,7 +5519,7 @@ const ManageUsers: React.FC = () => {
               {/* Role-specific Information */}
               {formData.role === 'student' && (
                 <div className="space-y-6">
-                  
+
                   {/* Basic Information - SATS Standard */}
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
@@ -5535,7 +5529,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.enrollmentNo}
-                          onChange={(e) => setFormData({...formData, enrollmentNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter enrollment number"
                         />
@@ -5545,7 +5539,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.tcNo}
-                          onChange={(e) => setFormData({...formData, tcNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter TC number"
                         />
@@ -5564,40 +5558,40 @@ const ManageUsers: React.FC = () => {
                             Loading classes...
                           </div>
                         ) : (
-                        <select
-                          required
-                          value={formData.class || formData.studentDetails?.currentClass || ''}
-                          onChange={(e) => {
-                            const newClass = e.target.value;
+                          <select
+                            required
+                            value={formData.class || formData.studentDetails?.currentClass || ''}
+                            onChange={(e) => {
+                              const newClass = e.target.value;
                               handleClassSelection(newClass); // Update sections
-                            setFormData({
-                              ...formData, 
-                              class: newClass,
+                              setFormData({
+                                ...formData,
+                                class: newClass,
                                 section: '', // Clear section when class changes
-                              studentDetails: {
-                                ...formData.studentDetails,
+                                studentDetails: {
+                                  ...formData.studentDetails,
                                   currentClass: newClass,
                                   currentSection: '' // Clear section when class changes
-                              }
-                            });
-                          }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Class</option>
+                                }
+                              });
+                            }}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Class</option>
                             {hasClasses() ? (
                               getClassOptions().map(cls => (
                                 <option key={cls.value} value={cls.value}>{cls.label}</option>
                               ))
                             ) : (
                               <>
-                          <option value="LKG">LKG</option>
-                          <option value="UKG">UKG</option>
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
-                            <option key={num} value={num.toString()}>{num}</option>
-                          ))}
+                                <option value="LKG">LKG</option>
+                                <option value="UKG">UKG</option>
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                                  <option key={num} value={num.toString()}>{num}</option>
+                                ))}
                               </>
                             )}
-                        </select>
+                          </select>
                         )}
                         {classesError && <p className="text-yellow-600 text-sm mt-1">⚠️ Using default classes (Super Admin hasn't configured classes yet)</p>}
                       </div>
@@ -5629,7 +5623,7 @@ const ManageUsers: React.FC = () => {
                           onChange={(e) => {
                             const newSection = e.target.value;
                             setFormData({
-                              ...formData, 
+                              ...formData,
                               section: newSection,
                               studentDetails: {
                                 ...formData.studentDetails,
@@ -5641,8 +5635,8 @@ const ManageUsers: React.FC = () => {
                           disabled={!formData.class && !formData.studentDetails?.currentClass}
                         >
                           <option value="">
-                            {!formData.class && !formData.studentDetails?.currentClass 
-                              ? 'Select Class First' 
+                            {!formData.class && !formData.studentDetails?.currentClass
+                              ? 'Select Class First'
                               : 'Select Section'
                             }
                           </option>
@@ -5652,7 +5646,7 @@ const ManageUsers: React.FC = () => {
                             ))
                           ) : (
                             ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
-                            <option key={letter} value={letter}>Section {letter}</option>
+                              <option key={letter} value={letter}>Section {letter}</option>
                             ))
                           )}
                         </select>
@@ -5662,7 +5656,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.mediumOfInstruction}
-                          onChange={(e) => setFormData({...formData, mediumOfInstruction: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="English">English</option>
@@ -5674,7 +5668,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
                         <select
                           value={formData.motherTongue}
-                          onChange={(e) => setFormData({...formData, motherTongue: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Mother Tongue</option>
@@ -5694,7 +5688,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.motherTongueOther || ''}
-                            onChange={(e) => setFormData({...formData, motherTongueOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify mother tongue"
                           />
@@ -5713,7 +5707,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.name}
-                          onChange={(e) => setFormData({...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ')})}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter full name in English"
                         />
@@ -5723,7 +5717,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentNameKannada}
-                          onChange={(e) => setFormData({...formData, studentNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter name in Kannada"
                         />
@@ -5743,7 +5737,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="number"
                           value={formData.ageYears}
-                          onChange={(e) => setFormData({...formData, ageYears: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Years"
                           min="0"
@@ -5755,7 +5749,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="number"
                           value={formData.ageMonths}
-                          onChange={(e) => setFormData({...formData, ageMonths: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Months"
                           min="0"
@@ -5767,7 +5761,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.gender}
-                          onChange={(e) => setFormData({...formData, gender: e.target.value as 'male' | 'female' | 'other'})}
+                          onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="male">Male</option>
@@ -5789,7 +5783,7 @@ const ManageUsers: React.FC = () => {
                           required
                           value={formData.fatherName}
                           onChange={(e) => setFormData({
-                            ...formData, 
+                            ...formData,
                             fatherName: e.target.value,
                             studentDetails: {
                               ...formData.studentDetails,
@@ -5805,7 +5799,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.fatherNameKannada}
-                          onChange={(e) => setFormData({...formData, fatherNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter father's name in Kannada"
                         />
@@ -5815,7 +5809,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.fatherAadhaar}
-                          onChange={(e) => setFormData({...formData, fatherAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -5829,7 +5823,7 @@ const ManageUsers: React.FC = () => {
                           required
                           value={formData.motherName}
                           onChange={(e) => setFormData({
-                            ...formData, 
+                            ...formData,
                             motherName: e.target.value,
                             studentDetails: {
                               ...formData.studentDetails,
@@ -5845,7 +5839,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.motherNameKannada}
-                          onChange={(e) => setFormData({...formData, motherNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mother's name in Kannada"
                         />
@@ -5855,7 +5849,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.motherAadhaar}
-                          onChange={(e) => setFormData({...formData, motherAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -5874,7 +5868,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentAadhaar}
-                          onChange={(e) => setFormData({...formData, studentAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -5886,7 +5880,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentCasteCertNo}
-                          onChange={(e) => setFormData({...formData, studentCasteCertNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter certificate number"
                         />
@@ -5896,7 +5890,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.fatherCasteCertNo}
-                          onChange={(e) => setFormData({...formData, fatherCasteCertNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherCasteCertNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter certificate number"
                         />
@@ -5906,7 +5900,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.motherCasteCertNo}
-                          onChange={(e) => setFormData({...formData, motherCasteCertNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherCasteCertNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter certificate number"
                         />
@@ -5922,7 +5916,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
                         <select
                           value={formData.studentCaste}
-                          onChange={(e) => setFormData({...formData, studentCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -5938,7 +5932,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.studentCasteOther}
-                            onChange={(e) => setFormData({...formData, studentCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify student caste"
                           />
@@ -5948,7 +5942,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
                         <select
                           value={formData.fatherCaste}
-                          onChange={(e) => setFormData({...formData, fatherCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -5964,7 +5958,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.fatherCasteOther}
-                            onChange={(e) => setFormData({...formData, fatherCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify father caste"
                           />
@@ -5974,7 +5968,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
                         <select
                           value={formData.motherCaste}
-                          onChange={(e) => setFormData({...formData, motherCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -5990,7 +5984,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.motherCasteOther}
-                            onChange={(e) => setFormData({...formData, motherCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify mother caste"
                           />
@@ -6000,7 +5994,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
                         <select
                           value={formData.socialCategory}
-                          onChange={(e) => setFormData({...formData, socialCategory: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Category</option>
@@ -6019,7 +6013,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.socialCategoryOther}
-                            onChange={(e) => setFormData({...formData, socialCategoryOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify social category"
                           />
@@ -6029,7 +6023,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
                         <select
                           value={formData.religion}
-                          onChange={(e) => setFormData({...formData, religion: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Religion</option>
@@ -6045,7 +6039,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.religionOther}
-                            onChange={(e) => setFormData({...formData, religionOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify religion"
                           />
@@ -6062,7 +6056,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Belonging to BPL</label>
                         <select
                           value={formData.belongingToBPL}
-                          onChange={(e) => setFormData({...formData, belongingToBPL: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, belongingToBPL: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="No">No</option>
@@ -6074,7 +6068,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bplCardNo}
-                          onChange={(e) => setFormData({...formData, bplCardNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bplCardNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter BPL card number"
                         />
@@ -6084,7 +6078,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bhagyalakshmiBondNo}
-                          onChange={(e) => setFormData({...formData, bhagyalakshmiBondNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bhagyalakshmiBondNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter bond number"
                         />
@@ -6100,7 +6094,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
                         <select
                           value={formData.disability}
-                          onChange={(e) => setFormData({...formData, disability: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="Not Applicable">Not Applicable</option>
@@ -6118,20 +6112,20 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.disabilityOther}
-                            onChange={(e) => setFormData({...formData, disabilityOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify disability type"
                           />
                         )}
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
                         </label>
                         <select
                           value={formData.isRTECandidate || ''}
-                          onChange={(e) => setFormData({...formData, isRTECandidate: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Option</option>
@@ -6151,7 +6145,7 @@ const ManageUsers: React.FC = () => {
                         <textarea
                           required
                           value={formData.address}
-                          onChange={(e) => setFormData({...formData, address: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter complete address"
                           rows={2}
@@ -6163,7 +6157,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.cityVillageTown}
-                          onChange={(e) => setFormData({...formData, cityVillageTown: e.target.value, city: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, cityVillageTown: e.target.value, city: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter city/village/town"
                         />
@@ -6173,7 +6167,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.locality}
-                          onChange={(e) => setFormData({...formData, locality: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter locality"
                         />
@@ -6184,7 +6178,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.taluka}
-                          onChange={(e) => setFormData({...formData, taluka: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, taluka: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter taluka/taluk"
                         />
@@ -6194,7 +6188,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.district}
-                          onChange={(e) => setFormData({...formData, district: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, district: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select District</option>
@@ -6236,7 +6230,7 @@ const ManageUsers: React.FC = () => {
                           required
                           value={formData.state || formData.permanentState || 'Karnataka'}
                           onChange={(e) => setFormData({
-                            ...formData, 
+                            ...formData,
                             state: e.target.value,
                             permanentState: e.target.value
                           })}
@@ -6258,7 +6252,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.pinCode}
-                          onChange={(e) => setFormData({...formData, pinCode: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="6-digit pin code"
                           pattern="[0-9]{6}"
@@ -6277,7 +6271,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.studentMobile}
-                          onChange={(e) => setFormData({...formData, studentMobile: e.target.value, phone: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentMobile: e.target.value, phone: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="10-digit mobile number"
                           pattern="[0-9]{10}"
@@ -6289,7 +6283,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="email"
                           value={formData.studentEmail}
-                          onChange={(e) => setFormData({...formData, studentEmail: e.target.value, email: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentEmail: e.target.value, email: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter email address"
                         />
@@ -6299,7 +6293,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.fatherMobile}
-                          onChange={(e) => setFormData({...formData, fatherMobile: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherMobile: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="10-digit mobile number"
                           pattern="[0-9]{10}"
@@ -6311,7 +6305,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="email"
                           value={formData.fatherEmail}
-                          onChange={(e) => setFormData({...formData, fatherEmail: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherEmail: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter email address"
                         />
@@ -6321,7 +6315,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.motherMobile}
-                          onChange={(e) => setFormData({...formData, motherMobile: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherMobile: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="10-digit mobile number"
                           pattern="[0-9]{10}"
@@ -6333,7 +6327,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="email"
                           value={formData.motherEmail}
-                          onChange={(e) => setFormData({...formData, motherEmail: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherEmail: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter email address"
                         />
@@ -6350,7 +6344,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="date"
                           value={formData.schoolAdmissionDate}
-                          onChange={(e) => setFormData({...formData, schoolAdmissionDate: e.target.value, admissionDate: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, schoolAdmissionDate: e.target.value, admissionDate: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         />
                       </div>
@@ -6359,7 +6353,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankName}
-                          onChange={(e) => setFormData({...formData, bankName: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter bank name"
                         />
@@ -6369,7 +6363,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankAccountNo}
-                          onChange={(e) => setFormData({...formData, bankAccountNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter account number"
                         />
@@ -6379,7 +6373,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankIFSC}
-                          onChange={(e) => setFormData({...formData, bankIFSC: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="11-character IFSC code"
                           pattern="[A-Z]{4}0[A-Z0-9]{6}"
@@ -6397,11 +6391,11 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select
                           value={formData.section}
-                          onChange={(e) => setFormData({...formData, section: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, section: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Section</option>
-                          {['A','B','C','D','E'].map(section => (
+                          {['A', 'B', 'C', 'D', 'E'].map(section => (
                             <option key={section} value={section}>{section}</option>
                           ))}
                         </select>
@@ -6411,7 +6405,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.rollNumber}
-                          onChange={(e) => setFormData({...formData, rollNumber: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter roll number"
                         />
@@ -6422,7 +6416,7 @@ const ManageUsers: React.FC = () => {
                   {/* Additional Essential Information - Missing Fields */}
                   <div className="bg-rose-50 p-4 rounded-lg">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Essential Information</h4>
-                    
+
                     {/* Personal Details */}
                     <div className="mb-6">
                       <h5 className="text-md font-medium text-gray-800 mb-3">Personal Details</h5>
@@ -6431,7 +6425,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
                           <select
                             value={formData.bloodGroup || ''}
-                            onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
                             <option value="">Select Blood Group</option>
@@ -6451,7 +6445,7 @@ const ManageUsers: React.FC = () => {
                             type="text"
                             required
                             value={formData.nationality || 'Indian'}
-                            onChange={(e) => setFormData({...formData, nationality: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter nationality"
                           />
@@ -6461,7 +6455,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.placeOfBirth || ''}
-                            onChange={(e) => setFormData({...formData, placeOfBirth: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, placeOfBirth: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter place of birth"
                           />
@@ -6478,7 +6472,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.previousSchool || ''}
-                            onChange={(e) => setFormData({...formData, previousSchool: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, previousSchool: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter previous school name"
                           />
@@ -6488,7 +6482,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.tcNumber || ''}
-                            onChange={(e) => setFormData({...formData, tcNumber: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, tcNumber: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter TC number"
                           />
@@ -6498,7 +6492,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.migrationCertificate || ''}
-                            onChange={(e) => setFormData({...formData, migrationCertificate: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, migrationCertificate: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter migration certificate number"
                           />
@@ -6508,7 +6502,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.previousClass || ''}
-                            onChange={(e) => setFormData({...formData, previousClass: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, previousClass: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter last class passed"
                           />
@@ -6525,7 +6519,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.guardianName || ''}
-                            onChange={(e) => setFormData({...formData, guardianName: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter guardian name"
                           />
@@ -6534,7 +6528,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Relationship</label>
                           <select
                             value={formData.guardianRelation || ''}
-                            onChange={(e) => setFormData({...formData, guardianRelation: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, guardianRelation: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
                             <option value="">Select Relationship</option>
@@ -6554,7 +6548,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="tel"
                             value={formData.alternatePhone || ''}
-                            onChange={(e) => setFormData({...formData, alternatePhone: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="10-digit emergency contact"
                             pattern="[0-9]{10}"
@@ -6572,7 +6566,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Medical Conditions</label>
                           <textarea
                             value={formData.medicalConditions || ''}
-                            onChange={(e) => setFormData({...formData, medicalConditions: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, medicalConditions: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter any chronic medical conditions"
                             rows={2}
@@ -6582,7 +6576,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Special Needs</label>
                           <textarea
                             value={formData.specialNeeds || ''}
-                            onChange={(e) => setFormData({...formData, specialNeeds: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, specialNeeds: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter any special educational needs"
                             rows={2}
@@ -6599,7 +6593,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Transport Required</label>
                           <select
                             value={formData.transportMode || 'Own'}
-                            onChange={(e) => setFormData({...formData, transportMode: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, transportMode: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
                             <option value="Own">Own Transport</option>
@@ -6613,7 +6607,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.busRoute || ''}
-                            onChange={(e) => setFormData({...formData, busRoute: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, busRoute: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter bus route (if applicable)"
                           />
@@ -6623,7 +6617,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.pickupPoint || ''}
-                            onChange={(e) => setFormData({...formData, pickupPoint: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, pickupPoint: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter pickup point"
                           />
@@ -6640,7 +6634,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.birthCertificateNumber || ''}
-                            onChange={(e) => setFormData({...formData, birthCertificateNumber: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, birthCertificateNumber: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter birth certificate number"
                           />
@@ -6650,7 +6644,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.rationCardNumber || ''}
-                            onChange={(e) => setFormData({...formData, rationCardNumber: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, rationCardNumber: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter ration card number"
                           />
@@ -6660,7 +6654,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.scholarshipDetails || ''}
-                            onChange={(e) => setFormData({...formData, scholarshipDetails: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, scholarshipDetails: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter scholarship information"
                           />
@@ -6677,7 +6671,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.fatherEducation || ''}
-                            onChange={(e) => setFormData({...formData, fatherEducation: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, fatherEducation: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter father's education"
                           />
@@ -6687,7 +6681,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.motherEducation || ''}
-                            onChange={(e) => setFormData({...formData, motherEducation: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, motherEducation: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter mother's education"
                           />
@@ -6696,7 +6690,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Family Income (Annual)</label>
                           <select
                             value={formData.familyIncome || ''}
-                            onChange={(e) => setFormData({...formData, familyIncome: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, familyIncome: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
                             <option value="">Select Income Range</option>
@@ -6711,7 +6705,7 @@ const ManageUsers: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-700 mb-1">Economic Status</label>
                           <select
                             value={formData.economicStatus || ''}
-                            onChange={(e) => setFormData({...formData, economicStatus: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, economicStatus: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
                             <option value="">Select Status</option>
@@ -6726,7 +6720,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.bplCardNumber || ''}
-                            onChange={(e) => setFormData({...formData, bplCardNumber: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, bplCardNumber: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                             placeholder="Enter BPL card number"
                           />
@@ -6747,7 +6741,7 @@ const ManageUsers: React.FC = () => {
                         type="text"
                         required
                         value={formData.qualification}
-                        onChange={(e) => setFormData({...formData, qualification: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter qualification"
                       />
@@ -6757,7 +6751,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="number"
                         value={formData.experience}
-                        onChange={(e) => setFormData({...formData, experience: parseInt(e.target.value) || 0})}
+                        onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter experience in years"
                         min="0"
@@ -6768,7 +6762,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.subjects}
-                        onChange={(e) => setFormData({...formData, subjects: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter subjects separated by commas (e.g., Mathematics, Physics, Chemistry)"
                       />
@@ -6779,7 +6773,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.employeeId}
-                        onChange={(e) => setFormData({...formData, employeeId: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter employee ID (optional)"
                       />
@@ -6797,7 +6791,7 @@ const ManageUsers: React.FC = () => {
                       <select
                         required
                         value={formData.adminLevel}
-                        onChange={(e) => setFormData({...formData, adminLevel: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Admin Level</option>
@@ -6813,7 +6807,7 @@ const ManageUsers: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                       <select
                         value={formData.department}
-                        onChange={(e) => setFormData({...formData, department: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Department</option>
@@ -6831,7 +6825,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.employeeId}
-                        onChange={(e) => setFormData({...formData, employeeId: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter employee ID"
                       />
@@ -6840,7 +6834,7 @@ const ManageUsers: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
                       <select
                         value={formData.accessLevel}
-                        onChange={(e) => setFormData({...formData, accessLevel: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Access Level</option>
@@ -6858,7 +6852,7 @@ const ManageUsers: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <textarea
                   value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="Enter address"
                   rows={2}
@@ -6897,7 +6891,7 @@ const ManageUsers: React.FC = () => {
           <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-900 mb-6">Edit User - {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}</h3>
             <form onSubmit={handleUpdateUser} className="space-y-6">
-              
+
               {/* User ID Display */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">User Information</h4>
@@ -6927,7 +6921,7 @@ const ManageUsers: React.FC = () => {
                       type="text"
                       required
                       value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim()})}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter first name"
                     />
@@ -6938,7 +6932,7 @@ const ManageUsers: React.FC = () => {
                       type="text"
                       required
                       value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim()})}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter last name"
                     />
@@ -6949,7 +6943,7 @@ const ManageUsers: React.FC = () => {
                       type="email"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter email address"
                     />
@@ -6960,7 +6954,7 @@ const ManageUsers: React.FC = () => {
                       type="tel"
                       required
                       value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter phone number (10 digits)"
                       pattern="[0-9]{10}"
@@ -6980,7 +6974,7 @@ const ManageUsers: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                     <select
                       value={formData.gender}
-                      onChange={(e) => setFormData({...formData, gender: e.target.value as 'male' | 'female' | 'other'})}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     >
                       <option value="male">Male</option>
@@ -6994,7 +6988,7 @@ const ManageUsers: React.FC = () => {
               {/* Role-Specific Fields */}
               {editingUser.role === 'student' && (
                 <div className="space-y-6">
-                  
+
                   {/* Basic Information - SATS Standard */}
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
@@ -7004,7 +6998,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.enrollmentNo}
-                          onChange={(e) => setFormData({...formData, enrollmentNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter enrollment number"
                         />
@@ -7014,7 +7008,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.tcNo}
-                          onChange={(e) => setFormData({...formData, tcNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter TC number"
                         />
@@ -7032,7 +7026,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.name}
-                          onChange={(e) => setFormData({...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ')})}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter full name in English"
                         />
@@ -7042,7 +7036,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentNameKannada}
-                          onChange={(e) => setFormData({...formData, studentNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter name in Kannada"
                         />
@@ -7062,7 +7056,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="number"
                           value={formData.ageYears}
-                          onChange={(e) => setFormData({...formData, ageYears: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Years"
                           min="0"
@@ -7074,7 +7068,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="number"
                           value={formData.ageMonths}
-                          onChange={(e) => setFormData({...formData, ageMonths: parseInt(e.target.value) || 0})}
+                          onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Months"
                           min="0"
@@ -7086,7 +7080,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.gender}
-                          onChange={(e) => setFormData({...formData, gender: e.target.value as 'male' | 'female' | 'other'})}
+                          onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="male">Male</option>
@@ -7106,7 +7100,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.academicYear}
-                          onChange={(e) => setFormData({...formData, academicYear: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="2024-2025">2024-2025</option>
@@ -7118,7 +7112,7 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.mediumOfInstruction}
-                          onChange={(e) => setFormData({...formData, mediumOfInstruction: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="English">English</option>
@@ -7130,7 +7124,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
                         <select
                           value={formData.motherTongue}
-                          onChange={(e) => setFormData({...formData, motherTongue: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Mother Tongue</option>
@@ -7150,7 +7144,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.motherTongueOther || ''}
-                            onChange={(e) => setFormData({...formData, motherTongueOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify mother tongue"
                           />
@@ -7168,13 +7162,13 @@ const ManageUsers: React.FC = () => {
                         <select
                           required
                           value={formData.class}
-                          onChange={(e) => setFormData({...formData, class: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, class: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Class</option>
                           <option value="LKG">LKG</option>
                           <option value="UKG">UKG</option>
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
                             <option key={num} value={num.toString()}>{num}</option>
                           ))}
                         </select>
@@ -7183,7 +7177,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select
                           value={formData.section}
-                          onChange={(e) => setFormData({...formData, section: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, section: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Section</option>
@@ -7197,7 +7191,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.rollNumber}
-                          onChange={(e) => setFormData({...formData, rollNumber: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter roll number"
                         />
@@ -7207,7 +7201,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="date"
                           value={formData.admissionDate}
-                          onChange={(e) => setFormData({...formData, admissionDate: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         />
                       </div>
@@ -7224,7 +7218,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.fatherName}
-                          onChange={(e) => setFormData({...formData, fatherName: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter father's name"
                         />
@@ -7234,7 +7228,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.fatherNameKannada}
-                          onChange={(e) => setFormData({...formData, fatherNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter father's name in Kannada"
                         />
@@ -7244,7 +7238,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.fatherAadhaar}
-                          onChange={(e) => setFormData({...formData, fatherAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -7257,7 +7251,7 @@ const ManageUsers: React.FC = () => {
                           type="text"
                           required
                           value={formData.motherName}
-                          onChange={(e) => setFormData({...formData, motherName: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mother's name"
                         />
@@ -7267,7 +7261,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.motherNameKannada}
-                          onChange={(e) => setFormData({...formData, motherNameKannada: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mother's name in Kannada"
                         />
@@ -7277,7 +7271,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.motherAadhaar}
-                          onChange={(e) => setFormData({...formData, motherAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -7289,7 +7283,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.fatherPhone}
-                          onChange={(e) => setFormData({...formData, fatherPhone: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherPhone: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter father's phone (10 digits)"
                           pattern="[0-9]{10}"
@@ -7301,7 +7295,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.motherPhone}
-                          onChange={(e) => setFormData({...formData, motherPhone: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherPhone: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mother's phone (10 digits)"
                           pattern="[0-9]{10}"
@@ -7320,7 +7314,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="email"
                           value={formData.email}
-                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter email address"
                         />
@@ -7330,7 +7324,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="tel"
                           value={formData.phone}
-                          onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter mobile number (10 digits)"
                           pattern="[0-9]{10}"
@@ -7349,7 +7343,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentAadhaar}
-                          onChange={(e) => setFormData({...formData, studentAadhaar: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="12-digit Aadhaar number"
                           pattern="[0-9]{12}"
@@ -7361,7 +7355,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.studentCasteCertNo}
-                          onChange={(e) => setFormData({...formData, studentCasteCertNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter certificate number"
                         />
@@ -7377,7 +7371,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
                         <select
                           value={formData.socialCategory}
-                          onChange={(e) => setFormData({...formData, socialCategory: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Category</option>
@@ -7396,7 +7390,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.socialCategoryOther}
-                            onChange={(e) => setFormData({...formData, socialCategoryOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify social category"
                           />
@@ -7406,7 +7400,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
                         <select
                           value={formData.religion}
-                          onChange={(e) => setFormData({...formData, religion: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Religion</option>
@@ -7422,7 +7416,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.religionOther}
-                            onChange={(e) => setFormData({...formData, religionOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify religion"
                           />
@@ -7432,7 +7426,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
                         <select
                           value={formData.studentCaste}
-                          onChange={(e) => setFormData({...formData, studentCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -7448,7 +7442,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.studentCasteOther}
-                            onChange={(e) => setFormData({...formData, studentCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify student caste"
                           />
@@ -7458,7 +7452,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
                         <select
                           value={formData.fatherCaste}
-                          onChange={(e) => setFormData({...formData, fatherCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -7474,7 +7468,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.fatherCasteOther}
-                            onChange={(e) => setFormData({...formData, fatherCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify father caste"
                           />
@@ -7484,7 +7478,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
                         <select
                           value={formData.motherCaste}
-                          onChange={(e) => setFormData({...formData, motherCaste: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Caste</option>
@@ -7500,7 +7494,7 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.motherCasteOther}
-                            onChange={(e) => setFormData({...formData, motherCasteOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify mother caste"
                           />
@@ -7517,7 +7511,7 @@ const ManageUsers: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
                         <select
                           value={formData.disability}
-                          onChange={(e) => setFormData({...formData, disability: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="Not Applicable">Not Applicable</option>
@@ -7535,20 +7529,20 @@ const ManageUsers: React.FC = () => {
                           <input
                             type="text"
                             value={formData.disabilityOther}
-                            onChange={(e) => setFormData({...formData, disabilityOther: e.target.value})}
+                            onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
                             placeholder="Please specify disability type"
                           />
                         )}
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
                         </label>
                         <select
                           value={formData.isRTECandidate || ''}
-                          onChange={(e) => setFormData({...formData, isRTECandidate: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
                           <option value="">Select Option</option>
@@ -7568,7 +7562,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankName}
-                          onChange={(e) => setFormData({...formData, bankName: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter bank name"
                         />
@@ -7578,7 +7572,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankAccountNo}
-                          onChange={(e) => setFormData({...formData, bankAccountNo: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="Enter account number"
                         />
@@ -7588,7 +7582,7 @@ const ManageUsers: React.FC = () => {
                         <input
                           type="text"
                           value={formData.bankIFSC}
-                          onChange={(e) => setFormData({...formData, bankIFSC: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           placeholder="11-character IFSC code"
                           pattern="[A-Z]{4}0[A-Z0-9]{6}"
@@ -7609,7 +7603,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.employeeId}
-                        onChange={(e) => setFormData({...formData, employeeId: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter employee ID"
                       />
@@ -7619,7 +7613,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.qualification}
-                        onChange={(e) => setFormData({...formData, qualification: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter qualification"
                       />
@@ -7629,7 +7623,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="number"
                         value={formData.experience}
-                        onChange={(e) => setFormData({...formData, experience: parseInt(e.target.value) || 0})}
+                        onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter years of experience"
                         min="0"
@@ -7640,7 +7634,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.subjects}
-                        onChange={(e) => setFormData({...formData, subjects: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="e.g., Mathematics, Physics"
                       />
@@ -7658,7 +7652,7 @@ const ManageUsers: React.FC = () => {
                       <select
                         required
                         value={formData.adminLevel}
-                        onChange={(e) => setFormData({...formData, adminLevel: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Admin Level</option>
@@ -7674,7 +7668,7 @@ const ManageUsers: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
                       <select
                         value={formData.department}
-                        onChange={(e) => setFormData({...formData, department: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Department</option>
@@ -7692,7 +7686,7 @@ const ManageUsers: React.FC = () => {
                       <input
                         type="text"
                         value={formData.employeeId}
-                        onChange={(e) => setFormData({...formData, employeeId: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         placeholder="Enter employee ID"
                       />
@@ -7701,7 +7695,7 @@ const ManageUsers: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
                       <select
                         value={formData.accessLevel}
-                        onChange={(e) => setFormData({...formData, accessLevel: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       >
                         <option value="">Select Access Level</option>
@@ -7723,7 +7717,7 @@ const ManageUsers: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                     <textarea
                       value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter complete address"
                       rows={2}
@@ -7734,7 +7728,7 @@ const ManageUsers: React.FC = () => {
                     <input
                       type="text"
                       value={formData.city}
-                      onChange={(e) => setFormData({...formData, city: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter city"
                     />
@@ -7744,7 +7738,7 @@ const ManageUsers: React.FC = () => {
                     <input
                       type="text"
                       value={formData.state}
-                      onChange={(e) => setFormData({...formData, state: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter state"
                     />
@@ -7754,7 +7748,7 @@ const ManageUsers: React.FC = () => {
                     <input
                       type="text"
                       value={formData.pinCode}
-                      onChange={(e) => setFormData({...formData, pinCode: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="Enter pin code"
                       pattern="[0-9]{6}"
@@ -7806,7 +7800,7 @@ const ManageUsers: React.FC = () => {
                   Please save these credentials and share them with the user.
                 </p>
               </div>
-              
+
               <div className="mt-6 bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-3">Login Credentials</h4>
                 <div className="space-y-3">
@@ -7822,7 +7816,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
                     <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
@@ -7835,7 +7829,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Password</label>
                     <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
@@ -7848,7 +7842,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
                     <div className="mt-1 bg-white border rounded px-3 py-2">
@@ -7857,7 +7851,7 @@ const ManageUsers: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => setShowCredentials(null)}
@@ -7887,7 +7881,7 @@ const ManageUsers: React.FC = () => {
                   Please save these new credentials and share them with the user.
                 </p>
               </div>
-              
+
               <div className="mt-6 bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-3">New Login Credentials</h4>
                 <div className="space-y-3">
@@ -7903,7 +7897,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
                     <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
@@ -7916,7 +7910,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">New Password</label>
                     <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
@@ -7929,7 +7923,7 @@ const ManageUsers: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
                     <div className="mt-1 bg-white border rounded px-3 py-2">
@@ -7938,7 +7932,7 @@ const ManageUsers: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={() => setShowResetCredentials(null)}
@@ -8027,7 +8021,7 @@ const ManageUsers: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      
+
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <div className="flex items-center">
                           <FileText className="h-5 w-5 text-blue-500 mr-2" />
@@ -8041,7 +8035,7 @@ const ManageUsers: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      
+
                       {isImporting ? (
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
@@ -8049,9 +8043,9 @@ const ManageUsers: React.FC = () => {
                             <span>{Math.round(importProgress)}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
+                            <div
                               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{width: `${importProgress}%`}}
+                              style={{ width: `${importProgress}%` }}
                             ></div>
                           </div>
                         </div>

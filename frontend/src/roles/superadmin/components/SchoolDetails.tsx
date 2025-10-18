@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Users, GraduationCap, Settings, BarChart3, Calendar, BookOpen, Award, TrendingUp, Edit, Save, X, Plus, Trash2, Eye, EyeOff, RefreshCw, Key } from 'lucide-react';
+import { ArrowLeft, Users, GraduationCap, Settings, BarChart3, Calendar, BookOpen, Award, TrendingUp, Edit, Save, X, Plus, Trash2, Eye, EyeOff, RefreshCw, Key, Upload } from 'lucide-react'; // Added Upload icon
 import { useApp } from '../context/AppContext';
 import api from '../../../api/axios';
 import { schoolUserAPI } from '../../../api/schoolUsers';
 import AcademicTestConfiguration from './AcademicTestConfiguration';
+import { ImportUsersDialog } from './ImportUsersDialog'; // Import the dialog
 
 // Define proper types for the component
 type TabType = 'overview' | 'users' | 'academics' | 'settings';
@@ -29,6 +30,12 @@ interface User {
   teachingInfo?: any;
   adminInfo?: any;
   parentInfo?: any;
+  // Add studentDetails to the interface
+  studentDetails?: {
+    currentClass?: string;
+    currentSection?: string;
+    [key: string]: any; // Allow other properties
+  };
 }
 
 interface Result {
@@ -80,6 +87,8 @@ interface SchoolData {
   marks: Mark[];
   settings: SchoolSettings;
   accessMatrix?: any;
+  // Add schoolCode to SchoolData
+  schoolCode?: string;
 }
 
 function SchoolDetails() {
@@ -131,24 +140,26 @@ function SchoolDetailsContent() {
   const appContext = useApp();
   const schools = appContext?.schools || [];
   const selectedSchoolId = appContext?.selectedSchoolId || '';
-  const setCurrentView = appContext?.setCurrentView || (() => {});
+  const setCurrentView = appContext?.setCurrentView || (() => { });
   const getSchoolData = appContext?.getSchoolData;
   const updateUserRole = appContext?.updateUserRole;
   const updateSchoolSettings = appContext?.updateSchoolSettings;
-  
+
   // Component state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fetchedData, setFetchedData] = useState<SchoolData | null>(null);
-  
+
   // UI state
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [editingUserData, setEditingUserData] = useState<string | null>(null);
   const [editingSettings, setEditingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState<Partial<SchoolSettings>>({});
-  
+
   // User management state
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false); // State for import dialog
+  const [schoolCode, setSchoolCode] = useState<string | null>(null); // State for school code
   const [addUserForm, setAddUserForm] = useState({
     firstName: '',
     lastName: '',
@@ -164,15 +175,15 @@ function SchoolDetailsContent() {
   const [resettingPassword, setResettingPassword] = useState<string | null>(null);
   const [resetPasswordResult, setResetPasswordResult] = useState<any>(null);
   const [showTestDetailsManager, setShowTestDetailsManager] = useState(false);
-  
+
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
-  
-  
+
+
   // Find the selected school
   const school = schools.find(s => s.id === selectedSchoolId);
-  
+
   // Logging for debugging
   useEffect(() => {
     console.log('SchoolDetails - Debug Info:');
@@ -182,24 +193,26 @@ function SchoolDetailsContent() {
     console.log('- loading state:', loading);
     console.log('- error state:', error);
     console.log('- data loaded:', fetchedData ? 'yes' : 'no');
-  }, [selectedSchoolId, school, loading, error, fetchedData]);
-  
+    console.log('- schoolCode:', schoolCode);
+  }, [selectedSchoolId, school, loading, error, fetchedData, schoolCode]);
+
   // Load data when component mounts or ID changes
   useEffect(() => {
     let isMounted = true;
     let timeoutId: any;
-    
+
     async function fetchData() {
       if (!selectedSchoolId) {
         console.log('No selectedSchoolId, skipping data fetch');
         return;
       }
-      
+
       console.log('Fetching data for school:', selectedSchoolId, 'reloadKey:', reloadKey);
-      
+
       setLoading(true);
       setError(null);
-      
+      setSchoolCode(null); // Reset school code on reload
+
       // Set a timeout in case the request takes too long
       timeoutId = setTimeout(() => {
         if (isMounted) {
@@ -207,42 +220,44 @@ function SchoolDetailsContent() {
           setError('Request timed out after 10 seconds');
         }
       }, 10000);
-      
+
       try {
         console.log('Making API calls for school data...');
         // First get school information to get the school code
         const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-        
+
         if (!isMounted) return;
-        
+
         const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-        const schoolCode = schoolInfo.code;
-        
-        if (!schoolCode) {
+        const currentSchoolCode = schoolInfo.code; // Get school code
+
+        if (!currentSchoolCode) {
           throw new Error('School code not found');
         }
-        
-        console.log('Fetching users for school code:', schoolCode);
-        
+
+        setSchoolCode(currentSchoolCode); // Set school code in state
+
+        console.log('Fetching users for school code:', currentSchoolCode);
+
         const token = getAuthToken();
-        
+
         if (!token) {
           throw new Error('No authentication token found');
         }
-        
-        const usersRes = await schoolUserAPI.getAllUsers(schoolCode, token);
-        
+
+        const usersRes = await schoolUserAPI.getAllUsers(currentSchoolCode, token);
+
         if (!isMounted) return;
         clearTimeout(timeoutId);
-        
+
         console.log('API responses received:', {
           school: schoolInfo,
           users: usersRes
         });
-        
+
         // Handle the new flat array format from the backend
         let allUsers = [];
-        
+
         if (usersRes && usersRes.data && Array.isArray(usersRes.data)) {
           // New format: flat array in data field
           allUsers = usersRes.data;
@@ -262,7 +277,7 @@ function SchoolDetailsContent() {
             studentCount: usersRes.student?.length || 0,
             parentCount: usersRes.parent?.length || 0
           });
-          
+
           if (usersRes.admin && Array.isArray(usersRes.admin)) {
             console.log('Processing', usersRes.admin.length, 'admins');
             allUsers.push(...usersRes.admin.map((user: any) => ({ ...user, role: 'admin' })));
@@ -283,8 +298,15 @@ function SchoolDetailsContent() {
           console.log('No user data received or unexpected format');
           allUsers = [];
         }
-        
+
         console.log('Processing', allUsers.length, 'users...');
+        // Log first student to check studentDetails
+        const firstStudent = allUsers.find(u => u.role === 'student');
+        if (firstStudent) {
+          console.log('Sample student data:', firstStudent);
+        }
+
+
         console.log('User breakdown:', {
           total: allUsers.length,
           byRole: allUsers.reduce((acc: Record<string, number>, user: any) => {
@@ -292,7 +314,7 @@ function SchoolDetailsContent() {
             return acc;
           }, {})
         });
-        
+
         // Process data into SchoolData format
         const processed: SchoolData = {
           users: allUsers.filter((user: any) => !user._placeholder), // Remove placeholder documents
@@ -309,9 +331,11 @@ function SchoolDetailsContent() {
             },
             subjects: Array.isArray(schoolInfo?.settings?.subjects) ? schoolInfo.settings.subjects : [],
             classes: Array.isArray(schoolInfo?.settings?.classes) ? schoolInfo.settings.classes : []
-          }
+          },
+          schoolCode: currentSchoolCode, // Store the school code
+          accessMatrix: schoolInfo?.accessMatrix || {} // Store access matrix
         };
-        
+
         console.log('Final processed data:', {
           totalUsers: processed.users.length,
           userRoles: processed.users.reduce((acc: Record<string, number>, user) => {
@@ -324,33 +348,31 @@ function SchoolDetailsContent() {
       } catch (err: any) {
         if (!isMounted) return;
         clearTimeout(timeoutId);
-        
+
         console.error('Failed to load school details:', err);
         console.error('Error response:', err.response?.data);
         setError(err?.response?.data?.message || err?.message || 'Failed to load school details');
         setLoading(false);
       }
     }
-    
+
     fetchData();
-    
+
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [selectedSchoolId, reloadKey, school?.name]);
-  
-  
+  }, [selectedSchoolId, reloadKey]); // Removed school?.name dependency, rely on reloadKey
+
+
   // Handle user management operations
   const handleSaveUser = async (userId: string) => {
     try {
-      const school = schools.find(s => s.id === selectedSchoolId);
-      if (!school) {
-        throw new Error('School not found');
+      if (!schoolCode) {
+        throw new Error('School code not found');
       }
 
       const token = getAuthToken();
-
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -359,15 +381,6 @@ function SchoolDetailsContent() {
       const currentUser = schoolData?.users.find(u => u._id === userId);
       if (!currentUser) {
         throw new Error('User not found');
-      }
-
-      // Get school code from schoolInfo (from the API response)
-      const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-      const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-      const schoolCode = schoolInfo.code;
-
-      if (!schoolCode) {
-        throw new Error('School code not found');
       }
 
       // Prepare update data
@@ -408,7 +421,7 @@ function SchoolDetailsContent() {
       alert('Failed to update user: ' + err.message);
     }
   };
-  
+
   const handleEditUser = (user: any) => {
     setEditingUser(user._id);
     setUserEditForm({
@@ -422,7 +435,7 @@ function SchoolDetailsContent() {
       confirmPassword: ''
     });
   };
-  
+
   const generatePassword = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let result = '';
@@ -435,13 +448,16 @@ function SchoolDetailsContent() {
       confirmPassword: result
     }));
   };
-  
+
   const handleDeleteUser = async (userId: string) => {
     try {
       const token = getAuthToken();
-      
       if (!token) {
         throw new Error('No authentication token found');
+      }
+
+      if (!schoolCode) {
+        throw new Error('School code not found');
       }
 
       // Find the user to get their userId (not _id)
@@ -450,20 +466,11 @@ function SchoolDetailsContent() {
         throw new Error('User not found');
       }
 
-      // Get school code from API
-      const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-      const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-      const schoolCode = schoolInfo.code;
-      
-      if (!schoolCode) {
-        throw new Error('School code not found');
-      }
-
       await schoolUserAPI.deleteUser(schoolCode, currentUser.userId, token);
-      
+
       setDeletingUser(null);
       setReloadKey(prev => prev + 1);
-      
+
       alert('User deleted successfully!');
     } catch (err: any) {
       console.error('Failed to delete user:', err);
@@ -474,41 +481,39 @@ function SchoolDetailsContent() {
   const handleResetPassword = async (userId: string, userIdCode: string) => {
     try {
       const token = getAuthToken();
-      
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      setResettingPassword(userId);
-      
-      // Get school code from API
-      const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-      const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-      const schoolCode = schoolInfo.code;
-      
       if (!schoolCode) {
         throw new Error('School code not found');
       }
 
+      setResettingPassword(userId);
+
       const result = await schoolUserAPI.resetPassword(schoolCode, userIdCode, token);
-      
+
       setResetPasswordResult(result.data);
       setResettingPassword(null);
-      
+
       // Show the new password to the admin
       alert(`Password reset successfully!\n\nNew credentials:\nUser ID: ${result.data.userId}\nEmail: ${result.data.email}\nNew Password: ${result.data.password}\n\nPlease share these credentials with the user.`);
-      
+
     } catch (err: any) {
       console.error('Failed to reset password:', err);
       setResettingPassword(null);
       alert('Failed to reset password: ' + err.message);
     }
   };
-  
+
   const handleAddUser = async () => {
     setAddingUser(true);
-    
+
     try {
+      if (!schoolCode) {
+        throw new Error('School code not found');
+      }
+
       console.log('Adding user with data:', {
         firstName: addUserForm.firstName,
         lastName: addUserForm.lastName,
@@ -522,22 +527,12 @@ function SchoolDetailsContent() {
       if (!addUserForm.firstName || !addUserForm.lastName || !addUserForm.email || !addUserForm.role) {
         throw new Error('Please fill in all required fields');
       }
-      
+
       const token = getAuthToken();
-      
       if (!token) {
         throw new Error('No authentication token found');
       }
-      
-      // Get school code from API
-      const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-      const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-      const schoolCode = schoolInfo.code;
-      
-      if (!schoolCode) {
-        throw new Error('School code not found');
-      }
-      
+
       // Format the data for the new API
       const userData = {
         firstName: addUserForm.firstName,
@@ -546,14 +541,14 @@ function SchoolDetailsContent() {
         role: addUserForm.role,
         phone: addUserForm.phone
       };
-      
+
       console.log('Making API call to create user in school:', schoolCode);
-      
+
       // Call the new school-specific API to create the user
       const result = await schoolUserAPI.addUser(schoolCode, userData, token);
-      
+
       console.log('User creation response:', result);
-      
+
       // Close the modal and reset the form
       setShowAddUserModal(false);
       setAddUserForm({
@@ -563,11 +558,11 @@ function SchoolDetailsContent() {
         role: 'admin' as UserRole,
         phone: ''
       });
-      
+
       // Refresh the data
       console.log('Triggering data refresh...');
       setReloadKey(prev => prev + 1);
-      
+
       // Show success message with credentials
       alert(`User added successfully!\n\nCredentials:\nUser ID: ${result.data.credentials.userId}\nEmail: ${result.data.credentials.email}\nPassword: ${result.data.credentials.password}\n\nPlease share these credentials with the user.`);
     } catch (err: any) {
@@ -579,11 +574,11 @@ function SchoolDetailsContent() {
       setAddingUser(false);
     }
   };
-  
+
   const handleSaveSettings = async () => {
     try {
       const token = getAuthToken();
-      
+
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -610,21 +605,21 @@ function SchoolDetailsContent() {
 
       // Close editing mode
       setEditingSettings(false);
-      
+
       // Refresh the data to show updated settings
       setReloadKey(prev => prev + 1);
-      
+
       alert('Settings updated successfully!');
-      
+
     } catch (err: any) {
       console.error('Failed to update settings:', err);
       alert('Failed to update settings: ' + (err.response?.data?.message || err.message));
     }
   };
-  
+
   // Alias for backward compatibility
   const schoolData = fetchedData;
-  
+
   // Case 1: No school ID
   if (!selectedSchoolId) {
     return (
@@ -633,7 +628,7 @@ function SchoolDetailsContent() {
         <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
           <p>No school selected. Please go back and select a school.</p>
         </div>
-        <button 
+        <button
           onClick={() => setCurrentView('dashboard')}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
         >
@@ -642,7 +637,7 @@ function SchoolDetailsContent() {
       </div>
     );
   }
-  
+
   // Case 2: School not found
   if (!school) {
     return (
@@ -652,7 +647,7 @@ function SchoolDetailsContent() {
           <p>School not found. The school ID may be invalid.</p>
           <p className="text-sm mt-2">ID: {selectedSchoolId}</p>
         </div>
-        <button 
+        <button
           onClick={() => setCurrentView('dashboard')}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
         >
@@ -661,7 +656,7 @@ function SchoolDetailsContent() {
       </div>
     );
   }
-  
+
   // Case 3: Loading
   if (loading) {
     return (
@@ -683,7 +678,7 @@ function SchoolDetailsContent() {
       </div>
     );
   }
-  
+
   // Case 4: Error
   if (error) {
     return (
@@ -703,7 +698,7 @@ function SchoolDetailsContent() {
           <p className="mt-1">{error}</p>
         </div>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => setReloadKey(prev => prev + 1)} // Use reloadKey to retry
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           Retry
@@ -711,7 +706,7 @@ function SchoolDetailsContent() {
       </div>
     );
   }
-  
+
   // Case 5: Success - basic view
   return (
     <div className="p-6">
@@ -725,7 +720,7 @@ function SchoolDetailsContent() {
         </button>
         <h1 className="text-2xl font-bold text-gray-900 ml-4">School Details - {school.name}</h1>
       </div>
-      
+
       {/* DEBUG Panel - visible to help diagnose issues */}
       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
         <h2 className="font-bold text-blue-800 mb-2">Debug Information</h2>
@@ -733,25 +728,24 @@ function SchoolDetailsContent() {
           <div>
             <p><span className="font-medium">School ID:</span> {selectedSchoolId}</p>
             <p><span className="font-medium">School Name:</span> {school.name}</p>
-            <p><span className="font-medium">Users Count:</span> {schoolData?.users?.length || 0}</p>
+            <p><span className="font-medium">School Code:</span> {schoolCode || 'N/A'}</p>
           </div>
           <div>
             <p><span className="font-medium">Data Loaded:</span> {schoolData ? '✅' : '❌'}</p>
             <p><span className="font-medium">Loading State:</span> {loading ? 'Loading' : 'Complete'}</p>
-            <p><span className="font-medium">Error State:</span> {error || 'None'}</p>
+            <p><span className="font-medium">Users Count:</span> {schoolData?.users?.length || 0}</p>
           </div>
         </div>
       </div>
-      
+
       {/* Tabs Navigation */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'overview'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'overview'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             onClick={() => setActiveTab('overview')}
           >
             <span className="flex items-center">
@@ -759,13 +753,12 @@ function SchoolDetailsContent() {
               Overview
             </span>
           </button>
-          
+
           <button
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'users'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'users'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             onClick={() => setActiveTab('users')}
           >
             <span className="flex items-center">
@@ -773,14 +766,13 @@ function SchoolDetailsContent() {
               Users
             </span>
           </button>
-          
-          
+
+
           <button
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'academics'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'academics'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             onClick={() => setActiveTab('academics')}
           >
             <span className="flex items-center">
@@ -788,13 +780,12 @@ function SchoolDetailsContent() {
               Academics
             </span>
           </button>
-          
+
           <button
-            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'settings'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'settings'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             onClick={() => setActiveTab('settings')}
           >
             <span className="flex items-center">
@@ -804,7 +795,7 @@ function SchoolDetailsContent() {
           </button>
         </nav>
       </div>
-      
+
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -816,9 +807,10 @@ function SchoolDetailsContent() {
                 <h3 className="font-medium text-gray-700 mb-2">Basic Info</h3>
                 <p><span className="font-medium">Name:</span> {school.name}</p>
                 <p><span className="font-medium">ID:</span> {school.id}</p>
+                <p><span className="font-medium">Code:</span> {schoolCode || 'N/A'}</p>
                 <p><span className="font-medium">Contact:</span> {schoolData?.settings?.schoolName || 'N/A'}</p>
               </div>
-              
+
               <div>
                 <h3 className="font-medium text-gray-700 mb-2">User Counts</h3>
                 <p><span className="font-medium">Total Users:</span> {schoolData?.users?.length || 0}</p>
@@ -828,7 +820,7 @@ function SchoolDetailsContent() {
               </div>
             </div>
           </div>
-          
+
           {/* Quick Actions Card */}
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
@@ -840,7 +832,7 @@ function SchoolDetailsContent() {
                 <Users className="h-8 w-8 text-blue-600 mb-2" />
                 <span className="text-blue-800 font-medium">Manage Users</span>
               </button>
-              
+
               <button
                 onClick={() => setActiveTab('settings')}
                 className="flex flex-col items-center justify-center p-4 bg-emerald-50 rounded-lg hover:bg-emerald-100"
@@ -848,7 +840,7 @@ function SchoolDetailsContent() {
                 <Settings className="h-8 w-8 text-emerald-600 mb-2" />
                 <span className="text-emerald-800 font-medium">School Settings</span>
               </button>
-              
+
               <button
                 onClick={() => setCurrentView('school-login')}
                 className="flex flex-col items-center justify-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100"
@@ -856,38 +848,47 @@ function SchoolDetailsContent() {
                 <Key className="h-8 w-8 text-purple-600 mb-2" />
                 <span className="text-purple-800 font-medium">Test Login</span>
               </button>
-              
+
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => setReloadKey(prev => prev + 1)}
                 className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100"
               >
-                <TrendingUp className="h-8 w-8 text-gray-600 mb-2" />
+                <RefreshCw className="h-8 w-8 text-gray-600 mb-2" />
                 <span className="text-gray-800 font-medium">Refresh Data</span>
               </button>
             </div>
           </div>
         </div>
       )}
-      
+
       {activeTab === 'users' && (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold">Users Management</h2>
-            <button
-              onClick={() => setShowAddUserModal(true)}
-              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add User</span>
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowImportDialog(true)}
+                className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Import Users</span>
+              </button>
+              <button
+                onClick={() => setShowAddUserModal(true)}
+                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add User</span>
+              </button>
+            </div>
           </div>
-          
+
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="text-gray-500">Loading users...</div>
             </div>
           )}
-          
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <div className="text-red-800 font-medium">Error loading users</div>
@@ -900,230 +901,239 @@ function SchoolDetailsContent() {
               </button>
             </div>
           )}
-          
+
           {!loading && !error && schoolData && (
             <>
-          {/* Search and Filter */}
-          <div className="mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label htmlFor="searchUsers" className="block text-sm font-medium text-gray-700 mb-1">
-                Search Users
-              </label>
-              <div className="relative">
-                <input
-                  id="searchUsers"
-                  type="text"
-                  placeholder="Search by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
+              {/* Search and Filter */}
+              <div className="mb-6 flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <label htmlFor="searchUsers" className="block text-sm font-medium text-gray-700 mb-1">
+                    Search Users
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="searchUsers"
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full px-3 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:w-64">
+                  <label htmlFor="roleFilter" className="block text-sm font-medium text-gray-700 mb-1">
+                    Filter by Role
+                  </label>
+                  <select
+                    id="roleFilter"
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value as UserRole | 'all')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="student">Student</option>
+                  </select>
                 </div>
               </div>
-            </div>
-            
-            <div className="md:w-64">
-              <label htmlFor="roleFilter" className="block text-sm font-medium text-gray-700 mb-1">
-                Filter by Role
-              </label>
-              <select
-                id="roleFilter"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as UserRole | 'all')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="teacher">Teacher</option>
-                <option value="student">Student</option>
-              </select>
-            </div>
-          </div>
-          
-          {/* User Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg">
-              <div className="font-medium text-purple-800">Admins</div>
-              <div className="text-2xl font-bold text-purple-900">{schoolData.users.filter(u => u.role === 'admin').length}</div>
-            </div>
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
-              <div className="font-medium text-blue-800">Teachers</div>
-              <div className="text-2xl font-bold text-blue-900">{schoolData.users.filter(u => u.role === 'teacher').length}</div>
-            </div>
-            <div className="p-4 bg-green-50 border border-green-100 rounded-lg">
-              <div className="font-medium text-green-800">Students</div>
-              <div className="text-2xl font-bold text-green-900">{schoolData.users.filter(u => u.role === 'student').length}</div>
-            </div>
-            <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg">
-              <div className="font-medium text-gray-800">Total Users</div>
-              <div className="text-2xl font-bold text-gray-900">{schoolData.users.length}</div>
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {schoolData.users
-                  .filter(user => {
-                    // Apply role filter
-                    if (roleFilter !== 'all' && user.role !== roleFilter) {
-                      return false;
-                    }
-                    
-                    // Apply search query
-                    if (searchQuery) {
-                      const query = searchQuery.toLowerCase();
-                      return (
-                        (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
-                        (user.email || '').toLowerCase().includes(query) ||
-                        (user.userId || '').toLowerCase().includes(query)
-                      );
-                    }
-                    
-                    return true;
-                  })
-                  .map((user: User) => (
-                  <tr key={user._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full w-full flex items-center justify-center bg-blue-100 text-blue-800 font-medium">
-                            {user.name?.firstName?.[0]?.toUpperCase() || user.name?.displayName?.[0]?.toUpperCase() || 'U'}
-                            {user.name?.lastName?.[0]?.toUpperCase() || user.name?.displayName?.[1]?.toUpperCase() || 'U'}
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.name?.displayName || user.name?.firstName || user.email || 'Unknown User'}</div>
-                          <div className="text-sm text-gray-500">ID: {user.userId || 'N/A'}</div>
-                          <div className="text-sm text-gray-500">Since {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
-                        user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 
-                        user.role === 'teacher' ? 'bg-blue-100 text-blue-800' : 
-                        user.role === 'student' ? 'bg-green-100 text-green-800' : 
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {(user.role || 'unknown').charAt(0).toUpperCase() + (user.role || 'unknown').slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.email || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${
-                        (user.isActive !== false) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {(user.isActive !== false) ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button 
-                        className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
-                        onClick={() => handleEditUser(user)}
-                        title="Edit User"
-                      >
-                        <Edit size={16} />
-                        Edit
-                      </button>
-                      <button 
-                        className="text-green-600 hover:text-green-900 inline-flex items-center gap-1"
-                        onClick={() => handleResetPassword(user._id || '', user.userId || '')}
-                        title="Reset Password"
-                      >
-                        <Key size={16} />
-                        Reset
-                      </button>
-                      <button 
-                        className="text-red-600 hover:text-red-900 inline-flex items-center gap-1"
-                        onClick={() => setDeletingUser(user._id)}
-                        title="Delete User"
-                      >
-                        <Trash2 size={16} />
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                
-                {/* No results message */}
-                {schoolData.users.filter(user => {
-                  if (roleFilter !== 'all' && user.role !== roleFilter) {
-                    return false;
-                  }
-                  if (searchQuery) {
-                    const query = searchQuery.toLowerCase();
-                    return (
-                      (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
-                      (user.email || '').toLowerCase().includes(query) ||
-                      (user.userId || '').toLowerCase().includes(query)
-                    );
-                  }
-                  return true;
-                }).length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                      <div className="flex flex-col items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-lg font-medium">No users found</p>
-                        <p className="text-sm mt-1">
-                          {searchQuery 
-                            ? `No users match the search "${searchQuery}"` 
-                            : roleFilter !== 'all' 
-                              ? `No users with role "${roleFilter}" found` 
-                              : 'There are no users to display'}
-                        </p>
-                        {(searchQuery || roleFilter !== 'all') && (
-                          <button 
-                            onClick={() => {
-                              setSearchQuery('');
-                              setRoleFilter('all');
-                            }}
-                            className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          >
-                            Clear filters
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+
+              {/* User Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="p-4 bg-purple-50 border border-purple-100 rounded-lg">
+                  <div className="font-medium text-purple-800">Admins</div>
+                  <div className="text-2xl font-bold text-purple-900">{schoolData.users.filter(u => u.role === 'admin').length}</div>
+                </div>
+                <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
+                  <div className="font-medium text-blue-800">Teachers</div>
+                  <div className="text-2xl font-bold text-blue-900">{schoolData.users.filter(u => u.role === 'teacher').length}</div>
+                </div>
+                <div className="p-4 bg-green-50 border border-green-100 rounded-lg">
+                  <div className="font-medium text-green-800">Students</div>
+                  <div className="text-2xl font-bold text-green-900">{schoolData.users.filter(u => u.role === 'student').length}</div>
+                </div>
+                <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg">
+                  <div className="font-medium text-gray-800">Total Users</div>
+                  <div className="text-2xl font-bold text-gray-900">{schoolData.users.length}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {schoolData.users
+                      .filter(user => {
+                        // Apply role filter
+                        if (roleFilter !== 'all' && user.role !== roleFilter) {
+                          return false;
+                        }
+
+                        // Apply search query
+                        if (searchQuery) {
+                          const query = searchQuery.toLowerCase();
+                          return (
+                            (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
+                            (user.email || '').toLowerCase().includes(query) ||
+                            (user.userId || '').toLowerCase().includes(query)
+                          );
+                        }
+
+                        return true;
+                      })
+                      .map((user: User) => (
+                        <tr key={user._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 flex-shrink-0 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-full w-full flex items-center justify-center bg-blue-100 text-blue-800 font-medium">
+                                  {user.name?.firstName?.[0]?.toUpperCase() || user.name?.displayName?.[0]?.toUpperCase() || 'U'}
+                                  {user.name?.lastName?.[0]?.toUpperCase() || user.name?.displayName?.[1]?.toUpperCase() || 'U'}
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">{user.name?.displayName || user.name?.firstName || user.email || 'Unknown User'}</div>
+                                <div className="text-sm text-gray-500">ID: {user.userId || 'N/A'}</div>
+
+                                {/* *** THIS IS THE FIX for Problem 1 *** */}
+                                {user.role === 'student' && (
+                                  <div className="text-sm text-gray-500">
+                                    Class: <strong>{user.studentDetails?.currentClass || 'N/A'}</strong>
+                                    {' - '}
+                                    <strong>{user.studentDetails?.currentSection || 'N/A'}</strong>
+                                  </div>
+                                )}
+                                {/* *** END OF FIX *** */}
+
+                                <div className="text-sm text-gray-500 mt-1">Since {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                              user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
+                                user.role === 'student' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
+                              }`}>
+                              {(user.role || 'unknown').charAt(0).toUpperCase() + (user.role || 'unknown').slice(1)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {user.email || 'N/A'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full ${(user.isActive !== false) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                              {(user.isActive !== false) ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button
+                              className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
+                              onClick={() => handleEditUser(user)}
+                              title="Edit User"
+                            >
+                              <Edit size={16} />
+                              Edit
+                            </button>
+                            <button
+                              className="text-green-600 hover:text-green-900 inline-flex items-center gap-1"
+                              onClick={() => handleResetPassword(user._id || '', user.userId || '')}
+                              title="Reset Password"
+                            >
+                              <Key size={16} />
+                              Reset
+                            </button>
+                            <button
+                              className="text-red-600 hover:text-red-900 inline-flex items-center gap-1"
+                              onClick={() => setDeletingUser(user._id)}
+                              title="Delete User"
+                            >
+                              <Trash2 size={16} />
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                    {/* No results message */}
+                    {schoolData.users.filter(user => {
+                      if (roleFilter !== 'all' && user.role !== roleFilter) {
+                        return false;
+                      }
+                      if (searchQuery) {
+                        const query = searchQuery.toLowerCase();
+                        return (
+                          (user.name?.displayName || user.name?.firstName || user.email || '').toLowerCase().includes(query) ||
+                          (user.email || '').toLowerCase().includes(query) ||
+                          (user.userId || '').toLowerCase().includes(query)
+                        );
+                      }
+                      return true;
+                    }).length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                            <div className="flex flex-col items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <p className="text-lg font-medium">No users found</p>
+                              <p className="text-sm mt-1">
+                                {searchQuery
+                                  ? `No users match the search "${searchQuery}"`
+                                  : roleFilter !== 'all'
+                                    ? `No users with role "${roleFilter}" found`
+                                    : 'There are no users to display'}
+                              </p>
+                              {(searchQuery || roleFilter !== 'all') && (
+                                <button
+                                  onClick={() => {
+                                    setSearchQuery('');
+                                    setRoleFilter('all');
+                                  }}
+                                  className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  Clear filters
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>
       )}
-      
-      
+
+
       {activeTab === 'academics' && (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-6">
@@ -1132,11 +1142,11 @@ function SchoolDetailsContent() {
               Configure test types and academic settings for {school?.name}
             </div>
           </div>
-          
+
           <AcademicTestConfiguration />
         </div>
       )}
-      
+
       {activeTab === 'settings' && schoolData && (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex justify-between items-center mb-6">
@@ -1174,7 +1184,7 @@ function SchoolDetailsContent() {
               </div>
             )}
           </div>
-          
+
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">School Name</label>
@@ -1182,7 +1192,7 @@ function SchoolDetailsContent() {
                 <input
                   type="text"
                   value={settingsForm.schoolName || ''}
-                  onChange={(e) => setSettingsForm({...settingsForm, schoolName: e.target.value})}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, schoolName: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               ) : (
@@ -1191,14 +1201,14 @@ function SchoolDetailsContent() {
                 </p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Academic Year</label>
               {editingSettings ? (
                 <input
                   type="text"
                   value={settingsForm.academicYear || ''}
-                  onChange={(e) => setSettingsForm({...settingsForm, academicYear: e.target.value})}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, academicYear: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               ) : (
@@ -1207,7 +1217,7 @@ function SchoolDetailsContent() {
                 </p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Threshold (%)</label>
               {editingSettings ? (
@@ -1216,7 +1226,7 @@ function SchoolDetailsContent() {
                   min="0"
                   max="100"
                   value={settingsForm.attendanceThreshold || 0}
-                  onChange={(e) => setSettingsForm({...settingsForm, attendanceThreshold: Number(e.target.value)})}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, attendanceThreshold: Number(e.target.value) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               ) : (
@@ -1225,7 +1235,7 @@ function SchoolDetailsContent() {
                 </p>
               )}
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">School Hours</label>
               {editingSettings ? (
@@ -1234,7 +1244,7 @@ function SchoolDetailsContent() {
                     type="time"
                     value={settingsForm.schoolHours?.start || ''}
                     onChange={(e) => setSettingsForm({
-                      ...settingsForm, 
+                      ...settingsForm,
                       schoolHours: {
                         start: e.target.value,
                         end: settingsForm.schoolHours?.end || '15:00'
@@ -1247,7 +1257,7 @@ function SchoolDetailsContent() {
                     type="time"
                     value={settingsForm.schoolHours?.end || ''}
                     onChange={(e) => setSettingsForm({
-                      ...settingsForm, 
+                      ...settingsForm,
                       schoolHours: {
                         start: settingsForm.schoolHours?.start || '08:00',
                         end: e.target.value
@@ -1262,14 +1272,14 @@ function SchoolDetailsContent() {
                 </p>
               )}
             </div>
-            
+
             {/* Access Matrix Section */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Access Control Matrix</h3>
               <p className="text-sm text-gray-600 mb-4">
                 Configure role-based permissions for different user types.
               </p>
-              
+
               {editingSettings ? (
                 <div className="space-y-4">
                   {schoolData.accessMatrix && Object.keys(schoolData.accessMatrix).map((role) => (
@@ -1313,11 +1323,10 @@ function SchoolDetailsContent() {
                       <div className="grid grid-cols-2 gap-3">
                         {Object.keys(schoolData.accessMatrix[role]).map((permission) => (
                           <div key={permission} className="flex items-center space-x-2">
-                            <div className={`w-4 h-4 rounded ${
-                              schoolData.accessMatrix[role][permission] 
-                                ? 'bg-green-500' 
-                                : 'bg-red-500'
-                            }`}></div>
+                            <div className={`w-4 h-4 rounded ${schoolData.accessMatrix[role][permission]
+                              ? 'bg-green-500'
+                              : 'bg-red-500'
+                              }`}></div>
                             <span className="text-sm text-gray-700 capitalize">
                               {permission.replace(/([A-Z])/g, ' $1').trim()}
                             </span>
@@ -1332,22 +1341,22 @@ function SchoolDetailsContent() {
           </div>
         </div>
       )}
-      
-      
+
+
       {/* Add User Modal */}
       {showAddUserModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold">Add New User</h3>
-              <button 
+              <button
                 onClick={() => setShowAddUserModal(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            
+
             <form onSubmit={(e) => { e.preventDefault(); handleAddUser(); }}>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1356,43 +1365,43 @@ function SchoolDetailsContent() {
                     <input
                       type="text"
                       value={addUserForm.firstName}
-                      onChange={(e) => setAddUserForm({...addUserForm, firstName: e.target.value})}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, firstName: e.target.value })}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="First Name"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                     <input
                       type="text"
                       value={addUserForm.lastName}
-                      onChange={(e) => setAddUserForm({...addUserForm, lastName: e.target.value})}
+                      onChange={(e) => setAddUserForm({ ...addUserForm, lastName: e.target.value })}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Last Name"
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
                     value={addUserForm.email}
-                    onChange={(e) => setAddUserForm({...addUserForm, email: e.target.value})}
+                    onChange={(e) => setAddUserForm({ ...addUserForm, email: e.target.value })}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Email Address"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                   <select
                     value={addUserForm.role}
-                    onChange={(e) => setAddUserForm({...addUserForm, role: e.target.value as UserRole})}
+                    onChange={(e) => setAddUserForm({ ...addUserForm, role: e.target.value as UserRole })}
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
@@ -1401,18 +1410,18 @@ function SchoolDetailsContent() {
                     <option value="student">Student</option>
                   </select>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone (Optional)</label>
                   <input
                     type="tel"
                     value={addUserForm.phone}
-                    onChange={(e) => setAddUserForm({...addUserForm, phone: e.target.value})}
+                    onChange={(e) => setAddUserForm({ ...addUserForm, phone: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Phone Number"
                   />
                 </div>
-                
+
                 <div>
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <div className="flex items-center">
@@ -1430,7 +1439,7 @@ function SchoolDetailsContent() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -1442,11 +1451,10 @@ function SchoolDetailsContent() {
                 <button
                   type="submit"
                   disabled={addingUser}
-                  className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors duration-200 ${
-                    addingUser
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                  className={`flex-1 px-4 py-2 rounded-lg text-white transition-colors duration-200 ${addingUser
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
                 >
                   {addingUser ? (
                     <>
@@ -1462,7 +1470,20 @@ function SchoolDetailsContent() {
           </div>
         </div>
       )}
-      
+
+      {/* Import Users Modal */}
+      {showImportDialog && schoolCode && (
+        <ImportUsersDialog
+          schoolCode={schoolCode} // Pass schoolCode
+          onClose={() => setShowImportDialog(false)}
+          onSuccess={() => {
+            setShowImportDialog(false);
+            setReloadKey(prev => prev + 1); // Refresh user list on success
+            alert('Users imported successfully! The user list has been updated.'); // Add success message
+          }}
+        />
+      )}
+
       {/* Confirm Delete Modal */}
       {deletingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1520,7 +1541,7 @@ function SchoolDetailsContent() {
                       <input
                         type="text"
                         value={userEditForm.firstName || ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, firstName: e.target.value})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, firstName: e.target.value })}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -1531,7 +1552,7 @@ function SchoolDetailsContent() {
                       <input
                         type="text"
                         value={userEditForm.lastName || ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, lastName: e.target.value})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, lastName: e.target.value })}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -1543,7 +1564,7 @@ function SchoolDetailsContent() {
                     <input
                       type="email"
                       value={userEditForm.email || ''}
-                      onChange={(e) => setUserEditForm({...userEditForm, email: e.target.value})}
+                      onChange={(e) => setUserEditForm({ ...userEditForm, email: e.target.value })}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -1554,7 +1575,7 @@ function SchoolDetailsContent() {
                     <input
                       type="tel"
                       value={userEditForm.phone || ''}
-                      onChange={(e) => setUserEditForm({...userEditForm, phone: e.target.value})}
+                      onChange={(e) => setUserEditForm({ ...userEditForm, phone: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -1570,7 +1591,7 @@ function SchoolDetailsContent() {
                       <input
                         type="password"
                         value={userEditForm.password || ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, password: e.target.value})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, password: e.target.value })}
                         placeholder="Leave blank to keep current password"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -1582,7 +1603,7 @@ function SchoolDetailsContent() {
                       <input
                         type="password"
                         value={userEditForm.confirmPassword || ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, confirmPassword: e.target.value})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, confirmPassword: e.target.value })}
                         placeholder="Confirm new password"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -1599,11 +1620,6 @@ function SchoolDetailsContent() {
                             setResettingPassword(editingUser);
                             const token = getAuthToken();
                             if (!token) throw new Error('No authentication token');
-
-                            const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
-                            const schoolInfo = schoolRes.data?.school || schoolRes.data;
-                            const schoolCode = schoolInfo.code;
-
                             if (!schoolCode) throw new Error('School code not found');
 
                             const result = await schoolUserAPI.resetPassword(schoolCode, user.userId, token);
@@ -1657,7 +1673,7 @@ function SchoolDetailsContent() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                       <select
                         value={userEditForm.role || ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, role: e.target.value})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, role: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="admin">Admin</option>
@@ -1670,7 +1686,7 @@ function SchoolDetailsContent() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                       <select
                         value={userEditForm.isActive !== undefined ? userEditForm.isActive.toString() : ''}
-                        onChange={(e) => setUserEditForm({...userEditForm, isActive: e.target.value === 'true'})}
+                        onChange={(e) => setUserEditForm({ ...userEditForm, isActive: e.target.value === 'true' })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="true">Active</option>
@@ -1703,10 +1719,9 @@ function SchoolDetailsContent() {
           </div>
         </div>
       )}
-      
+
     </div>
   );
 }
 
 export default SchoolDetails;
-  
