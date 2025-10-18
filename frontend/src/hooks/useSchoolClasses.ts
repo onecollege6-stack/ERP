@@ -68,13 +68,13 @@ export const useSchoolClasses = () => {
     try {
       // Fetch both classes and tests in parallel
       const [classesResponse, testsResponse] = await Promise.all([
-        fetch(`http://localhost:5050/api/admin/classes/${user.schoolCode}/classes-sections`, {
+        fetch(`/api/admin/classes/${user.schoolCode}/classes-sections`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }),
-        fetch(`http://localhost:5050/api/admin/classes/${user.schoolCode}/tests`, {
+        fetch(`/api/admin/classes/${user.schoolCode}/tests`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -124,7 +124,7 @@ export const useSchoolClasses = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5050/api/admin/classes/${user.schoolCode}/classes/${className}/sections`, {
+      const response = await fetch(`/api/admin/classes/${user.schoolCode}/classes/${className}/sections`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

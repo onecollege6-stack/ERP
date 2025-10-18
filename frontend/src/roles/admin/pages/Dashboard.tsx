@@ -103,14 +103,14 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
-  
+
   // Get auth token - improved to use AuthContext first
   const getAuthToken = () => {
     // First try the token from AuthContext
     if (token) {
       return token;
     }
-    
+
     // Then try localStorage with the correct key
     try {
       const authData = localStorage.getItem('erp.auth');
@@ -121,58 +121,58 @@ const Dashboard: React.FC = () => {
     } catch (e) {
       console.warn('Failed to parse auth data from localStorage:', e);
     }
-    
+
     // Fallback to old storage methods
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   };
-  
+
   useEffect(() => {
     const fetchSchoolAndUsers = async () => {
       try {
         setLoading(true);
         setError(null);
-        
+
         const debug: any = {
           user: user,
           schoolIdentifier: user?.schoolId || user?.schoolCode,
           token: !!getAuthToken(),
           timestamp: new Date().toISOString()
         };
-        
+
         console.log('🔍 Starting fetchSchoolAndUsers with debug info:', debug);
         setDebugInfo(debug);
-        
+
         // Check if we have a valid school identifier
         const schoolIdentifier = user?.schoolId || user?.schoolCode;
         if (!schoolIdentifier) {
           throw new Error(`No school identifier found. Please log out and log back in to refresh your school association.`);
         }
-        
+
         if (schoolIdentifier) {
           const token = getAuthToken();
           if (!token) {
             throw new Error('No authentication token found. Please log in again.');
           }
-          
+
           try {
             // Fetch school details
             console.log('📡 Fetching school details for identifier:', schoolIdentifier);
             const schoolResponse = await schoolAPI.getSchoolById(schoolIdentifier);
             console.log('✅ School response:', schoolResponse);
             setSchool(schoolResponse.data);
-            
+
             debug.schoolFetch = { success: true, schoolName: schoolResponse.data?.name };
           } catch (schoolErr: any) {
             console.error('❌ Error fetching school:', schoolErr);
-            debug.schoolFetch = { 
-              success: false, 
+            debug.schoolFetch = {
+              success: false,
               error: schoolErr.message,
               status: schoolErr.response?.status,
               data: schoolErr.response?.data
             };
             // Don't set error state yet, continue with users
           }
-          
+
           try {
             // Fetch school users using the correct API
             // Use schoolCode (P) for the API call, not schoolId (ObjectId)
@@ -180,7 +180,7 @@ const Dashboard: React.FC = () => {
             console.log('📡 Fetching users for school code:', schoolCodeForAPI);
             const usersResponse = await schoolUserAPI.getAllUsers(schoolCodeForAPI, token);
             console.log('✅ Users response:', usersResponse);
-            
+
             // Handle the new flat array format
             let allUsers: any[] = [];
             if (usersResponse && usersResponse.data && Array.isArray(usersResponse.data)) {
@@ -195,7 +195,7 @@ const Dashboard: React.FC = () => {
                 }
               }
             }
-            
+
             // Normalize user objects so `name` is always a string (displayName or first+last)
             const normalized = allUsers.map(u => {
               const userObj: any = { ...u };
@@ -205,33 +205,33 @@ const Dashboard: React.FC = () => {
               return userObj;
             });
             setUsers(normalized);
-            debug.usersFetch = { 
-              success: true, 
+            debug.usersFetch = {
+              success: true,
               totalUsers: allUsers.length,
               breakdown: allUsers.reduce((acc: Record<string, number>, user: any) => {
                 acc[user.role] = (acc[user.role] || 0) + 1;
                 return acc;
               }, {})
             };
-            
+
           } catch (userErr: any) {
             console.error('❌ Error fetching users:', userErr);
-            debug.usersFetch = { 
-              success: false, 
+            debug.usersFetch = {
+              success: false,
               error: userErr.message,
               status: userErr.response?.status,
               data: userErr.response?.data
             };
             throw userErr; // Propagate user fetch errors
           }
-          
-          setDebugInfo({...debug});
-          
+
+          setDebugInfo({ ...debug });
+
         } else {
           // No school information in user object
           console.log('⚠️  User object:', user);
           debug.noSchoolInfo = true;
-          
+
           if (user?.role === 'superadmin') {
             // SuperAdmin doesn't need school information
             setError(null);
@@ -243,8 +243,8 @@ const Dashboard: React.FC = () => {
             console.error('❌ No schoolId or schoolCode found in user object:', user);
             debug.missingSchoolAssociation = true;
           }
-          
-          setDebugInfo({...debug});
+
+          setDebugInfo({ ...debug });
         }
       } catch (err: any) {
         console.error('💥 Error in fetchSchoolAndUsers:', err);
@@ -261,14 +261,14 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     };
-    
+
     fetchSchoolAndUsers();
   }, [user]);
-  
+
   // Calculate stats from actual user data
   const totalStudents = users.filter(user => user.role === 'student').length;
   const totalTeachers = users.filter(user => user.role === 'teacher').length;
-  
+
   // Use real data from the school or fallback to sample data
   const stats = [
     { name: 'Total Students', value: totalStudents.toString(), icon: Users, color: 'bg-blue-500' },
@@ -319,7 +319,7 @@ const Dashboard: React.FC = () => {
             </div>
             <p className="text-red-600 mt-2">{error}</p>
             <div className="mt-3 flex gap-2">
-              <button 
+              <button
                 onClick={() => window.location.reload()}
                 className="inline-flex items-center px-3 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
               >
@@ -327,7 +327,7 @@ const Dashboard: React.FC = () => {
                 Retry
               </button>
               {!getAuthToken() && (
-                <button 
+                <button
                   onClick={() => {
                     logout();
                     window.location.href = '/login';
@@ -340,7 +340,7 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           </div>
-          
+
           {/* Debug Panel */}
           <div className="bg-gray-50 border border-gray-200 p-4 rounded-md">
             <div className="flex items-center justify-between mb-3">
@@ -355,7 +355,7 @@ const Dashboard: React.FC = () => {
                 {showDebug ? 'Hide' : 'Show'} Details
               </button>
             </div>
-            
+
             {showDebug && debugInfo && (
               <div className="bg-white p-3 rounded border text-xs">
                 <pre className="whitespace-pre-wrap overflow-x-auto text-gray-600">
@@ -363,7 +363,7 @@ const Dashboard: React.FC = () => {
                 </pre>
               </div>
             )}
-            
+
             <div className="text-xs text-gray-500 mt-2">
               <p>User Role: {user?.role}</p>
               <p>School ID: {user?.schoolId || 'Not found'}</p>
@@ -386,9 +386,9 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-col md:flex-row items-start md:items-center">
               {school?.logoUrl && (
                 <div className="w-24 h-24 mr-6 mb-4 md:mb-0 rounded-lg overflow-hidden flex-shrink-0">
-                  <img 
-                    src={school.logoUrl} 
-                    alt={`${school.name} logo`} 
+                  <img
+                    src={school.logoUrl}
+                    alt={`${school.name} logo`}
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -396,7 +396,7 @@ const Dashboard: React.FC = () => {
               <div className="flex-grow">
                 <h2 className="text-2xl font-bold text-gray-900">{school?.name || user?.schoolName || 'Your School'}</h2>
                 <p className="text-gray-500 mb-2">School Code: {school?.code || 'N/A'}</p>
-                
+
                 {/* Principal Information */}
                 {school?.principalName && (
                   <p className="text-gray-600 mb-2">
@@ -406,7 +406,7 @@ const Dashboard: React.FC = () => {
                     )}
                   </p>
                 )}
-                
+
                 {/* Academic Information */}
                 {(school?.settings?.academicYear?.currentYear || school?.settings?.classes?.length || school?.settings?.subjects?.length) && (
                   <div className="bg-gray-50 p-3 rounded-lg mb-4">
@@ -433,18 +433,18 @@ const Dashboard: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
                   {/* Complete Address */}
                   <div className="flex items-start">
                     <Building className="h-5 w-5 text-gray-400 mr-2 mt-0.5" />
                     <div>
                       <span className="text-gray-600 block">
-                        {school?.address?.street && school?.address?.area && school?.address?.city ? 
-                          `${school.address.street}, ${school.address.area}, ${school.address.city}` : 
-                          school?.address?.street && school?.address?.city ? 
-                          `${school.address.street}, ${school.address.city}` : 
-                          school?.address?.street || school?.address?.city || 'Address not available'}
+                        {school?.address?.street && school?.address?.area && school?.address?.city ?
+                          `${school.address.street}, ${school.address.area}, ${school.address.city}` :
+                          school?.address?.street && school?.address?.city ?
+                            `${school.address.street}, ${school.address.city}` :
+                            school?.address?.street || school?.address?.city || 'Address not available'}
                       </span>
                       {school?.address?.district && (
                         <span className="text-gray-500 text-sm">{school.address.district}</span>
@@ -457,7 +457,7 @@ const Dashboard: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Primary Phone */}
                   {(school?.contact?.phone || school?.mobile) && (
                     <div className="flex items-center">
@@ -470,7 +470,7 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Email */}
                   {(school?.contact?.email || school?.principalEmail) && (
                     <div className="flex items-center">
@@ -478,24 +478,24 @@ const Dashboard: React.FC = () => {
                       <span className="text-gray-600">{school.contact?.email || school.principalEmail}</span>
                     </div>
                   )}
-                  
+
                   {/* Website */}
                   {(school?.contact?.website || school?.website) && (
                     <div className="flex items-center">
                       <MapPin className="h-5 w-5 text-gray-400 mr-2" />
-                      <a 
-                        href={(school.contact?.website || school.website)?.startsWith('http') ? 
-                          (school.contact?.website || school.website) : 
-                          `https://${school.contact?.website || school.website}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <a
+                        href={(school.contact?.website || school.website)?.startsWith('http') ?
+                          (school.contact?.website || school.website) :
+                          `https://${school.contact?.website || school.website}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800"
                       >
                         {school.contact?.website || school.website}
                       </a>
                     </div>
                   )}
-                  
+
                   {/* School Type & Established Year */}
                   {(school?.schoolType || school?.establishedYear) && (
                     <div className="flex items-center">
@@ -510,7 +510,7 @@ const Dashboard: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Affiliation Board */}
                   {school?.affiliationBoard && (
                     <div className="flex items-center">
@@ -518,7 +518,7 @@ const Dashboard: React.FC = () => {
                       <span className="text-gray-600">{school.affiliationBoard} Affiliated</span>
                     </div>
                   )}
-                  
+
                   {/* Working Hours */}
                   {school?.settings?.workingHours && (
                     <div className="flex items-center">
@@ -528,7 +528,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
                   )}
-                  
+
                   {/* Working Days */}
                   {school?.settings?.workingDays && school.settings.workingDays.length > 0 && (
                     <div className="flex items-center">
@@ -538,7 +538,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
                   )}
-                  
+
                   {/* School Features */}
                   {school?.features && (
                     <div className="flex items-start">
@@ -581,7 +581,7 @@ const Dashboard: React.FC = () => {
           {/* Users Section */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Associated Users 
+              Associated Users
               <span className="text-sm font-normal text-gray-500 ml-2">({users.length} total)</span>
             </h3>
             <div className="overflow-x-auto">
@@ -617,19 +617,17 @@ const Dashboard: React.FC = () => {
                           <div className="text-sm text-gray-500">{user.email}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                            user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
-                            user.role === 'student' ? 'bg-green-100 text-green-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                              user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
+                                user.role === 'student' ? 'bg-green-100 text-green-800' :
+                                  'bg-gray-100 text-gray-800'
+                            }`}>
                             {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {user.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
@@ -723,10 +721,9 @@ const Dashboard: React.FC = () => {
               <div className="space-y-4">
                 {recentActivities.map((activity, index) => (
                   <div key={index} className="flex items-center p-3 rounded-lg bg-gray-50">
-                    <div className={`w-3 h-3 rounded-full mr-3 ${
-                      activity.type === 'success' ? 'bg-green-500' :
-                      activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
-                    }`}></div>
+                    <div className={`w-3 h-3 rounded-full mr-3 ${activity.type === 'success' ? 'bg-green-500' :
+                        activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                      }`}></div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{activity.action}</p>
                       <p className="text-xs text-gray-500">{activity.time}</p>
