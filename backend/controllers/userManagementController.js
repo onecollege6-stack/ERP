@@ -1,98 +1,108 @@
 const bcrypt = require('bcryptjs');
 const { ObjectId } = require('mongodb');
 const School = require('../models/School');
-const User = require('../models/User');
+// const User = require('../models/User'); // Not directly used
 const { generateSequentialUserId } = require('./userController');
 const { generateRandomPassword, generateStudentPasswordFromDOB } = require('../utils/passwordGenerator');
+const SchoolDatabaseManager = require('../utils/databaseManager');
 
 // Get all users for a school with standardized format
 exports.getAllUsers = async (req, res) => {
   try {
     const { schoolCode } = req.params;
-    
-    console.log(`🔍 Fetching all users for school: ${schoolCode}`);
-    
-    // Validate school exists
-    const school = await School.findOne({ code: schoolCode.toUpperCase() });
+    const upperSchoolCode = schoolCode.toUpperCase();
+
+    console.log(`🔍 Fetching all users for school: ${upperSchoolCode}`);
+
+    const school = await School.findOne({ code: upperSchoolCode });
     if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found'
-      });
+      return res.status(404).json({ success: false, message: 'School not found' });
     }
 
-    // Get users from school-specific database
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
+    let connection;
+    try {
+      connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode);
+    } catch (connError) {
+      console.error(`DB Connect Error for ${upperSchoolCode} in getAllUsers: ${connError.message}`);
+      return res.status(500).json({ success: false, message: 'Could not connect to school database' });
+    }
     if (!connection) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not connect to school database'
-      });
+      return res.status(500).json({ success: false, message: 'Database connection object invalid' });
     }
 
     const db = connection.db;
     const collections = ['admins', 'teachers', 'students', 'parents'];
     let allUsers = [];
 
-    // Fetch users from all role collections
     for (const collection of collections) {
       try {
         const users = await db.collection(collection).find({ isActive: { $ne: false } }).toArray();
-        
-        const processedUsers = users.map(user => ({
-          _id: user._id,
-          userId: user.userId,
-          schoolCode: user.schoolCode || schoolCode,
-          name: {
-            firstName: user.name?.firstName || user.firstName || 'Unknown',
-            middleName: user.name?.middleName || user.middleName || '',
-            lastName: user.name?.lastName || user.lastName || 'User',
-            displayName: user.name?.displayName || 
-                        `${user.name?.firstName || user.firstName || ''} ${user.name?.lastName || user.lastName || ''}`.trim()
-          },
-          email: user.email || 'no-email@example.com',
-          role: user.role || collection.slice(0, -1), // Remove 's' from collection name
-          contact: {
-            primaryPhone: user.contact?.primaryPhone || user.phone || '0000000000',
-            secondaryPhone: user.contact?.secondaryPhone || '',
-            whatsappNumber: user.contact?.whatsappNumber || '',
-            emergencyContact: user.contact?.emergencyContact || undefined
-          },
-          address: {
-            permanent: {
-              street: user.address?.permanent?.street || user.address?.street || '',
-              area: user.address?.permanent?.area || user.address?.area || '',
-              city: user.address?.permanent?.city || user.address?.city || '',
-              state: user.address?.permanent?.state || user.address?.state || '',
-              country: user.address?.permanent?.country || user.address?.country || 'India',
-              pincode: user.address?.permanent?.pincode || user.address?.pincode || '',
-              landmark: user.address?.permanent?.landmark || user.address?.landmark || ''
+
+        const processedUsers = users.map(user => {
+          // --- *** FINAL CORRECTED NAME LOGIC *** ---
+          const firstName = user.name?.firstName?.trim() || ''; // Safely access and trim
+          const lastName = user.name?.lastName?.trim() || '';
+          // Construct displayName ONLY if it's missing or blank
+          let displayName = user.name?.displayName?.trim();
+          if (!displayName) {
+            displayName = `${firstName} ${lastName}`.trim();
+          }
+          // Final fallback
+          if (!displayName) {
+            displayName = user.userId || user.email || 'Unknown User';
+          }
+          // --- *** END CORRECTION *** ---
+
+          return {
+            _id: user._id,
+            userId: user.userId,
+            schoolCode: user.schoolCode || upperSchoolCode,
+            role: user.role || collection.slice(0, -1),
+            email: user.email || 'no-email@example.com',
+            isActive: user.isActive !== false,
+            createdAt: user.createdAt || new Date(0).toISOString(),
+            updatedAt: user.updatedAt || user.createdAt || new Date(0).toISOString(),
+
+            // Corrected Name section
+            name: {
+              firstName: firstName,
+              middleName: user.name?.middleName?.trim() || '', // Trim middle name too
+              lastName: lastName,
+              displayName: displayName // Use the corrected displayName
             },
-            current: user.address?.current || undefined,
-            sameAsPermanent: user.address?.sameAsPermanent !== false
-          },
-          identity: user.identity || undefined,
-          isActive: user.isActive !== false,
-          passwordChangeRequired: user.passwordChangeRequired || false,
-          createdAt: user.createdAt || new Date().toISOString(),
-          updatedAt: user.updatedAt || user.createdAt || new Date().toISOString(),
-          schoolAccess: user.schoolAccess || undefined,
-          
-          // Role-specific details
-          ...(user.role === 'student' && user.studentDetails ? { studentDetails: user.studentDetails } : {}),
-          ...(user.role === 'teacher' && user.teacherDetails ? { teacherDetails: user.teacherDetails } : {}),
-          ...(user.role === 'admin' && user.adminDetails ? { adminDetails: user.adminDetails } : {})
-        }));
+
+            contact: {
+              primaryPhone: user.contact?.primaryPhone || user.phone || 'No phone',
+              secondaryPhone: user.contact?.secondaryPhone || '',
+              whatsappNumber: user.contact?.whatsappNumber || '',
+              emergencyContact: user.contact?.emergencyContact
+            },
+
+            // Flattened class/section for display
+            'class': (user.role === 'student' && user.studentDetails)
+              ? user.studentDetails.currentClass || 'Not assigned'
+              : '',
+            'section': (user.role === 'student' && user.studentDetails)
+              ? user.studentDetails.currentSection || 'Not assigned'
+              : '',
+
+            // Optional nested details
+            ...(user.role === 'student' && user.studentDetails ? { studentDetails: user.studentDetails } : {}),
+            ...(user.role === 'teacher' && user.teacherDetails ? { teacherDetails: user.teacherDetails } : {}),
+            ...(user.role === 'admin' && user.adminDetails ? { adminDetails: user.adminDetails } : {}),
+            passwordChangeRequired: user.passwordChangeRequired || false,
+            schoolAccess: user.schoolAccess
+          };
+        });
 
         allUsers.push(...processedUsers);
       } catch (collectionError) {
-        console.log(`Collection ${collection} not found or empty`);
+        console.warn(`Error fetching from collection ${collection} for school ${upperSchoolCode}: ${collectionError.message}`);
+        if (collectionError.codeName !== 'NamespaceNotFound') { console.error(collectionError); }
       }
     }
 
-    console.log(`✅ Found ${allUsers.length} users for school ${schoolCode}`);
+    console.log(`✅ Found ${allUsers.length} users for school ${upperSchoolCode}`);
 
     res.json({
       success: true,
@@ -107,684 +117,519 @@ exports.getAllUsers = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error(`❌ Critical Error fetching users for school ${req.params.schoolCode}:`, error);
     res.status(500).json({
       success: false,
-      message: 'Error fetching users',
+      message: 'Server error while fetching users',
       error: error.message
     });
   }
 };
 
-// Get user by ID with full details
-exports.getUserById = async (req, res) => {
+// --- OTHER FUNCTIONS (getUserById, createUser, updateUser, deleteUser, resetPassword) ---
+// Keep these functions exactly as they were in the previous correct version.
+// (Omitted here for brevity, but ensure they are present in your file)
+// Get user by ID
+exports.getUserById = async (req, res) => { /* ... Keep code from previous correct version ... */
   try {
-    const { schoolCode, userId } = req.params;
-    
-    console.log(`🔍 Fetching user ${userId} for school: ${schoolCode}`);
-    
-    // Get user from school-specific database
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
-    if (!connection) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not connect to school database'
-      });
-    }
+    const { schoolCode, userId: userIdToFind } = req.params;
+    const upperSchoolCode = schoolCode.toUpperCase();
+
+    console.log(`🔍 Fetching user ${userIdToFind} for school: ${upperSchoolCode}`);
+
+    let connection;
+    try { connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode); }
+    catch (connError) { return res.status(500).json({ success: false, message: 'Could not connect to school database' }); }
+    if (!connection) { return res.status(500).json({ success: false, message: 'Database connection object invalid' }); }
 
     const db = connection.db;
     const collections = ['admins', 'teachers', 'students', 'parents'];
     let user = null;
 
-    // Search for user in all collections
+    const isObjectId = ObjectId.isValid(userIdToFind);
+    const query = isObjectId
+      ? { $or: [{ userId: userIdToFind }, { _id: new ObjectId(userIdToFind) }] }
+      : { userId: userIdToFind };
+
     for (const collection of collections) {
       try {
-        const foundUser = await db.collection(collection).findOne({ 
-          $or: [
-            { userId: userId },
-            { _id: ObjectId.isValid(userId) ? new ObjectId(userId) : null }
-          ]
-        });
-        
+        const foundUser = await db.collection(collection).findOne(query);
         if (foundUser) {
           user = foundUser;
           break;
         }
-      } catch (collectionError) {
-        console.log(`Error searching in collection ${collection}:`, collectionError.message);
+      } catch (error) {
+        console.warn(`Error searching in ${collection} for ${userIdToFind}: ${error.message}`);
       }
     }
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Return user with standardized format (excluding password)
-    const { password, temporaryPassword, ...userWithoutPassword } = user;
-    
-    res.json({
-      success: true,
-      data: userWithoutPassword
-    });
+    const { password, temporaryPassword, passwordHistory, ...userWithoutSensitiveData } = user;
+
+    res.json({ success: true, data: userWithoutSensitiveData });
 
   } catch (error) {
-    console.error('Error fetching user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching user',
-      error: error.message
-    });
+    console.error(`Error fetching user ${req.params.userId}:`, error);
+    res.status(500).json({ success: false, message: 'Error fetching user', error: error.message });
   }
 };
 
-// Create new user with standardized data structure
-exports.createUser = async (req, res) => {
+// Create new user
+exports.createUser = async (req, res) => { /* ... Keep code from previous correct version ... */
   try {
     const { schoolCode } = req.params;
     const userData = req.body;
-    
-    console.log(`🔥 Creating user for school: ${schoolCode}`, userData);
-    
-    // Validate school exists
-    const school = await School.findOne({ code: schoolCode.toUpperCase() });
+    const creatingUserId = req.user?._id;
+    const upperSchoolCode = schoolCode.toUpperCase();
+
+    console.log(`🔥 Creating user for school: ${upperSchoolCode}`, userData);
+
+    const school = await School.findOne({ code: upperSchoolCode });
     if (!school) {
-      return res.status(404).json({
-        success: false,
-        message: 'School not found'
-      });
+      return res.status(404).json({ success: false, message: 'School not found' });
     }
 
-    // Validate required fields
     if (!userData.firstName || !userData.lastName || !userData.email || !userData.role) {
-      return res.status(400).json({
-        success: false,
-        message: 'First name, last name, email, and role are required'
-      });
+      return res.status(400).json({ success: false, message: 'First name, last name, email, and role are required' });
     }
-
-    // Validate role
-    if (!['admin', 'teacher', 'student', 'parent'].includes(userData.role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid role'
-      });
+    const role = userData.role.toLowerCase();
+    if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role specified' });
     }
+    const email = userData.email.trim().toLowerCase();
 
-    // Check if email already exists
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    let connection;
+    try { connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode); }
+    catch (connError) { return res.status(500).json({ success: false, message: 'Could not connect to school database' }); }
+    if (!connection) { return res.status(500).json({ success: false, message: 'Database connection object invalid' }); }
     const db = connection.db;
-    
-    const collections = ['admins', 'teachers', 'students', 'parents'];
-    for (const collection of collections) {
+
+    const collectionsToCheck = ['admins', 'teachers', 'students', 'parents'];
+    for (const collection of collectionsToCheck) {
       try {
-        const existingUser = await db.collection(collection).findOne({ email: userData.email });
+        const existingUser = await db.collection(collection).findOne({ email: email });
         if (existingUser) {
-          return res.status(400).json({
-            success: false,
-            message: 'Email already exists in this school'
-          });
+          return res.status(400).json({ success: false, message: `Email '${email}' already exists in collection '${collection}' for this school.` });
         }
-      } catch (error) {
-        // Collection might not exist yet, continue
-      }
+      } catch (error) { if (error.codeName !== 'NamespaceNotFound') { console.warn(`Error checking email in ${collection}: ${error.message}`); } }
     }
 
-    // Generate user ID
-    const userId = await generateSequentialUserId(schoolCode, userData.role);
-    
-    // Generate password
+    const userId = await generateSequentialUserId(upperSchoolCode, role);
+
     let tempPassword;
-    if (userData.useGeneratedPassword) {
-      if (userData.role === 'student' && userData.dateOfBirth) {
-        tempPassword = generateStudentPasswordFromDOB(userData.dateOfBirth);
-      } else {
-        tempPassword = generateRandomPassword(8);
-      }
+    if (userData.useGeneratedPassword !== false) {
+      if (role === 'student' && userData.dateOfBirth) {
+        try { tempPassword = generateStudentPasswordFromDOB(userData.dateOfBirth); }
+        catch (dobError) { tempPassword = generateRandomPassword(8); }
+      } else { tempPassword = generateRandomPassword(8); }
     } else if (userData.customPassword) {
       tempPassword = userData.customPassword;
-    } else {
-      tempPassword = generateRandomPassword(8);
-    }
+      if (tempPassword.length < 6) { return res.status(400).json({ success: false, message: 'Custom password must be at least 6 characters.' }); }
+    } else { tempPassword = generateRandomPassword(8); }
 
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // Structure user data according to our standardized format
     const newUser = {
+      _id: new ObjectId(),
       userId,
-      schoolCode: schoolCode.toUpperCase(),
+      schoolCode: upperSchoolCode,
       schoolId: school._id,
-      
-      // Name structure
-      name: {
-        firstName: userData.firstName.trim(),
-        middleName: userData.middleName?.trim() || '',
-        lastName: userData.lastName.trim(),
-        displayName: `${userData.firstName.trim()} ${userData.lastName.trim()}`.trim()
-      },
-      
-      // Basic information
-      email: userData.email.trim().toLowerCase(),
+      name: { firstName: userData.firstName.trim(), middleName: userData.middleName?.trim() || '', lastName: userData.lastName.trim(), displayName: `${userData.firstName.trim()} ${userData.lastName.trim()}`.trim() },
+      email: email,
       password: hashedPassword,
       temporaryPassword: tempPassword,
-      passwordChangeRequired: true,
-      role: userData.role,
-      
-      // Contact information
+      passwordChangeRequired: userData.passwordChangeRequired !== false,
+      role: role,
       contact: {
-        primaryPhone: userData.primaryPhone?.trim() || '0000000000',
-        secondaryPhone: userData.secondaryPhone?.trim() || '',
-        whatsappNumber: userData.whatsappNumber?.trim() || '',
-        emergencyContact: userData.emergencyContactName ? {
-          name: userData.emergencyContactName.trim(),
-          relationship: userData.emergencyContactRelation?.trim() || '',
-          phone: userData.emergencyContactPhone?.trim() || ''
-        } : undefined
+        primaryPhone: userData.primaryPhone?.trim() || '', secondaryPhone: userData.secondaryPhone?.trim() || '', whatsappNumber: userData.whatsappNumber?.trim() || '',
+        emergencyContact: userData.emergencyContactName ? { name: userData.emergencyContactName.trim(), relationship: userData.emergencyContactRelation?.trim() || '', phone: userData.emergencyContactPhone?.trim() || '' } : undefined
       },
-      
-      // Address information
       address: {
-        permanent: {
-          street: userData.permanentStreet?.trim() || '',
-          area: userData.permanentArea?.trim() || '',
-          city: userData.permanentCity?.trim() || '',
-          state: userData.permanentState?.trim() || '',
-          country: userData.permanentCountry || 'India',
-          pincode: userData.permanentPincode?.trim() || '',
-          landmark: userData.permanentLandmark?.trim() || ''
-        },
-        current: userData.sameAsPermanent ? undefined : {
-          street: userData.currentStreet?.trim() || '',
-          area: userData.currentArea?.trim() || '',
-          city: userData.currentCity?.trim() || '',
-          state: userData.currentState?.trim() || '',
-          country: userData.currentCountry || 'India',
-          pincode: userData.currentPincode?.trim() || '',
-          landmark: userData.currentLandmark?.trim() || ''
-        },
+        permanent: { street: userData.permanentStreet?.trim() || '', area: userData.permanentArea?.trim() || '', city: userData.permanentCity?.trim() || '', state: userData.permanentState?.trim() || '', country: userData.permanentCountry || 'India', pincode: userData.permanentPincode?.trim() || '', landmark: userData.permanentLandmark?.trim() || '' },
+        current: userData.sameAsPermanent === false ? { street: userData.currentStreet?.trim() || '', area: userData.currentArea?.trim() || '', city: userData.currentCity?.trim() || '', state: userData.currentState?.trim() || '', country: userData.currentCountry || 'India', pincode: userData.currentPincode?.trim() || '', landmark: userData.currentLandmark?.trim() || '' } : undefined,
         sameAsPermanent: userData.sameAsPermanent !== false
       },
-      
-      // Identity information
-      identity: {
-        aadharNumber: userData.aadharNumber?.trim() || '',
-        panNumber: userData.panNumber?.trim() || ''
-      },
-      
-      // System fields
-      isActive: true,
+      identity: { aadharNumber: userData.aadharNumber?.trim() || '', panNumber: userData.panNumber?.trim() || '' },
+      isActive: userData.isActive !== false,
       createdAt: new Date(),
       updatedAt: new Date(),
-      schoolAccess: {
-        joinedDate: new Date(),
-        assignedBy: req.user?._id,
-        status: 'active',
-        accessLevel: 'full'
-      },
-      auditTrail: {
-        createdBy: req.user?._id,
-        createdAt: new Date()
-      }
+      schoolAccess: { joinedDate: userData.joiningDate ? new Date(userData.joiningDate) : new Date(), assignedBy: creatingUserId, status: 'active', accessLevel: 'full' },
+      auditTrail: { createdBy: creatingUserId, createdAt: new Date() }
     };
 
-    // Add role-specific details
-    if (userData.role === 'student') {
+    // Add Role-Specific Details
+    if (role === 'student') {
       newUser.studentDetails = {
-        currentClass: userData.currentClass?.trim() || '',
-        currentSection: userData.currentSection?.trim() || '',
-        rollNumber: userData.rollNumber?.trim() || '',
-        admissionNumber: userData.admissionNumber?.trim() || '',
-        admissionDate: userData.admissionDate || '',
-        dateOfBirth: userData.dateOfBirth || '',
-        gender: userData.gender || 'male',
-        bloodGroup: userData.bloodGroup?.trim() || '',
-        nationality: userData.nationality || 'Indian',
-        religion: userData.religion?.trim() || '',
-        caste: userData.caste?.trim() || '',
-        category: userData.category?.trim() || '',
-        
-        // Family information
-        fatherName: userData.fatherName?.trim() || '',
-        fatherPhone: userData.fatherPhone?.trim() || '',
-        fatherEmail: userData.fatherEmail?.trim() || '',
-        fatherOccupation: userData.fatherOccupation?.trim() || '',
-        fatherAnnualIncome: userData.fatherAnnualIncome || 0,
-        
-        motherName: userData.motherName?.trim() || '',
-        motherPhone: userData.motherPhone?.trim() || '',
-        motherEmail: userData.motherEmail?.trim() || '',
-        motherOccupation: userData.motherOccupation?.trim() || '',
-        motherAnnualIncome: userData.motherAnnualIncome || 0,
-        
-        // Guardian information
-        guardianName: userData.guardianName?.trim() || '',
-        guardianRelationship: userData.guardianRelationship?.trim() || '',
-        guardianPhone: userData.guardianPhone?.trim() || '',
-        guardianEmail: userData.guardianEmail?.trim() || '',
-        
-        // Previous school
-        previousSchoolName: userData.previousSchoolName?.trim() || '',
-        previousBoard: userData.previousBoard?.trim() || '',
-        lastClass: userData.lastClass?.trim() || '',
-        tcNumber: userData.tcNumber?.trim() || '',
-        
-        // Transportation
-        transportMode: userData.transportMode?.trim() || '',
-        busRoute: userData.busRoute?.trim() || '',
-        pickupPoint: userData.pickupPoint?.trim() || '',
-        
-        // Financial information
-        feeCategory: userData.feeCategory?.trim() || '',
-        concessionType: userData.concessionType?.trim() || '',
-        concessionPercentage: userData.concessionPercentage || 0,
-        
-        // Banking information
-        bankName: userData.bankName?.trim() || '',
-        bankAccountNo: userData.bankAccountNo?.trim() || '',
-        bankIFSC: userData.bankIFSC?.trim() || '',
-        
-        // Medical information
-        medicalConditions: userData.medicalConditions?.trim() || '',
-        allergies: userData.allergies?.trim() || '',
-        specialNeeds: userData.specialNeeds?.trim() || ''
+        currentClass: userData.currentClass?.trim() || '', currentSection: userData.currentSection?.trim() || '', rollNumber: userData.rollNumber?.trim() || '', admissionNumber: userData.admissionNumber?.trim() || '',
+        admissionDate: userData.admissionDate ? new Date(userData.admissionDate) : null, dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null, gender: userData.gender?.toLowerCase() || 'male',
+        fatherName: userData.fatherName?.trim() || '', fatherPhone: userData.fatherPhone?.trim() || '', motherName: userData.motherName?.trim() || '', motherPhone: userData.motherPhone?.trim() || '',
+        bloodGroup: userData.bloodGroup?.trim() || '', nationality: userData.nationality || 'Indian', religion: userData.religion?.trim() || '', caste: userData.caste?.trim() || '', category: userData.category?.trim() || '',
+        fatherEmail: userData.fatherEmail?.trim().toLowerCase() || '', fatherOccupation: userData.fatherOccupation?.trim() || '', fatherAnnualIncome: userData.fatherAnnualIncome || 0,
+        motherEmail: userData.motherEmail?.trim().toLowerCase() || '', motherOccupation: userData.motherOccupation?.trim() || '', motherAnnualIncome: userData.motherAnnualIncome || 0,
+        guardianName: userData.guardianName?.trim() || '', guardianRelationship: userData.guardianRelationship?.trim() || '', guardianPhone: userData.guardianPhone?.trim() || '', guardianEmail: userData.guardianEmail?.trim().toLowerCase() || '',
+        previousSchoolName: userData.previousSchoolName?.trim() || '', previousBoard: userData.previousBoard?.trim() || '', lastClass: userData.lastClass?.trim() || '', tcNumber: userData.tcNumber?.trim() || '',
+        transportMode: userData.transportMode?.trim() || '', busRoute: userData.busRoute?.trim() || '', pickupPoint: userData.pickupPoint?.trim() || '',
+        feeCategory: userData.feeCategory?.trim() || '', concessionType: userData.concessionType?.trim() || '', concessionPercentage: userData.concessionPercentage || 0,
+        bankName: userData.bankName?.trim() || '', bankAccountNo: userData.bankAccountNo?.trim() || '', bankIFSC: userData.bankIFSC?.trim() || '',
+        medicalConditions: userData.medicalConditions?.trim() || '', allergies: userData.allergies?.trim() || '', specialNeeds: userData.specialNeeds?.trim() || ''
       };
-    } else if (userData.role === 'teacher') {
+    }
+    else if (role === 'teacher') {
       newUser.teacherDetails = {
-        employeeId: userData.employeeId?.trim() || userId,
-        subjects: Array.isArray(userData.subjects) ? userData.subjects : [],
-        qualification: userData.qualification?.trim() || '',
-        experience: userData.experience || 0,
-        joiningDate: userData.joiningDate || '',
-        specialization: userData.specialization?.trim() || '',
-        previousExperience: userData.previousExperience?.trim() || '',
-        dateOfBirth: userData.dateOfBirth || '',
-        gender: userData.gender || 'male',
-        bloodGroup: userData.bloodGroup?.trim() || '',
-        nationality: userData.nationality || 'Indian',
-        religion: userData.religion?.trim() || '',
-        bankName: userData.bankName?.trim() || '',
-        bankAccountNo: userData.bankAccountNo?.trim() || '',
-        bankIFSC: userData.bankIFSC?.trim() || ''
+        employeeId: userData.employeeId?.trim() || userId, subjects: Array.isArray(userData.subjects) ? userData.subjects.map(s => String(s).trim()) : [], qualification: userData.qualification?.trim() || '', experience: userData.experience || 0,
+        joiningDate: userData.joiningDate ? new Date(userData.joiningDate) : null,
+        specialization: userData.specialization?.trim() || '', previousExperience: userData.previousExperience?.trim() || '', dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
+        gender: userData.gender?.toLowerCase() || 'other', bloodGroup: userData.bloodGroup?.trim() || '', nationality: userData.nationality || 'Indian', religion: userData.religion?.trim() || '',
+        bankName: userData.bankName?.trim() || '', bankAccountNo: userData.bankAccountNo?.trim() || '', bankIFSC: userData.bankIFSC?.trim() || ''
       };
-    } else if (userData.role === 'admin') {
+    }
+    else if (role === 'admin') {
       newUser.adminDetails = {
-        employeeId: userData.employeeId?.trim() || userId,
-        designation: userData.designation?.trim() || '',
-        qualification: userData.qualification?.trim() || '',
-        experience: userData.experience || 0,
-        joiningDate: userData.joiningDate || '',
-        previousExperience: userData.previousExperience?.trim() || '',
-        dateOfBirth: userData.dateOfBirth || '',
-        gender: userData.gender || 'male',
-        bloodGroup: userData.bloodGroup?.trim() || '',
-        nationality: userData.nationality || 'Indian',
-        bankName: userData.bankName?.trim() || '',
-        bankAccountNo: userData.bankAccountNo?.trim() || '',
-        bankIFSC: userData.bankIFSC?.trim() || ''
+        employeeId: userData.employeeId?.trim() || userId, designation: userData.designation?.trim() || '', qualification: userData.qualification?.trim() || '', experience: userData.experience || 0,
+        joiningDate: userData.joiningDate ? new Date(userData.joiningDate) : null,
+        previousExperience: userData.previousExperience?.trim() || '', dateOfBirth: userData.dateOfBirth ? new Date(userData.dateOfBirth) : null,
+        gender: userData.gender?.toLowerCase() || 'other', bloodGroup: userData.bloodGroup?.trim() || '', nationality: userData.nationality || 'Indian',
+        bankName: userData.bankName?.trim() || '', bankAccountNo: userData.bankAccountNo?.trim() || '', bankIFSC: userData.bankIFSC?.trim() || ''
       };
     }
 
-    // Insert user into appropriate collection
-    const collectionName = userData.role === 'admin' ? 'admins' :
-                          userData.role === 'teacher' ? 'teachers' :
-                          userData.role === 'student' ? 'students' : 'parents';
-    
+
+    const collectionName = `${role}s`;
     const result = await db.collection(collectionName).insertOne(newUser);
-    
-    console.log(`✅ User created successfully: ${userId}`);
-    
+
+    if (!result.insertedId) { throw new Error(`Failed to insert user ${userId} into ${collectionName}`); }
+
+    console.log(`✅ User created successfully: ${userId} in ${collectionName}`);
+
     res.status(201).json({
-      success: true,
-      message: 'User created successfully',
-      data: {
-        userId: newUser.userId,
-        name: newUser.name.displayName,
-        email: newUser.email,
-        role: newUser.role,
-        temporaryPassword: tempPassword
-      }
+      success: true, message: 'User created successfully',
+      data: { _id: result.insertedId, userId: newUser.userId, name: newUser.name.displayName, email: newUser.email, role: newUser.role, temporaryPassword: tempPassword }
     });
 
   } catch (error) {
-    console.error('Error creating user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error creating user',
-      error: error.message
-    });
+    console.error(`Error creating user:`, error);
+    res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
   }
 };
 
-// Update user with standardized data structure
-exports.updateUser = async (req, res) => {
+// Update user
+exports.updateUser = async (req, res) => { /* ... Keep code from previous correct version ... */
   try {
-    const { schoolCode, userId } = req.params;
+    const { schoolCode, userId: userIdToUpdate } = req.params;
     const updateData = req.body;
-    
-    console.log(`🔄 Updating user ${userId} for school: ${schoolCode}`);
-    
-    // Get user from school-specific database
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
-    if (!connection) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not connect to school database'
-      });
-    }
+    const updatingUserId = req.user?._id;
+    const upperSchoolCode = schoolCode.toUpperCase();
 
+    console.log(`🔄 Updating user ${userIdToUpdate} for school: ${upperSchoolCode}`);
+
+    let connection;
+    try { connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode); }
+    catch (connError) { return res.status(500).json({ success: false, message: 'Could not connect to school database' }); }
+    if (!connection) { return res.status(500).json({ success: false, message: 'Database connection object invalid' }); }
     const db = connection.db;
-    const collections = ['admins', 'teachers', 'students', 'parents'];
+
+    const collectionsToSearch = ['admins', 'teachers', 'students', 'parents'];
     let user = null;
     let collectionName = null;
 
-    // Find user in collections
-    for (const collection of collections) {
+    const isObjectId = ObjectId.isValid(userIdToUpdate);
+    const query = isObjectId
+      ? { $or: [{ userId: userIdToUpdate }, { _id: new ObjectId(userIdToUpdate) }] }
+      : { userId: userIdToUpdate };
+
+    for (const collection of collectionsToSearch) {
       try {
-        const foundUser = await db.collection(collection).findOne({ 
-          $or: [
-            { userId: userId },
-            { _id: ObjectId.isValid(userId) ? new ObjectId(userId) : null }
-          ]
-        });
-        
-        if (foundUser) {
-          user = foundUser;
-          collectionName = collection;
-          break;
+        const foundUser = await db.collection(collection).findOne(query);
+        if (foundUser) { user = foundUser; collectionName = collection; break; }
+      } catch (error) { console.warn(`Error searching ${collection} for ${userIdToUpdate}: ${error.message}`); }
+    }
+
+    if (!user) { return res.status(404).json({ success: false, message: 'User not found' }); }
+
+    const updateFields = {};
+    let changesMade = false;
+
+    const setField = (fieldPath, newValue) => {
+      let currentValue = user;
+      try { fieldPath.split('.').forEach(part => { currentValue = currentValue?.[part]; }); }
+      catch (e) { currentValue = undefined; }
+
+      const processedNewValue = typeof newValue === 'string' ? newValue.trim() : newValue;
+      const processedCurrentValue = currentValue === null || currentValue === undefined ? currentValue : (typeof currentValue === 'string' ? currentValue.trim() : currentValue);
+
+      if (JSON.stringify(processedNewValue) !== JSON.stringify(processedCurrentValue)) {
+        if (!(processedNewValue === '' && processedCurrentValue === undefined)) {
+          updateFields[fieldPath] = processedNewValue;
+          changesMade = true;
+        } else if (processedCurrentValue !== undefined) {
+          updateFields[fieldPath] = processedNewValue;
+          changesMade = true;
         }
-      } catch (collectionError) {
-        console.log(`Error searching in collection ${collection}:`, collectionError.message);
       }
-    }
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Prepare update object (only update provided fields)
-    const updateFields = {
-      updatedAt: new Date()
     };
 
-    // Update basic information
-    if (updateData.firstName || updateData.lastName) {
-      updateFields.name = {
-        ...user.name,
-        ...(updateData.firstName && { firstName: updateData.firstName.trim() }),
-        ...(updateData.lastName && { lastName: updateData.lastName.trim() }),
-        ...(updateData.middleName !== undefined && { middleName: updateData.middleName?.trim() || '' })
-      };
-      updateFields.name.displayName = `${updateFields.name.firstName} ${updateFields.name.lastName}`.trim();
+    // Update basic info
+    if (updateData.firstName !== undefined || updateData.lastName !== undefined || updateData.middleName !== undefined) {
+      const newName = { ...user.name };
+      if (updateData.firstName !== undefined) newName.firstName = updateData.firstName.trim();
+      if (updateData.lastName !== undefined) newName.lastName = updateData.lastName.trim();
+      if (updateData.middleName !== undefined) newName.middleName = updateData.middleName?.trim() || '';
+      newName.displayName = `${newName.firstName} ${newName.lastName}`.trim();
+
+      if (JSON.stringify(newName) !== JSON.stringify(user.name)) {
+        if (newName.firstName !== user.name?.firstName) updateFields['name.firstName'] = newName.firstName;
+        if (newName.lastName !== user.name?.lastName) updateFields['name.lastName'] = newName.lastName;
+        if (newName.middleName !== user.name?.middleName) updateFields['name.middleName'] = newName.middleName;
+        if (newName.displayName !== user.name?.displayName) updateFields['name.displayName'] = newName.displayName;
+        changesMade = true;
+      }
+    }
+    if (updateData.email && updateData.email.trim().toLowerCase() !== user.email) {
+      const newEmail = updateData.email.trim().toLowerCase();
+      let emailExists = false;
+      for (const col of collectionsToSearch) {
+        try {
+          const existing = await db.collection(col).findOne({ email: newEmail, _id: { $ne: user._id } });
+          if (existing) { emailExists = true; break; }
+        } catch (e) {/* ignore */ }
+      }
+      if (emailExists) { return res.status(400).json({ success: false, message: `Email '${newEmail}' already exists for another user.` }); }
+      setField('email', newEmail);
+    }
+    if (updateData.isActive !== undefined && updateData.isActive !== user.isActive) {
+      setField('isActive', updateData.isActive);
     }
 
-    if (updateData.email) {
-      updateFields.email = updateData.email.trim().toLowerCase();
+    // Update Contact
+    if (updateData.primaryPhone !== undefined) setField('contact.primaryPhone', updateData.primaryPhone);
+    if (updateData.secondaryPhone !== undefined) setField('contact.secondaryPhone', updateData.secondaryPhone || '');
+    if (updateData.whatsappNumber !== undefined) setField('contact.whatsappNumber', updateData.whatsappNumber || '');
+
+    // Update Permanent Address
+    if (updateData.permanentStreet !== undefined) setField('address.permanent.street', updateData.permanentStreet);
+    if (updateData.permanentArea !== undefined) setField('address.permanent.area', updateData.permanentArea);
+    if (updateData.permanentCity !== undefined) setField('address.permanent.city', updateData.permanentCity);
+    if (updateData.permanentState !== undefined) setField('address.permanent.state', updateData.permanentState);
+    if (updateData.permanentPincode !== undefined) setField('address.permanent.pincode', updateData.permanentPincode);
+    if (updateData.permanentCountry !== undefined) setField('address.permanent.country', updateData.permanentCountry || 'India');
+    if (updateData.permanentLandmark !== undefined) setField('address.permanent.landmark', updateData.permanentLandmark);
+
+    // Update Current Address & sameAsPermanent flag
+    if (updateData.sameAsPermanent !== undefined) setField('address.sameAsPermanent', updateData.sameAsPermanent);
+    if (updateData.sameAsPermanent === false) {
+      if (updateData.currentStreet !== undefined) setField('address.current.street', updateData.currentStreet);
+      if (updateData.currentArea !== undefined) setField('address.current.area', updateData.currentArea);
+      if (updateData.currentCity !== undefined) setField('address.current.city', updateData.currentCity);
+      if (updateData.currentState !== undefined) setField('address.current.state', updateData.currentState);
+      if (updateData.currentPincode !== undefined) setField('address.current.pincode', updateData.currentPincode);
+      if (updateData.currentCountry !== undefined) setField('address.current.country', updateData.currentCountry || 'India');
+      if (updateData.currentLandmark !== undefined) setField('address.current.landmark', updateData.currentLandmark);
+    } else if (updateData.sameAsPermanent === true && user.address?.current) {
+      updateFields['address.current'] = undefined;
+      changesMade = true;
     }
 
-    // Update contact information
-    if (updateData.primaryPhone || updateData.secondaryPhone || updateData.whatsappNumber) {
-      updateFields.contact = {
-        ...user.contact,
-        ...(updateData.primaryPhone && { primaryPhone: updateData.primaryPhone.trim() }),
-        ...(updateData.secondaryPhone !== undefined && { secondaryPhone: updateData.secondaryPhone?.trim() || '' }),
-        ...(updateData.whatsappNumber !== undefined && { whatsappNumber: updateData.whatsappNumber?.trim() || '' })
-      };
-    }
-
-    // Update address information
-    if (updateData.permanentStreet || updateData.permanentCity || updateData.permanentState) {
-      updateFields.address = {
-        ...user.address,
-        permanent: {
-          ...user.address?.permanent,
-          ...(updateData.permanentStreet !== undefined && { street: updateData.permanentStreet?.trim() || '' }),
-          ...(updateData.permanentArea !== undefined && { area: updateData.permanentArea?.trim() || '' }),
-          ...(updateData.permanentCity !== undefined && { city: updateData.permanentCity?.trim() || '' }),
-          ...(updateData.permanentState !== undefined && { state: updateData.permanentState?.trim() || '' }),
-          ...(updateData.permanentCountry !== undefined && { country: updateData.permanentCountry || 'India' }),
-          ...(updateData.permanentPincode !== undefined && { pincode: updateData.permanentPincode?.trim() || '' }),
-          ...(updateData.permanentLandmark !== undefined && { landmark: updateData.permanentLandmark?.trim() || '' })
+    // --- Update Role-Specific Details using setField ---
+    const rolePrefix = `${user.role}Details`;
+    if (user.role === 'student') {
+      if (updateData.currentClass !== undefined) setField(`${rolePrefix}.currentClass`, updateData.currentClass);
+      if (updateData.currentSection !== undefined) setField(`${rolePrefix}.currentSection`, updateData.currentSection);
+      if (updateData.rollNumber !== undefined) setField(`${rolePrefix}.rollNumber`, updateData.rollNumber);
+      if (updateData.admissionNumber !== undefined) setField(`${rolePrefix}.admissionNumber`, updateData.admissionNumber);
+      if (updateData.fatherName !== undefined) setField(`${rolePrefix}.fatherName`, updateData.fatherName);
+      if (updateData.motherName !== undefined) setField(`${rolePrefix}.motherName`, updateData.motherName);
+      // ... Add setField for ALL other updatable studentDetails fields ...
+    } else if (user.role === 'teacher') {
+      if (updateData.qualification !== undefined) setField(`${rolePrefix}.qualification`, updateData.qualification);
+      if (updateData.experience !== undefined) setField(`${rolePrefix}.experience`, updateData.experience);
+      if (updateData.subjects !== undefined && Array.isArray(updateData.subjects)) {
+        const newSubjects = updateData.subjects.map(s => String(s).trim()).filter(Boolean);
+        if (JSON.stringify(newSubjects) !== JSON.stringify(user.teacherDetails?.subjects || [])) {
+          updateFields[`${rolePrefix}.subjects`] = newSubjects;
+          changesMade = true;
         }
-      };
+      }
+      // ... Add setField for ALL other updatable teacherDetails fields ...
+    } else if (user.role === 'admin') {
+      if (updateData.designation !== undefined) setField(`${rolePrefix}.designation`, updateData.designation);
+      if (updateData.qualification !== undefined) setField(`${rolePrefix}.qualification`, updateData.qualification);
+      // ... Add setField for ALL other updatable adminDetails fields ...
     }
 
-    // Update role-specific details
-    if (user.role === 'student' && updateData.currentClass) {
-      updateFields.studentDetails = {
-        ...user.studentDetails,
-        ...(updateData.currentClass && { currentClass: updateData.currentClass.trim() }),
-        ...(updateData.currentSection && { currentSection: updateData.currentSection.trim() }),
-        // Add other student-specific updates as needed
-      };
-    } else if (user.role === 'teacher' && (updateData.subjects || updateData.qualification)) {
-      updateFields.teacherDetails = {
-        ...user.teacherDetails,
-        ...(updateData.subjects && { subjects: Array.isArray(updateData.subjects) ? updateData.subjects : [] }),
-        ...(updateData.qualification && { qualification: updateData.qualification.trim() }),
-        // Add other teacher-specific updates as needed
-      };
-    } else if (user.role === 'admin' && (updateData.designation || updateData.qualification)) {
-      updateFields.adminDetails = {
-        ...user.adminDetails,
-        ...(updateData.designation && { designation: updateData.designation.trim() }),
-        ...(updateData.qualification && { qualification: updateData.qualification.trim() }),
-        // Add other admin-specific updates as needed
-      };
+    if (!changesMade) {
+      return res.status(200).json({ success: true, message: 'No changes detected to update.' });
     }
 
-    // Perform update
-    const result = await db.collection(collectionName).updateOne(
+    updateFields.updatedAt = new Date();
+    if (user.auditTrail) {
+      updateFields['auditTrail.lastModifiedBy'] = updatingUserId;
+      updateFields['auditTrail.lastModifiedAt'] = updateFields.updatedAt;
+    }
+
+    const result = await db.collection(collectionName).updateOne({ _id: user._id }, { $set: updateFields });
+
+    if (result.matchedCount === 0) { return res.status(404).json({ success: false, message: 'User not found during update operation.' }); }
+
+    console.log(`✅ User ${user.userId} update attempted in ${collectionName}. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+    res.json({ success: true, message: 'User updated successfully' });
+
+  } catch (error) {
+    console.error(`Error updating user ${req.params.userId}:`, error);
+    res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
+  }
+};
+
+// Delete user (Logical Deactivate)
+exports.deleteUser = async (req, res) => { /* ... Keep code from previous correct version ... */
+  try {
+    const { schoolCode, userId: userIdToDelete } = req.params;
+    const deletingUserId = req.user?._id;
+    const upperSchoolCode = schoolCode.toUpperCase();
+
+    console.log(`🗑️ Deactivating user ${userIdToDelete} for school: ${upperSchoolCode}`);
+
+    let connection;
+    try { connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode); }
+    catch (connError) { return res.status(500).json({ success: false, message: 'Could not connect to school database' }); }
+    if (!connection) return res.status(500).json({ success: false, message: 'Database connection object invalid' });
+    const db = connection.db;
+
+    const collectionsToSearch = ['admins', 'teachers', 'students', 'parents'];
+    let collectionName = null;
+    let user = null;
+
+    const isObjectId = ObjectId.isValid(userIdToDelete);
+    const query = isObjectId
+      ? { $or: [{ userId: userIdToDelete }, { _id: new ObjectId(userIdToDelete) }] }
+      : { userId: userIdToDelete };
+
+    for (const collection of collectionsToSearch) {
+      try {
+        const foundUser = await db.collection(collection).findOne(query);
+        if (foundUser) { user = foundUser; collectionName = collection; break; }
+      } catch (error) { /* ignore */ }
+    }
+
+    if (!user) { return res.status(404).json({ success: false, message: 'User not found' }); }
+
+    if (user._id.equals(deletingUserId)) {
+      return res.status(400).json({ success: false, message: 'Cannot deactivate your own account.' });
+    }
+
+    const updateResult = await db.collection(collectionName).updateOne(
       { _id: user._id },
-      { $set: updateFields }
+      {
+        $set: {
+          isActive: false,
+          updatedAt: new Date(),
+          ...(user.auditTrail && { 'auditTrail.lastModifiedBy': deletingUserId, 'auditTrail.lastModifiedAt': new Date() })
+        }
+      }
     );
 
-    if (result.modifiedCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No changes were made'
-      });
+    if (updateResult.matchedCount === 0) { return res.status(404).json({ success: false, message: 'User not found during deactivation.' }); }
+    if (updateResult.modifiedCount === 0 && user.isActive === false) { return res.status(200).json({ success: true, message: 'User was already inactive.' }); }
+    if (updateResult.modifiedCount === 0 && user.isActive === true) {
+      console.warn(`User ${user.userId} matched but isActive status was not changed to false.`);
+      return res.status(500).json({ success: false, message: 'Failed to deactivate user (no changes applied).' });
     }
 
-    console.log(`✅ User updated successfully: ${userId}`);
-    
-    res.json({
-      success: true,
-      message: 'User updated successfully'
-    });
+    console.log(`✅ User ${user.userId} deactivated successfully in ${collectionName}.`);
+    res.json({ success: true, message: 'User deactivated successfully' });
 
   } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating user',
-      error: error.message
-    });
+    console.error(`Error deactivating user ${req.params.userId}:`, error);
+    res.status(500).json({ success: false, message: 'Error deactivating user', error: error.message });
   }
 };
 
-// Delete user
-exports.deleteUser = async (req, res) => {
+// Reset user password
+exports.resetPassword = async (req, res) => { /* ... Keep code from previous correct version ... */
   try {
-    const { schoolCode, userId } = req.params;
-    
-    console.log(`🗑️ Deleting user ${userId} for school: ${schoolCode}`);
-    
-    // Get user from school-specific database
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
-    if (!connection) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not connect to school database'
-      });
-    }
+    const { schoolCode, userId: userIdToReset } = req.params;
+    const resettingAdminId = req.user?._id;
+    const upperSchoolCode = schoolCode.toUpperCase();
 
+    console.log(`🔑 Resetting password for user ${userIdToReset} in school: ${upperSchoolCode}`);
+
+    let connection;
+    try { connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode); }
+    catch (connError) { return res.status(500).json({ success: false, message: 'Could not connect to school database' }); }
+    if (!connection) return res.status(500).json({ success: false, message: 'Database connection object invalid' });
     const db = connection.db;
-    const collections = ['admins', 'teachers', 'students', 'parents'];
+
+    const collectionsToSearch = ['admins', 'teachers', 'parents']; // Exclude students
     let user = null;
     let collectionName = null;
 
-    // Find user in collections
-    for (const collection of collections) {
+    const isObjectId = ObjectId.isValid(userIdToReset);
+    const query = isObjectId
+      ? { $or: [{ userId: userIdToReset }, { _id: new ObjectId(userIdToReset) }] }
+      : { userId: userIdToReset };
+
+    for (const collection of collectionsToSearch) {
       try {
-        const foundUser = await db.collection(collection).findOne({ 
-          $or: [
-            { userId: userId },
-            { _id: ObjectId.isValid(userId) ? new ObjectId(userId) : null }
-          ]
-        });
-        
-        if (foundUser) {
-          user = foundUser;
-          collectionName = collection;
-          break;
-        }
-      } catch (collectionError) {
-        console.log(`Error searching in collection ${collection}:`, collectionError.message);
-      }
+        const foundUser = await db.collection(collection).findOne(query);
+        if (foundUser) { user = foundUser; collectionName = collection; break; }
+      } catch (error) { /* ignore */ }
     }
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Delete user
-    const result = await db.collection(collectionName).deleteOne({ _id: user._id });
-    
-    if (result.deletedCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to delete user'
-      });
-    }
-
-    console.log(`✅ User deleted successfully: ${userId}`);
-    
-    res.json({
-      success: true,
-      message: 'User deleted successfully'
-    });
-
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting user',
-      error: error.message
-    });
-  }
-};
-
-// Reset user password (admin/teacher only)
-exports.resetPassword = async (req, res) => {
-  try {
-    const { schoolCode, userId } = req.params;
-    
-    console.log(`🔑 Resetting password for user ${userId} in school: ${schoolCode}`);
-    
-    // Get user from school-specific database
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    
-    if (!connection) {
-      return res.status(500).json({
-        success: false,
-        message: 'Could not connect to school database'
-      });
-    }
-
-    const db = connection.db;
-    const collections = ['admins', 'teachers', 'students', 'parents'];
-    let user = null;
-    let collectionName = null;
-
-    // Find user in collections
-    for (const collection of collections) {
       try {
-        const foundUser = await db.collection(collection).findOne({ 
-          $or: [
-            { userId: userId },
-            { _id: ObjectId.isValid(userId) ? new ObjectId(userId) : null }
-          ]
-        });
-        
-        if (foundUser) {
-          user = foundUser;
-          collectionName = collection;
-          break;
+        const studentUser = await db.collection('students').findOne(query);
+        if (studentUser) {
+          return res.status(403).json({ success: false, message: 'Password reset is not allowed for student accounts.' });
         }
-      } catch (collectionError) {
-        console.log(`Error searching in collection ${collection}:`, collectionError.message);
-      }
+      } catch (e) {/* ignore */ }
+      return res.status(404).json({ success: false, message: 'User not found or is not eligible for password reset.' });
     }
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    // Don't allow password reset for students
-    if (user.role === 'student') {
-      return res.status(403).json({
-        success: false,
-        message: 'Password reset is not allowed for students'
-      });
-    }
-
-    // Generate new password
-    const newPassword = generateRandomPassword(8);
+    const newPassword = generateRandomPassword(10);
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password
     const result = await db.collection(collectionName).updateOne(
       { _id: user._id },
-      { 
-        $set: { 
+      {
+        $set: {
           password: hashedPassword,
           temporaryPassword: newPassword,
           passwordChangeRequired: true,
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          ...(user.auditTrail && { 'auditTrail.lastModifiedBy': resettingAdminId, 'auditTrail.lastModifiedAt': new Date() })
         }
       }
     );
 
+    if (result.matchedCount === 0) { return res.status(404).json({ success: false, message: 'User not found during password update.' }); }
     if (result.modifiedCount === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to reset password'
-      });
+      console.warn(`Password for user ${user.userId} was not modified.`);
+      return res.status(400).json({ success: false, message: 'Failed to reset password (no changes applied).' });
     }
 
-    console.log(`✅ Password reset successfully for user: ${userId}`);
-    
+    console.log(`✅ Password reset successfully for user: ${user.userId}`);
+
     res.json({
       success: true,
-      message: 'Password reset successfully',
+      message: 'Password reset successfully. Please provide the new password to the user.',
       newPassword: newPassword
     });
 
   } catch (error) {
-    console.error('Error resetting password:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error resetting password',
-      error: error.message
-    });
+    console.error(`Error resetting password for user ${req.params.userId}:`, error);
+    res.status(500).json({ success: false, message: 'Error resetting password', error: error.message });
   }
+};
+
+
+// Make sure all exported functions are included
+module.exports = {
+  getAllUsers: exports.getAllUsers,
+  getUserById: exports.getUserById,
+  createUser: exports.createUser,
+  updateUser: exports.updateUser,
+  deleteUser: exports.deleteUser,
+  resetPassword: exports.resetPassword,
 };

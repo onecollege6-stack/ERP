@@ -1,18 +1,25 @@
+const bcrypt = require('bcryptjs');
+const { ObjectId } = require('mongodb'); // Added for potential use if needed elsewhere
 const User = require('../models/User');
 const School = require('../models/School');
-const Class = require('../models/Class');
-const DatabaseManager = require('../utils/databaseManager');
+const Class = require('../models/Class'); // Original import, kept
+// Corrected import path based on likely structure
+const SchoolDatabaseManager = require('../utils/databaseManager');
+// Original imports, kept
 const { adminRegistrationFields, studentRegistrationFields, teacherRegistrationFields, parentRegistrationFields, validateField } = require('../utils/formFields');
-const { generateStudentId, generateTeacherId, generateParentId } = require('../utils/idGenerator');
-const { generateStudentPassword, generateTeacherPassword, generateParentPassword, generateRandomPassword, hashPassword } = require('../utils/passwordGenerator');
-const bcrypt = require('bcryptjs');
+const { generateStudentId, generateTeacherId, generateParentId } = require('../utils/idGenerator'); // Kept, though maybe deprecated by new function
+const { generateStudentPassword, generateTeacherPassword, generateParentPassword, generateRandomPassword, hashPassword, generateStudentPasswordFromDOB } = require('../utils/passwordGenerator'); // Added generateStudentPasswordFromDOB if used here
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs'); // Added fs if needed for file operations not shown
 
-// Configure multer for file uploads
+
+// --- Original Multer Config (Keep as is) ---
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
+    // Ensure this path exists or is created
     const uploadPath = path.join(__dirname, '../uploads/documents');
+    fs.mkdirSync(uploadPath, { recursive: true }); // Ensure directory exists
     cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
@@ -21,136 +28,196 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
   fileFilter: function (req, file, cb) {
-    const allowedTypes = /jpeg|jpg|png|pdf/;
+    // Allow common document and image types
+    const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
+    const mimetype = file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf' || file.mimetype.includes('msword') || file.mimetype.includes('officedocument');
+
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only JPEG, JPG, PNG, and PDF files are allowed'));
+      cb(new Error('Invalid file type. Allowed: JPEG, PNG, PDF, DOC, DOCX'));
     }
   }
 });
 
-// Enhanced ID Generation Function - Always scans for maximum existing ID
+
+// --- START: REPLACED SEQUENTIAL USER ID GENERATION ---
+
+/**
+ * Generates the next sequential user ID for a specific role within a school.
+ * Uses an atomic counter ('id_sequences' collection) in the school's database.
+ * Example: SB-S-1001, SB-T-1001, SB-A-1001
+ *
+ * @param {string} schoolCode - The school code (e.g., 'SB').
+ * @param {string} role - The user role ('student', 'teacher', 'admin', 'parent').
+ * @returns {Promise<string>} The next sequential user ID.
+ * @throws {Error} If connection fails, or sequence cannot be updated/initialized.
+ */
 const generateSequentialUserId = async (schoolCode, role) => {
-  try {
-    // Role mappings
-    const roleMappings = {
-      'admin': 'A',
-      'teacher': 'T',
-      'student': 'S',
-      'parent': 'P'
-    };
-
-    const roleCode = roleMappings[role];
-    if (!roleCode) {
-      throw new Error(`Invalid role: ${role}`);
-    }
-
-    console.log(`🔄 Generating sequential user ID for ${schoolCode}-${role} by scanning all existing IDs`);
-
-    // Use school-specific database connection directly
-    const SchoolDatabaseManager = require('../utils/databaseManager');
-    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-
-    // Access the native MongoDB database from the Mongoose connection
-    const db = connection.db;
-
-    // Get the correct collection based on role
-    const collectionName = role === 'admin' ? 'admins' :
-                          role === 'teacher' ? 'teachers' :
-                          role === 'student' ? 'students' : 'parents';
-
-    console.log(`📋 Using collection: ${collectionName} in database: ${db.databaseName}`);
-
-    const usersColl = db.collection(collectionName);
-    const prefix = `${schoolCode.toUpperCase()}-${roleCode}-`;
-
-    console.log(`� Scanning ALL existing users with pattern ${prefix}`);
-
-    // Always scan all existing users to find the maximum ID number
-    const aggregationResult = await usersColl.aggregate([
-      {
-        $match: {
-          userId: { $regex: `^${prefix}\\d{4}$`, $options: 'i' }
-        }
-      },
-      {
-        $addFields: {
-          numericPart: {
-            $toInt: {
-              $substr: ["$userId", prefix.length, 4] // Extract numeric part after prefix
-            }
-          }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          maxId: { $max: "$numericPart" },
-          count: { $sum: 1 }
-        }
-      }
-    ]).toArray();
-
-    let maxNumber = 0;
-    if (aggregationResult.length > 0) {
-      maxNumber = aggregationResult[0].maxId || 0;
-      console.log(`📋 Found ${aggregationResult[0].count} existing users with pattern ${prefix}, max ID number: ${maxNumber}`);
-    } else {
-      console.log(`� No existing users found with pattern ${prefix}, starting from 1`);
-    }
-
-    // Start with maxNumber + 1
-    let candidateNumber = maxNumber + 1;
-    let candidateId = `${schoolCode.toUpperCase()}-${roleCode}-${candidateNumber.toString().padStart(4, '0')}`;
-
-    // Check if this ID already exists (race condition protection)
-    // Keep incrementing until we find an available ID
-    let attempts = 0;
-    const maxAttempts = 100; // Prevent infinite loops
-
-    while (attempts < maxAttempts) {
-      const existingUser = await usersColl.findOne({ userId: candidateId });
-      if (!existingUser) {
-        // ID is available
-        console.log(`✅ Generated unique user ID: ${candidateId} (after ${attempts} collision checks)`);
-        return candidateId;
-      }
-
-      console.log(`⚠️ ID ${candidateId} already exists, trying next number...`);
-      candidateNumber++;
-      candidateId = `${schoolCode.toUpperCase()}-${roleCode}-${candidateNumber.toString().padStart(4, '0')}`;
-      attempts++;
-    }
-
-    throw new Error(`Could not find an available user ID after ${maxAttempts} attempts`);
-
-  } catch (error) {
-    console.error('❌ Error generating sequential user ID:', error);
-    throw error;
+  if (!schoolCode || !role) {
+    throw new Error('School code and role are required to generate user ID');
   }
+  const upperSchoolCode = schoolCode.toUpperCase();
+  const lowerRole = role.toLowerCase();
+
+  let connection;
+  try {
+    // Use the correctly imported SchoolDatabaseManager
+    connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode);
+  } catch (connError) {
+    console.error(`DB Connect Error for ${upperSchoolCode}: ${connError.message}`);
+    throw new Error(`Could not connect to database for school ${upperSchoolCode}`);
+  }
+
+  if (!connection) {
+    throw new Error(`Database connection object invalid for school ${upperSchoolCode}`);
+  }
+
+  const db = connection.db;
+  const sequencesCollection = db.collection('id_sequences');
+  const sequenceId = `${lowerRole}_sequence`;
+
+  // --- Atomically find and increment ---
+  let nextSequenceValue;
+  try {
+    const result = await sequencesCollection.findOneAndUpdate(
+      { _id: sequenceId },
+      { $inc: { sequence_value: 1 } },
+      {
+        returnDocument: 'after',
+        upsert: true,
+        projection: { sequence_value: 1 }
+      }
+    );
+
+    // --- Handle First-Time Upsert (Initialize to 1001) ---
+    if (result && result.value && result.value.sequence_value === 1) {
+      const initResult = await sequencesCollection.findOneAndUpdate(
+        { _id: sequenceId, sequence_value: 1 },
+        { $set: { sequence_value: 1001 } },
+        { returnDocument: 'after', projection: { sequence_value: 1 } }
+      );
+      nextSequenceValue = (initResult && initResult.value) ? initResult.value.sequence_value : 1001;
+    } else if (result && result.value && typeof result.value.sequence_value === 'number') {
+      nextSequenceValue = result.value.sequence_value;
+    } else {
+      // Fallback: If findOneAndUpdate didn't return expected value after upsert
+      console.warn(`Initial findOneAndUpdate for ${sequenceId} did not return expected value. Refetching.`);
+      const current = await sequencesCollection.findOne({ _id: sequenceId });
+      if (current && typeof current.sequence_value === 'number') {
+        nextSequenceValue = current.sequence_value;
+        // If it's still 1, maybe the $set failed, try setting again (less likely needed)
+        if (nextSequenceValue === 1) {
+          await sequencesCollection.updateOne({ _id: sequenceId }, { $set: { sequence_value: 1001 } });
+          nextSequenceValue = 1001;
+        }
+      } else {
+        throw new Error(`Failed to retrieve or initialize sequence value for ${sequenceId} after upsert attempt.`);
+      }
+    }
+
+  } catch (dbError) {
+    console.error(`Database error generating sequence for ${sequenceId} in ${upperSchoolCode}: ${dbError.message}`);
+    throw new Error(`Database error generating user ID: ${dbError.message}`);
+  }
+
+  // --- Format the ID ---
+  const rolePrefixes = { student: 'S', teacher: 'T', admin: 'A', parent: 'P' };
+  const prefix = rolePrefixes[lowerRole] || 'U';
+  const padding = 4;
+
+  const finalUserId = `${upperSchoolCode}-${prefix}-${String(nextSequenceValue).padStart(padding, '0')}`;
+
+  console.log(`Generated User ID: ${finalUserId} (Sequence: ${nextSequenceValue}) for role: ${role}, school: ${upperSchoolCode}`);
+  return finalUserId;
 };
 
-// Export helper for tests and other modules
+// --- END: REPLACED SEQUENTIAL USER ID GENERATION ---
+
+// --- Export the Corrected Function (and keep original export if needed elsewhere) ---
 exports.generateSequentialUserId = generateSequentialUserId;
 
+// --- Original getNextUserId (Now uses the corrected generator) ---
+exports.getNextUserId = async (req, res) => {
+  try {
+    const { role } = req.params;
+
+    console.log(`🔍 Getting next user ID for role: ${role}`);
+    // console.log(`👤 Request user:`, { id: req.user.id, role: req.user.role }); // Be careful logging user details
+
+    if (!['admin', 'superadmin'].includes(req.user?.role)) { // Added safe navigation for req.user
+      console.log(`❌ Access denied for role: ${req.user?.role}`);
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
+      console.log(`❌ Invalid role requested: ${role}`);
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    let schoolCode;
+    if (req.schoolCode) { // Check if middleware set schoolCode directly
+      schoolCode = req.schoolCode;
+      console.log(`🏫 Using school code from request context: ${schoolCode}`);
+    } else if (req.user?.schoolId && req.user.role !== 'superadmin') { // Superadmin might not have schoolId
+      console.log(`🔄 Looking up school code for user's school ID: ${req.user.schoolId}`);
+      const school = await School.findById(req.user.schoolId).select('code'); // Only fetch code
+      if (!school) {
+        console.log(`❌ School not found for ID: ${req.user.schoolId}`);
+        return res.status(404).json({ message: 'User school not found' });
+      }
+      schoolCode = school.code;
+      console.log(`🏫 Retrieved school code: ${schoolCode}`);
+    } else if (req.params.schoolCode) { // Check params as another fallback
+      schoolCode = req.params.schoolCode;
+      console.log(`🏫 Using school code from URL params: ${schoolCode}`);
+    } else if (req.query.schoolCode) { // Check query as another fallback
+      schoolCode = req.query.schoolCode;
+      console.log(`🏫 Using school code from query params: ${schoolCode}`);
+    }
+    else {
+      // Cannot determine school code, especially for superadmin if not provided
+      console.log(`❌ Could not determine school code for ${req.user?.role}`);
+      return res.status(400).json({ message: 'School code not provided or could not be determined.' });
+    }
+
+    // Generate the next sequential user ID using the corrected function
+    const nextUserId = await generateSequentialUserId(schoolCode, role);
+
+    console.log(`✅ Generated next user ID: ${nextUserId}`);
+
+    res.json({
+      success: true,
+      nextUserId,
+      role,
+      schoolCode: schoolCode.toUpperCase(), // Ensure consistent casing
+      message: `Next available ID preview for ${role}`
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting next user ID preview:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting next user ID',
+      error: error.message // Provide error message
+    });
+  }
+};
 // Get next available user ID for preview
 exports.getNextUserId = async (req, res) => {
   try {
     const { role } = req.params;
-    
+
     console.log(`🔍 Getting next user ID for role: ${role}`);
     console.log(`👤 Request user:`, { id: req.user.id, role: req.user.role });
-    
+
     // Validate caller
     if (!['admin', 'superadmin'].includes(req.user.role)) {
       console.log(`❌ Access denied for role: ${req.user.role}`);
@@ -165,7 +232,7 @@ exports.getNextUserId = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let schoolCode;
-    
+
     if (req.school && req.schoolCode) {
       schoolCode = req.schoolCode;
       console.log(`🏫 Using school code from middleware: ${schoolCode}`);
@@ -185,7 +252,7 @@ exports.getNextUserId = async (req, res) => {
 
     // Generate the next sequential user ID
     const nextUserId = await generateSequentialUserId(schoolCode, role);
-    
+
     console.log(`✅ Generated next user ID: ${nextUserId}`);
 
     res.json({
@@ -198,10 +265,10 @@ exports.getNextUserId = async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error getting next user ID:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: 'Error getting next user ID', 
-      error: error.message 
+      message: 'Error getting next user ID',
+      error: error.message
     });
   }
 };
@@ -209,11 +276,11 @@ exports.getNextUserId = async (req, res) => {
 // Validation helper
 const validateFormData = (data, fieldDefinitions) => {
   const errors = {};
-  
+
   const validateNestedObject = (obj, fields, prefix = '') => {
     for (const [key, fieldConfig] of Object.entries(fields)) {
       const fullKey = prefix ? `${prefix}.${key}` : key;
-      
+
       if (typeof fieldConfig === 'object' && !fieldConfig.required && !fieldConfig.type) {
         // Nested object
         if (obj[key]) {
@@ -229,7 +296,7 @@ const validateFormData = (data, fieldDefinitions) => {
       }
     }
   };
-  
+
   validateNestedObject(data, fieldDefinitions);
   return errors;
 };
@@ -238,7 +305,7 @@ const validateFormData = (data, fieldDefinitions) => {
 exports.getRegistrationFields = async (req, res) => {
   try {
     const { role } = req.params;
-    
+
     let fields;
     switch (role) {
       case 'admin':
@@ -256,7 +323,7 @@ exports.getRegistrationFields = async (req, res) => {
       default:
         return res.status(400).json({ message: 'Invalid role specified' });
     }
-    
+
     res.json({
       success: true,
       role,
@@ -274,26 +341,26 @@ exports.registerUser = async (req, res) => {
     if (err) {
       return res.status(400).json({ message: err.message });
     }
-    
+
     try {
       const { role, schoolCode } = req.body;
-      
+
       // Validate role
       if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
         return res.status(400).json({ message: 'Invalid role' });
       }
-      
+
       // Check permissions
       if (!['admin', 'superadmin'].includes(req.user.role)) {
         return res.status(403).json({ message: 'Access denied' });
       }
-      
+
       // Get school information
       const school = await School.findOne({ schoolCode });
       if (!school) {
         return res.status(404).json({ message: 'School not found' });
       }
-      
+
       // Validate form data based on role
       let fieldDefinitions;
       switch (role) {
@@ -310,26 +377,26 @@ exports.registerUser = async (req, res) => {
           fieldDefinitions = parentRegistrationFields;
           break;
       }
-      
+
       const validationErrors = validateFormData(req.body, fieldDefinitions);
       if (Object.keys(validationErrors).length > 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Validation failed',
-          errors: validationErrors 
+          errors: validationErrors
         });
       }
-      
+
       // Check if email already exists
-      const existingUser = await User.findOne({ 
-        email: req.body.personalInfo?.primaryEmail || req.body.contactInfo?.primaryEmail 
+      const existingUser = await User.findOne({
+        email: req.body.personalInfo?.primaryEmail || req.body.contactInfo?.primaryEmail
       });
       if (existingUser) {
         return res.status(400).json({ message: 'Email already exists' });
       }
-      
+
       // Generate user ID using the new database manager
       const userId = await generateSequentialUserId(schoolCode, role);
-      
+
       // Prepare user data
       const userData = {
         userId,
@@ -348,7 +415,7 @@ exports.registerUser = async (req, res) => {
           createdAt: new Date()
         }
       };
-      
+
       // Process form data based on role
       if (role === 'admin') {
         await processAdminRegistration(req.body, userData, req.files);
@@ -359,7 +426,7 @@ exports.registerUser = async (req, res) => {
       } else if (role === 'parent') {
         await processParentRegistration(req.body, userData, req.files);
       }
-      
+
       // Generate temporary password - use DOB for students, regular method for others
       let tempPassword;
       if (role === 'student' && req.body.personalInfo?.dateOfBirth) {
@@ -368,19 +435,19 @@ exports.registerUser = async (req, res) => {
       } else {
         tempPassword = generateTempPassword(userData.name.firstName, userId);
       }
-      
+
       userData.password = await bcrypt.hash(tempPassword, 10);
       userData.temporaryPassword = tempPassword;
       userData.passwordChangeRequired = true;
-      
+
       // Create user in school-specific database
       const ModelFactory = require('../utils/modelFactory');
       const SchoolUser = ModelFactory.getUserModel(schoolCode);
       const newUser = new SchoolUser(userData);
       await newUser.save();
-      
+
       console.log(`✅ User created in school database: ${userId} for school ${schoolCode}`);
-      
+
       res.status(201).json({
         success: true,
         message: 'User registered successfully',
@@ -392,7 +459,7 @@ exports.registerUser = async (req, res) => {
           tempPassword: tempPassword
         }
       });
-      
+
     } catch (error) {
       console.error('User registration error:', error);
       res.status(500).json({ message: 'Server error during registration' });
@@ -403,25 +470,25 @@ exports.registerUser = async (req, res) => {
 // Process admin registration data
 const processAdminRegistration = async (formData, userData, files) => {
   const { personalInfo, contactInfo, addressInfo, professionalInfo, identityDocs, bankDetails } = formData;
-  
+
   userData.name = {
     firstName: personalInfo.firstName,
     middleName: personalInfo.middleName,
     lastName: personalInfo.lastName
   };
-  
+
   userData.email = contactInfo.primaryEmail;
-  
+
   userData.contact = {
     primaryPhone: contactInfo.primaryPhone,
     secondaryPhone: contactInfo.secondaryPhone,
     whatsappNumber: contactInfo.whatsappNumber,
     emergencyContact: contactInfo.emergencyContact
   };
-  
+
   userData.address = addressInfo;
   userData.identity = identityDocs;
-  
+
   userData.adminDetails = {
     adminType: professionalInfo.adminType,
     employeeId: userData.userId,
@@ -443,7 +510,7 @@ const processAdminRegistration = async (formData, userData, files) => {
       auditLogs: false
     }
   };
-  
+
   // Process uploaded documents
   if (files && files.length > 0) {
     userData.documents = files.map(file => ({
@@ -459,18 +526,18 @@ const processAdminRegistration = async (formData, userData, files) => {
 // Process teacher registration data
 const processTeacherRegistration = async (formData, userData, files) => {
   const { personalInfo, contactInfo, addressInfo, professionalInfo, identityDocs, bankDetails } = formData;
-  
+
   userData.name = {
     firstName: personalInfo.firstName,
     middleName: personalInfo.middleName,
     lastName: personalInfo.lastName
   };
-  
+
   userData.email = contactInfo.primaryEmail;
   userData.contact = contactInfo;
   userData.address = addressInfo;
   userData.identity = identityDocs;
-  
+
   userData.teacherDetails = {
     employeeId: userData.userId,
     joiningDate: new Date(professionalInfo.joiningDate),
@@ -484,7 +551,7 @@ const processTeacherRegistration = async (formData, userData, files) => {
     salary: professionalInfo.salary,
     bankDetails: bankDetails
   };
-  
+
   // Add secondary subjects if provided
   if (professionalInfo.subjects.secondary && professionalInfo.subjects.secondary.length > 0) {
     professionalInfo.subjects.secondary.forEach(subjectCode => {
@@ -495,7 +562,7 @@ const processTeacherRegistration = async (formData, userData, files) => {
       });
     });
   }
-  
+
   // Process uploaded documents
   if (files && files.length > 0) {
     userData.documents = files.map(file => ({
@@ -511,15 +578,15 @@ const processTeacherRegistration = async (formData, userData, files) => {
 // Process student registration data
 const processStudentRegistration = async (formData, userData, files) => {
   const { personalInfo, academicInfo, fatherInfo, motherInfo, guardianInfo, medicalInfo, transportInfo, financialInfo, emergencyContacts } = formData;
-  
+
   userData.name = {
     firstName: personalInfo.firstName,
     middleName: personalInfo.middleName,
     lastName: personalInfo.lastName
   };
-  
+
   userData.email = fatherInfo.email || motherInfo.email;
-  
+
   userData.studentDetails = {
     studentId: userData.userId,
     admissionNumber: generateAdmissionNumber(),
@@ -552,14 +619,14 @@ const processStudentRegistration = async (formData, userData, files) => {
     transport: transportInfo,
     financial: financialInfo
   };
-  
+
   // Set contact from parents
   userData.contact = {
     primaryPhone: fatherInfo.primaryPhone || motherInfo.primaryPhone,
     secondaryPhone: motherInfo.primaryPhone || fatherInfo.secondaryPhone,
     emergencyContact: emergencyContacts.primary
   };
-  
+
   // Set address from father's details (can be modified as needed)
   userData.address = {
     permanent: {
@@ -570,7 +637,7 @@ const processStudentRegistration = async (formData, userData, files) => {
       pincode: fatherInfo.address?.pincode
     }
   };
-  
+
   // Process uploaded documents
   if (files && files.length > 0) {
     userData.documents = files.map(file => ({
@@ -586,17 +653,17 @@ const processStudentRegistration = async (formData, userData, files) => {
 // Process parent registration data
 const processParentRegistration = async (formData, userData, files) => {
   const { personalInfo, contactInfo, addressInfo, professionalInfo, childrenInfo } = formData;
-  
+
   userData.name = {
     firstName: personalInfo.firstName,
     middleName: personalInfo.middleName,
     lastName: personalInfo.lastName
   };
-  
+
   userData.email = contactInfo.primaryEmail;
   userData.contact = contactInfo;
   userData.address = addressInfo;
-  
+
   userData.parentDetails = {
     parentId: userData.userId,
     children: [], // Will be populated when linking to students
@@ -606,7 +673,7 @@ const processParentRegistration = async (formData, userData, files) => {
       languagePreference: 'English'
     }
   };
-  
+
   // Process uploaded documents
   if (files && files.length > 0) {
     userData.documents = files.map(file => ({
@@ -668,14 +735,14 @@ const getSubjectName = (subjectCode) => {
 // Simple user creation for superadmin/admin to add admin/teacher/student/parent
 exports.createUserSimple = async (req, res) => {
   try {
-    const { 
-      name, 
-      email, 
-      role, 
-      schoolId, 
-      subjects = [], 
-      classes = [], 
-      class: className, 
+    const {
+      name,
+      email,
+      role,
+      schoolId,
+      subjects = [],
+      classes = [],
+      class: className,
       rollNumber,
       // SATS Transfer Certificate specific fields
       studentDetails,
@@ -696,7 +763,7 @@ exports.createUserSimple = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -718,7 +785,7 @@ exports.createUserSimple = async (req, res) => {
     // Use school-specific database
     const ModelFactory = require('../utils/modelFactory');
     const SchoolUser = ModelFactory.getUserModel(schoolCode);
-    
+
     // Check email uniqueness in school database
     const existing = await SchoolUser.findOne({ email });
     if (existing) {
@@ -727,7 +794,7 @@ exports.createUserSimple = async (req, res) => {
 
     // Generate IDs and password using enhanced sequential generation
     const userId = await generateSequentialUserId(schoolCode, role);
-    
+
     // Use DOB for students, random password for others
     let tempPassword;
     if (role === 'student' && req.body.dateOfBirth) {
@@ -736,7 +803,7 @@ exports.createUserSimple = async (req, res) => {
     } else {
       tempPassword = require('../utils/passwordGenerator').generateRandomPassword(10);
     }
-    
+
     const hashedPassword = await hashPassword(tempPassword);
 
     // Basic name parsing
@@ -812,16 +879,16 @@ exports.createUserSimple = async (req, res) => {
       // Enhanced student details for Karnataka SATS Standard
       const getCurrentAcademicYear = () => {
         const currentYear = new Date().getFullYear();
-        return new Date().getMonth() > 5 ? 
-          `${currentYear}-${currentYear + 1}` : 
+        return new Date().getMonth() > 5 ?
+          `${currentYear}-${currentYear + 1}` :
           `${currentYear - 1}-${currentYear}`;
       };
 
       baseDoc.studentDetails = {
         studentId: userId,
-        admissionNumber: req.body.admissionNumber || `ADM${new Date().getFullYear().toString().slice(-2)}${Math.floor(Math.random()*10000).toString().padStart(4,'0')}`,
+        admissionNumber: req.body.admissionNumber || `ADM${new Date().getFullYear().toString().slice(-2)}${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`,
         rollNumber: rollNumber || null,
-        
+
         // Academic Information - Karnataka SATS Standard
         academic: {
           currentClass: className || req.body.class || '',
@@ -832,7 +899,7 @@ exports.createUserSimple = async (req, res) => {
           enrollmentNo: req.body.enrollmentNo,
           tcNo: req.body.tcNo
         },
-        
+
         // Personal Information - Karnataka SATS Standard
         personal: {
           dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
@@ -856,19 +923,19 @@ exports.createUserSimple = async (req, res) => {
           motherTongue: req.body.motherTongue,
           motherTongueOther: req.body.motherTongueOther,
           bloodGroup: req.body.bloodGroup,
-          
+
           // Special Category and Disability
           specialCategory: req.body.specialCategory,
           specialCategoryOther: req.body.specialCategoryOther,
           disability: req.body.disability,
           disabilityOther: req.body.disabilityOther,
-          
+
           // Economic Status
           belongingToBPL: req.body.belongingToBPL,
           bplCardNo: req.body.bplCardNo,
           bhagyalakshmiBondNo: req.body.bhagyalakshmiBondNo
         },
-        
+
         // Family Information - Karnataka SATS Standard
         family: {
           father: {
@@ -902,7 +969,7 @@ exports.createUserSimple = async (req, res) => {
             email: req.body.parentEmail
           }
         },
-        
+
         // Financial Information - Karnataka SATS Standard
         financial: {
           feeCategory: 'regular',
@@ -955,14 +1022,14 @@ exports.createUserSimple = async (req, res) => {
 // Add a new teacher (legacy function - enhanced)
 exports.addTeacher = async (req, res) => {
   try {
-    const { 
-      name, 
-      email, 
-      phone, 
-      subjects, 
-      qualification, 
+    const {
+      name,
+      email,
+      phone,
+      subjects,
+      qualification,
       experience,
-      address 
+      address
     } = req.body;
 
     // Check if user is admin or super admin
@@ -972,7 +1039,7 @@ exports.addTeacher = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -998,7 +1065,7 @@ exports.addTeacher = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'Email already exists in this school' });
     }
-    
+
     // Generate teacher ID and password using new system
     const DatabaseManager = require('../utils/databaseManager');
     let userId;
@@ -1009,12 +1076,12 @@ exports.addTeacher = async (req, res) => {
       console.error('Error generating userId:', error);
       return res.status(500).json({ message: 'Error generating user ID' });
     }
-    
+
     if (!userId) {
       console.error('UserId is null or undefined');
       return res.status(500).json({ message: 'Failed to generate user ID' });
     }
-    
+
     const password = generateTeacherPassword(name, userId);
     const hashedPassword = await hashPassword(password);
 
@@ -1106,14 +1173,14 @@ exports.addTeacher = async (req, res) => {
         name: teacher.name,
         email: teacher.email,
         role: teacher.role,
-  tempPassword: password,
-  // compatibility with frontend toast expecting `password`
-  password: password
+        tempPassword: password,
+        // compatibility with frontend toast expecting `password`
+        password: password
       }
     });
   } catch (error) {
-  console.error('Error adding teacher:', error);
-  res.status(500).json({ message: 'Server error', error: error?.message || String(error) });
+    console.error('Error adding teacher:', error);
+    res.status(500).json({ message: 'Server error', error: error?.message || String(error) });
   }
 };
 
@@ -1121,13 +1188,13 @@ exports.addTeacher = async (req, res) => {
 exports.getUserSessions = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('activeSessions');
-    
+
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const activeSessions = user.activeSessions.filter(session => session.isActive);
-    
+
     res.json({
       success: true,
       sessions: activeSessions.map(session => ({
@@ -1147,14 +1214,14 @@ exports.getUserSessions = async (req, res) => {
 exports.terminateSession = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     await user.removeSession(sessionId);
-    
+
     res.json({
       success: true,
       message: 'Session terminated successfully'
@@ -1168,7 +1235,7 @@ exports.terminateSession = async (req, res) => {
 exports.cleanupInactiveSessions = async (req, res) => {
   try {
     const cleanedCount = await DatabaseOptimization.cleanupInactiveSessions();
-    
+
     res.json({
       success: true,
       message: `Cleaned up ${cleanedCount} inactive sessions`
@@ -1182,13 +1249,13 @@ exports.cleanupInactiveSessions = async (req, res) => {
 // Add a new student
 exports.addStudent = async (req, res) => {
   try {
-    const { 
-      name, 
-      email, 
-      phone, 
-      dateOfBirth, 
-      gender, 
-      class: className, 
+    const {
+      name,
+      email,
+      phone,
+      dateOfBirth,
+      gender,
+      class: className,
       section,
       address,
       parentName,
@@ -1206,7 +1273,7 @@ exports.addStudent = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -1234,7 +1301,7 @@ exports.addStudent = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'Email already exists in this school' });
     }
-    
+
     // Generate student ID and password
     const studentId = await generateSequentialUserId(schoolCode, 'student');
     const password = generateStudentPassword(name, studentId);
@@ -1244,7 +1311,7 @@ exports.addStudent = async (req, res) => {
     const parentId = await generateSequentialUserId(schoolCode, 'parent');
     const parentPassword = generateParentPassword(parentName, parentId);
     const parentHashedPassword = await hashPassword(parentPassword);
-    
+
     const parent = new SchoolUser({
       userId: parentId,
       name: {
@@ -1385,13 +1452,13 @@ exports.addStudent = async (req, res) => {
 // Add a new parent (standalone)
 exports.addParent = async (req, res) => {
   try {
-    const { 
-      name, 
-      email, 
-      phone, 
-      occupation, 
+    const {
+      name,
+      email,
+      phone,
+      occupation,
       relationship,
-      address 
+      address
     } = req.body;
 
     // Check if user is admin or superadmin
@@ -1401,7 +1468,7 @@ exports.addParent = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -1429,7 +1496,7 @@ exports.addParent = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'Email already exists in this school' });
     }
-    
+
     // Generate parent ID and password
     const parentId = await generateSequentialUserId(schoolCode, 'parent');
     const password = generateParentPassword(name, parentId);
@@ -1520,7 +1587,7 @@ exports.getUsersByRole = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -1657,7 +1724,7 @@ exports.updateUser = async (req, res) => {
 
     // Resolve target school - use middleware-provided school context
     let targetSchoolId, school, schoolCode;
-    
+
     if (req.school && req.schoolId) {
       // School context provided by middleware (preferred for multi-tenant)
       targetSchoolId = req.schoolId;
@@ -1699,7 +1766,7 @@ exports.updateUser = async (req, res) => {
     // Handle student details update with Karnataka SATS fields
     if (user.role === 'student' && updateData.studentDetails) {
       const studentUpdate = {};
-      
+
       // Academic Information
       if (updateData.class) studentUpdate['studentDetails.academic.currentClass'] = updateData.class;
       if (updateData.section) studentUpdate['studentDetails.academic.currentSection'] = updateData.section;
@@ -1707,7 +1774,7 @@ exports.updateUser = async (req, res) => {
       if (updateData.admissionDate) studentUpdate['studentDetails.academic.admissionDate'] = new Date(updateData.admissionDate);
       if (updateData.enrollmentNo) studentUpdate['studentDetails.academic.enrollmentNo'] = updateData.enrollmentNo;
       if (updateData.tcNo) studentUpdate['studentDetails.academic.tcNo'] = updateData.tcNo;
-      
+
       // Personal Information - Karnataka SATS
       if (updateData.dateOfBirth) studentUpdate['studentDetails.personal.dateOfBirth'] = new Date(updateData.dateOfBirth);
       if (updateData.gender) studentUpdate['studentDetails.personal.gender'] = updateData.gender;
@@ -1730,21 +1797,21 @@ exports.updateUser = async (req, res) => {
       if (updateData.ageMonths !== undefined) studentUpdate['studentDetails.personal.ageMonths'] = parseInt(updateData.ageMonths);
       if (updateData.studentAadhaar) studentUpdate['studentDetails.personal.studentAadhaar'] = updateData.studentAadhaar;
       if (updateData.studentCasteCertNo) studentUpdate['studentDetails.personal.studentCasteCertNo'] = updateData.studentCasteCertNo;
-      
+
       // Special Category and Disability
       if (updateData.specialCategory) studentUpdate['studentDetails.personal.specialCategory'] = updateData.specialCategory;
       if (updateData.specialCategoryOther) studentUpdate['studentDetails.personal.specialCategoryOther'] = updateData.specialCategoryOther;
       if (updateData.disability) studentUpdate['studentDetails.personal.disability'] = updateData.disability;
       if (updateData.disabilityOther) studentUpdate['studentDetails.personal.disabilityOther'] = updateData.disabilityOther;
-      
+
       // RTE (Right to Education) Status
       if (updateData.isRTECandidate) studentUpdate['studentDetails.personal.isRTECandidate'] = updateData.isRTECandidate;
-      
+
       // Economic Status
       if (updateData.belongingToBPL) studentUpdate['studentDetails.personal.belongingToBPL'] = updateData.belongingToBPL;
       if (updateData.bplCardNo) studentUpdate['studentDetails.personal.bplCardNo'] = updateData.bplCardNo;
       if (updateData.bhagyalakshmiBondNo) studentUpdate['studentDetails.personal.bhagyalakshmiBondNo'] = updateData.bhagyalakshmiBondNo;
-      
+
       // Family Information - Karnataka SATS
       if (updateData.fatherName) studentUpdate['studentDetails.family.father.name'] = updateData.fatherName;
       if (updateData.fatherNameKannada) studentUpdate['studentDetails.family.father.nameKannada'] = updateData.fatherNameKannada;
@@ -1756,7 +1823,7 @@ exports.updateUser = async (req, res) => {
       if (updateData.fatherEducation) studentUpdate['studentDetails.family.father.qualification'] = updateData.fatherEducation;
       if (updateData.fatherPhone || updateData.fatherMobile) studentUpdate['studentDetails.family.father.phone'] = updateData.fatherPhone || updateData.fatherMobile;
       if (updateData.fatherEmail) studentUpdate['studentDetails.family.father.email'] = updateData.fatherEmail;
-      
+
       if (updateData.motherName) studentUpdate['studentDetails.family.mother.name'] = updateData.motherName;
       if (updateData.motherNameKannada) studentUpdate['studentDetails.family.mother.nameKannada'] = updateData.motherNameKannada;
       if (updateData.motherAadhaar) studentUpdate['studentDetails.family.mother.aadhaar'] = updateData.motherAadhaar;
@@ -1767,19 +1834,19 @@ exports.updateUser = async (req, res) => {
       if (updateData.motherEducation) studentUpdate['studentDetails.family.mother.qualification'] = updateData.motherEducation;
       if (updateData.motherPhone || updateData.motherMobile) studentUpdate['studentDetails.family.mother.phone'] = updateData.motherPhone || updateData.motherMobile;
       if (updateData.motherEmail) studentUpdate['studentDetails.family.mother.email'] = updateData.motherEmail;
-      
+
       // Guardian Information
       if (updateData.guardianName) studentUpdate['studentDetails.family.guardian.name'] = updateData.guardianName;
       if (updateData.guardianRelation) studentUpdate['studentDetails.family.guardian.relationship'] = updateData.guardianRelation;
       if (updateData.emergencyContactPhone) studentUpdate['studentDetails.family.guardian.phone'] = updateData.emergencyContactPhone;
       if (updateData.parentEmail) studentUpdate['studentDetails.family.guardian.email'] = updateData.parentEmail;
-      
+
       // Banking Information - Karnataka SATS
       if (updateData.bankName) studentUpdate['studentDetails.financial.bankDetails.bankName'] = updateData.bankName;
       if (updateData.bankAccountNo || updateData.bankAccountNumber) studentUpdate['studentDetails.financial.bankDetails.accountNumber'] = updateData.bankAccountNo || updateData.bankAccountNumber;
       if (updateData.bankIFSC || updateData.ifscCode) studentUpdate['studentDetails.financial.bankDetails.ifscCode'] = updateData.bankIFSC || updateData.ifscCode;
       if (updateData.accountHolderName) studentUpdate['studentDetails.financial.bankDetails.accountHolderName'] = updateData.accountHolderName;
-      
+
       Object.assign(updateData, studentUpdate);
     }
 
@@ -1872,7 +1939,7 @@ exports.resetUserPassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    res.json({ 
+    res.json({
       message: 'Password reset successfully',
       newPassword: newPassword
     });
@@ -1906,7 +1973,7 @@ exports.toggleUserStatus = async (req, res) => {
     user.isActive = !user.isActive;
     await user.save();
 
-    res.json({ 
+    res.json({
       message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`,
       user: { id: user._id, name: user.name, isActive: user.isActive }
     });
@@ -1924,43 +1991,43 @@ exports.getUsersByRole = async (req, res) => {
     const { role } = req.params;
     const { schoolCode, schoolDb } = req; // From school context middleware
     const { class: className, section } = req.query; // Get class and section from query params
-    
+
     if (!['admin', 'teacher', 'student', 'parent'].includes(role)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid role specified' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
       });
     }
-    
+
     console.log('🏫 School context:', { schoolCode, schoolName: req.school?.name });
     console.log('📋 Filter params:', { className, section });
-    
+
     // Use UserGenerator to get users from role-specific collections (like dashboard does)
     const UserGenerator = require('../utils/userGenerator');
-    
+
     console.log('📋 Querying users with role:', role);
-    
+
     // Get users from role-specific collection (students, teachers, etc.)
     let users = await UserGenerator.getUsersByRole(schoolCode, role);
-    
+
     // Filter by class and section if provided (for students)
     if (role === 'student' && (className || section)) {
       users = users.filter(user => {
         const academicInfo = user.academicInfo || {};
         const userClass = academicInfo.class;
         const userSection = academicInfo.section;
-        
+
         const classMatch = !className || userClass === className;
         const sectionMatch = !section || userSection === section;
-        
+
         return classMatch && sectionMatch;
       });
-      
+
       console.log(`📊 Filtered to ${users.length} students for class: ${className}, section: ${section}`);
     }
-    
+
     console.log(`✅ Found ${users.length} ${role}s in school ${schoolCode}`);
-    
+
     res.json({
       success: true,
       count: users.length,
@@ -1969,7 +2036,7 @@ exports.getUsersByRole = async (req, res) => {
       role: role,
       data: users // Changed from 'users' to 'data' for consistency
     });
-    
+
   } catch (error) {
     console.error(`Error fetching ${req.params.role} users:`, error);
     res.status(500).json({
@@ -1985,26 +2052,26 @@ exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
     const { schoolCode } = req;
-    
+
     const ModelFactory = require('../utils/modelFactory');
     const SchoolUser = ModelFactory.getUserModel(schoolCode);
-    
+
     const user = await SchoolUser.findById(userId)
       .select('-password -temporaryPassword -passwordHistory')
       .populate('schoolId', 'name code');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found in this school'
       });
     }
-    
+
     res.json({
       success: true,
       user: user
     });
-    
+
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({
