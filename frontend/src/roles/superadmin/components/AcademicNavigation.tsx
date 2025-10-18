@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Users, BookOpen, Award, Plus, Trash2, Edit3 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+// const [showClassPopup, setShowClassPopup] = useState(false);
 import { classAPI, testAPI } from '../../../services/api';
 
 interface ClassData {
@@ -29,7 +30,7 @@ const AcademicNavigation: React.FC = () => {
 
   // Navigation state
   const [activeView, setActiveView] = useState<'classes' | 'sections' | 'tests'>('classes');
-  
+
   // Data state
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [tests, setTests] = useState<TestData[]>([]);
@@ -74,7 +75,7 @@ const AcademicNavigation: React.FC = () => {
   // Fetch classes
   const fetchClasses = async () => {
     if (!selectedSchoolId) return;
-    
+
     try {
       setLoading(true);
       console.log('Fetching classes for school:', selectedSchoolId);
@@ -95,7 +96,7 @@ const AcademicNavigation: React.FC = () => {
   // Fetch tests
   const fetchTests = async () => {
     if (!selectedSchoolId) return;
-    
+
     try {
       setLoading(true);
       console.log('Fetching tests for school:', selectedSchoolId);
@@ -103,10 +104,10 @@ const AcademicNavigation: React.FC = () => {
       console.log('Tests response:', response);
       if (response.success) {
         console.log('Tests data:', response.data.tests);
-        console.log('School info:', { 
-          schoolId: response.data.schoolId, 
-          schoolCode: response.data.schoolCode, 
-          schoolName: response.data.schoolName 
+        console.log('School info:', {
+          schoolId: response.data.schoolId,
+          schoolCode: response.data.schoolCode,
+          schoolName: response.data.schoolName
         });
         setTests(response.data.tests || []);
       }
@@ -153,7 +154,7 @@ const AcademicNavigation: React.FC = () => {
 
     try {
       const response = await classAPI.addSectionToClass(selectedSchoolId, selectedClass, newSection.trim());
-      
+
       if (response.success) {
         toast.success(`Section ${newSection} added successfully`);
         setNewSection('');
@@ -173,7 +174,7 @@ const AcademicNavigation: React.FC = () => {
 
     try {
       const response = await classAPI.removeSectionFromClass(selectedSchoolId, classId, section);
-      
+
       if (response.success) {
         toast.success(`Section ${section} removed successfully`);
         await fetchClasses();
@@ -192,7 +193,7 @@ const AcademicNavigation: React.FC = () => {
 
     try {
       const response = await classAPI.deleteClass(selectedSchoolId, classId);
-      
+
       if (response.success) {
         toast.success(`Class ${className} deleted successfully`);
         await fetchClasses();
@@ -233,16 +234,16 @@ const AcademicNavigation: React.FC = () => {
 
       // Call API to create test
       const response = await testAPI.addTest(selectedSchoolId, testData);
-      
+
       console.log('Add test response:', response);
-      
+
       if (response.success) {
         toast.success(`Test "${newTestName}" created for all sections of Class ${selectedClassData.className}`);
-        
+
         // Reset form
         setNewTestName('');
         setSelectedClass('');
-        
+
         // Refresh tests list
         await fetchTests();
       } else {
@@ -261,15 +262,15 @@ const AcademicNavigation: React.FC = () => {
 
     try {
       console.log('Deleting test:', { testId, testName, selectedSchoolId });
-      
+
       // Call API to delete test
       const response = await testAPI.deleteTest(selectedSchoolId, testId);
-      
+
       console.log('Delete test response:', response);
-      
+
       if (response.success) {
         toast.success(`Test "${testName}" deleted successfully`);
-        
+
         // Refresh tests list
         await fetchTests();
       } else {
@@ -323,21 +324,19 @@ const AcademicNavigation: React.FC = () => {
           {navigationCards.map((card) => {
             const Icon = card.icon;
             const isActive = activeView === card.id;
-            
+
             return (
               <div
                 key={card.id}
                 onClick={() => setActiveView(card.id as any)}
-                className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                  isActive ? 'ring-2 ring-blue-500' : ''
-                }`}
+                className={`bg-white rounded-lg shadow-md p-6 cursor-pointer transition-all duration-200 hover:shadow-lg ${isActive ? 'ring-2 ring-blue-500' : ''
+                  }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-lg ${
-                    card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
+                  <div className={`p-3 rounded-lg ${card.color === 'blue' ? 'bg-blue-100 text-blue-600' :
                     card.color === 'green' ? 'bg-green-100 text-green-600' :
-                    'bg-purple-100 text-purple-600'
-                  }`}>
+                      'bg-purple-100 text-purple-600'
+                    }`}>
                     <Icon className="h-6 w-6" />
                   </div>
                   <div className="flex-1">
@@ -368,24 +367,80 @@ const AcademicNavigation: React.FC = () => {
               </div>
 
               {/* Add Class Form */}
+              {/* Add Class Form - Compact Version */}
               <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                 <h3 className="text-md font-medium text-gray-800 mb-4">Create New Class</h3>
                 <div className="flex gap-4">
-                  <input
-                    type="text"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    placeholder="Enter class name (e.g., 1, 2, LKG, UKG)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex-1 relative">
+                    <select
+                      value={newClassName}
+                      onChange={(e) => setNewClassName(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white appearance-none cursor-pointer shadow-sm hover:border-gray-400 transition-colors"
+                    >
+                      <option value="">Select class...</option>
+                      <optgroup label="Pre-Primary" className="text-gray-500">
+                        <option value="LKG" className="text-gray-700">LKG</option>
+                        <option value="UKG" className="text-gray-700">UKG</option>
+                      </optgroup>
+                      <optgroup label="Primary School (1-5)" className="text-gray-500">
+                        {[1, 2, 3, 4, 5].map(num => (
+                          <option key={num} value={num.toString()} className="text-gray-700">Class {num}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Middle School (6-8)" className="text-gray-500">
+                        {[6, 7, 8].map(num => (
+                          <option key={num} value={num.toString()} className="text-gray-700">Class {num}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="High School (9-12)" className="text-gray-500">
+                        {[9, 10, 11, 12].map(num => (
+                          <option key={num} value={num.toString()} className="text-gray-700">Class {num}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    {/* Custom dropdown arrow */}
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                   <button
                     onClick={addClass}
                     disabled={!newClassName.trim() || loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2 min-w-[120px] justify-center"
                   >
-                    {loading ? 'Adding...' : 'Add'}
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        Add Class
+                      </>
+                    )}
                   </button>
                 </div>
+                {newClassName && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm font-medium text-green-800">
+                        Selected: <strong className="text-green-900">
+                          {newClassName.includes('LKG') || newClassName.includes('UKG') ? newClassName : `Class ${newClassName}`}
+                        </strong>
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setNewClassName('')}
+                      className="text-green-600 hover:text-green-800 text-sm font-medium px-2 py-1 rounded hover:bg-green-100 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Debug Info */}
@@ -408,35 +463,35 @@ const AcademicNavigation: React.FC = () => {
                   </div>
                 ) : (
                   classes.map((cls) => (
-                  <div key={cls._id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-lg font-medium text-gray-900">Class {cls.className}</h4>
-                        <p className="text-sm text-gray-600">
-                          {cls.sections.length} sections • Academic Year: {cls.academicYear}
-                        </p>
-                        {cls.sections.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {cls.sections.map((section, index) => (
-                              <span
-                                key={index}
-                                className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-                              >
-                                Section {section}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                    <div key={cls._id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-lg font-medium text-gray-900">Class {cls.className}</h4>
+                          <p className="text-sm text-gray-600">
+                            {cls.sections.length} sections • Academic Year: {cls.academicYear}
+                          </p>
+                          {cls.sections.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {cls.sections.map((section, index) => (
+                                <span
+                                  key={index}
+                                  className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
+                                >
+                                  Section {section}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => deleteClass(cls._id, cls.className)}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded"
+                          title="Delete class"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => deleteClass(cls._id, cls.className)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded"
-                        title="Delete class"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
                     </div>
-                  </div>
                   ))
                 )}
               </div>
