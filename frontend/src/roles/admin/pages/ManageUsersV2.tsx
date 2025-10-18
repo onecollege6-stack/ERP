@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Plus, Edit, Trash2, Download, Upload, Filter, 
-  UserCheck, UserX, Eye, Lock, RotateCcw, FileText, 
-  AlertTriangle, Check, Users, GraduationCap, Shield 
+import {
+  Search, Plus, Edit, Trash2, Download, Upload, Filter,
+  UserCheck, UserX, Eye, Lock, RotateCcw, FileText,
+  AlertTriangle, Check, Users, GraduationCap, Shield
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
@@ -19,7 +19,7 @@ interface School {
 
 const ManageUsersV2: React.FC = () => {
   const { user, token } = useAuth();
-  
+
   // State management
   const [users, setUsers] = useState<User[]>([]);
   const [school, setSchool] = useState<School | null>(null);
@@ -28,19 +28,19 @@ const ManageUsersV2: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState('all');
   const [selectedClass, setSelectedClass] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
-  
+
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState<UserFormData>(getDefaultFormData('student'));
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  
+
   // Stats
   const [stats, setStats] = useState({
     total: 0,
@@ -58,21 +58,21 @@ const ManageUsersV2: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       const authToken = getAuthToken();
-      
+
       const response = await fetch(`http://localhost:5050/api/user-management/${schoolCode}/users`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch users: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
       console.log('Fetched users:', data);
-      
+
       // Handle different response formats
       let userList: any[] = [];
       if (Array.isArray(data)) {
@@ -88,7 +88,7 @@ const ManageUsersV2: React.FC = () => {
           }
         }
       }
-      
+
       // Normalize user data to match our User interface
       const normalizedUsers: User[] = userList.map((userData: any) => ({
         _id: userData._id || userData.id,
@@ -98,8 +98,8 @@ const ManageUsersV2: React.FC = () => {
           firstName: userData.name?.firstName || userData.firstName || 'Unknown',
           middleName: userData.name?.middleName || userData.middleName || '',
           lastName: userData.name?.lastName || userData.lastName || 'User',
-          displayName: userData.name?.displayName || 
-                      `${userData.name?.firstName || userData.firstName || ''} ${userData.name?.lastName || userData.lastName || ''}`.trim()
+          displayName: userData.name?.displayName ||
+            `${userData.name?.firstName || userData.firstName || ''} ${userData.name?.lastName || userData.lastName || ''}`.trim()
         },
         email: userData.email || 'no-email@example.com',
         role: userData.role || 'student',
@@ -129,13 +129,21 @@ const ManageUsersV2: React.FC = () => {
         updatedAt: userData.updatedAt || userData.createdAt || new Date().toISOString(),
         schoolAccess: userData.schoolAccess || undefined,
         // Role-specific details
-        ...(userData.role === 'student' && userData.studentDetails ? { studentDetails: userData.studentDetails } : {}),
+        ...(userData.role === 'student' && userData.studentDetails ? {
+          studentDetails: {
+            // CORRECT MAPPING: Map directly from API response
+            currentClass: userData.studentDetails.currentClass || 'N/A',
+            currentSection: userData.studentDetails.currentSection || 'N/A',
+            rollNumber: userData.studentDetails.rollNumber || undefined,
+            // Include other studentDetails fields if needed by the UI
+          }
+        } : {}),
         ...(userData.role === 'teacher' && userData.teacherDetails ? { teacherDetails: userData.teacherDetails } : {}),
         ...(userData.role === 'admin' && userData.adminDetails ? { adminDetails: userData.adminDetails } : {})
       }));
-      
+
       setUsers(normalizedUsers);
-      
+
       // Update stats
       const newStats = {
         total: normalizedUsers.length,
@@ -144,7 +152,7 @@ const ManageUsersV2: React.FC = () => {
         admins: normalizedUsers.filter(u => u.role === 'admin').length
       };
       setStats(newStats);
-      
+
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to fetch users');
@@ -158,14 +166,14 @@ const ManageUsersV2: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       const authToken = getAuthToken();
-      
+
       const response = await fetch(`http://localhost:5050/api/schools/${schoolCode}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         const schoolData = await response.json();
         setSchool(schoolData);
@@ -183,19 +191,19 @@ const ManageUsersV2: React.FC = () => {
 
   // Filter users based on search and filters
   const filteredUsers = users.filter(userData => {
-    const searchMatch = searchTerm === '' || 
+    const searchMatch = searchTerm === '' ||
       userData.name.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       userData.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       userData.userId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       userData.contact.primaryPhone.includes(searchTerm);
-    
+
     const roleMatch = selectedRole === 'all' || userData.role === selectedRole;
-    
+
     let classMatch = true;
     if (selectedClass !== 'all' && userData.role === 'student' && userData.studentDetails) {
       classMatch = userData.studentDetails.currentClass === selectedClass;
     }
-    
+
     return searchMatch && roleMatch && classMatch;
   });
 
@@ -240,10 +248,10 @@ const ManageUsersV2: React.FC = () => {
   // Handle form submission for add/edit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const errors = validateForm(formData);
     setFormErrors(errors);
-    
+
     if (Object.keys(errors).length > 0) {
       toast.error('Please fix the form errors');
       return;
@@ -253,7 +261,7 @@ const ManageUsersV2: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       const authToken = getAuthToken();
-      
+
       // Prepare user data for backend
       const userData = {
         // Basic information
@@ -262,7 +270,7 @@ const ManageUsersV2: React.FC = () => {
         lastName: formData.lastName.trim(),
         email: formData.email.trim(),
         role: formData.role,
-        
+
         // Contact information
         primaryPhone: formData.primaryPhone.trim(),
         secondaryPhone: formData.secondaryPhone?.trim() || '',
@@ -270,7 +278,7 @@ const ManageUsersV2: React.FC = () => {
         emergencyContactName: formData.emergencyContactName?.trim() || '',
         emergencyContactRelation: formData.emergencyContactRelation?.trim() || '',
         emergencyContactPhone: formData.emergencyContactPhone?.trim() || '',
-        
+
         // Address information
         permanentStreet: formData.permanentStreet.trim(),
         permanentArea: formData.permanentArea?.trim() || '',
@@ -280,15 +288,15 @@ const ManageUsersV2: React.FC = () => {
         permanentPincode: formData.permanentPincode.trim(),
         permanentLandmark: formData.permanentLandmark?.trim() || '',
         sameAsPermanent: formData.sameAsPermanent,
-        
+
         // Identity information
         aadharNumber: formData.aadharNumber?.trim() || '',
         panNumber: formData.panNumber?.trim() || '',
-        
+
         // Password
         useGeneratedPassword: formData.useGeneratedPassword,
         customPassword: formData.customPassword?.trim() || '',
-        
+
         // Role-specific data
         ...(formData.role === 'student' && {
           currentClass: (formData as any).currentClass,
@@ -346,19 +354,19 @@ const ManageUsersV2: React.FC = () => {
       }
 
       const result = await response.json();
-      
+
       toast.success(editingUser ? 'User updated successfully' : 'User created successfully');
-      
+
       // Reset form and close modal
       setFormData(getDefaultFormData('student'));
       setFormErrors({});
       setShowAddModal(false);
       setShowEditModal(false);
       setEditingUser(null);
-      
+
       // Refresh users list
       fetchUsers();
-      
+
     } catch (error: any) {
       console.error('Error saving user:', error);
       toast.error(error.message || 'Failed to save user');
@@ -384,7 +392,7 @@ const ManageUsersV2: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       const authToken = getAuthToken();
-      
+
       const response = await fetch(`http://localhost:5050/api/user-management/${schoolCode}/users/${userData.userId}`, {
         method: 'DELETE',
         headers: {
@@ -400,7 +408,7 @@ const ManageUsersV2: React.FC = () => {
 
       toast.success('User deleted successfully');
       fetchUsers();
-      
+
     } catch (error: any) {
       console.error('Error deleting user:', error);
       toast.error(error.message || 'Failed to delete user');
@@ -417,7 +425,7 @@ const ManageUsersV2: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       const authToken = getAuthToken();
-      
+
       const response = await fetch(`http://localhost:5050/api/user-management/${schoolCode}/users/${userData.userId}/reset-password`, {
         method: 'POST',
         headers: {
@@ -433,10 +441,10 @@ const ManageUsersV2: React.FC = () => {
 
       const result = await response.json();
       toast.success('Password reset successfully');
-      
+
       // Show new password to admin
       alert(`New password for ${userData.name.displayName}: ${result.newPassword}`);
-      
+
     } catch (error: any) {
       console.error('Error resetting password:', error);
       toast.error(error.message || 'Failed to reset password');
@@ -489,7 +497,7 @@ const ManageUsersV2: React.FC = () => {
             </p>
           )}
         </div>
-        
+
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowAddModal(true)}
@@ -513,7 +521,7 @@ const ManageUsersV2: React.FC = () => {
             Template
           </button>
           <button
-            onClick={() => {/* TODO: Implement import functionality */}}
+            onClick={() => {/* TODO: Implement import functionality */ }}
             className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 flex items-center gap-2"
           >
             <Upload className="h-4 w-4" />
@@ -559,7 +567,7 @@ const ManageUsersV2: React.FC = () => {
               />
             </div>
           </div>
-          
+
           <select
             value={selectedRole}
             onChange={(e) => setSelectedRole(e.target.value)}
@@ -570,7 +578,7 @@ const ManageUsersV2: React.FC = () => {
             <option value="teacher">Teachers</option>
             <option value="admin">Admins</option>
           </select>
-          
+
           {selectedRole === 'student' && (
             <select
               value={selectedClass}
@@ -583,7 +591,7 @@ const ManageUsersV2: React.FC = () => {
               ))}
             </select>
           )}
-          
+
           <div className="flex gap-2">
             <button
               onClick={() => setViewMode('table')}
@@ -668,7 +676,8 @@ const ManageUsersV2: React.FC = () => {
                       </div>
                       {userData.role === 'student' && userData.studentDetails && (
                         <div className="text-sm text-gray-500">
-                          Class {userData.studentDetails.currentClass}-{userData.studentDetails.currentSection}
+                          {/* CORRECTED: Reads from the normalized studentDetails object */}
+                          Class {userData.studentDetails.currentClass || 'N/A'} - {userData.studentDetails.currentSection || 'N/A'}
                           {userData.studentDetails.rollNumber && ` • Roll: ${userData.studentDetails.rollNumber}`}
                         </div>
                       )}
@@ -685,11 +694,10 @@ const ManageUsersV2: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        userData.isActive 
-                          ? 'bg-green-100 text-green-800' 
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${userData.isActive
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                      }`}>
+                        }`}>
                         {userData.isActive ? 'Active' : 'Inactive'}
                       </span>
                       {userData.passwordChangeRequired && (
@@ -740,7 +748,7 @@ const ManageUsersV2: React.FC = () => {
                 {editingUser ? 'Edit User' : 'Add New User'}
               </h2>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-6">
               <UserForm
                 formData={formData}

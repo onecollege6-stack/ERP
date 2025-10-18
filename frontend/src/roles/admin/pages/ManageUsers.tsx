@@ -1722,11 +1722,11 @@ const ManageUsers: React.FC = () => {
 
         // Extract users from each role collection based on the actual response structure
         if (response.data && Array.isArray(response.data)) {
-          // If response.data is a flat array of users
           response.data.forEach((userData: any) => {
+            // Initialize processedUser with potential studentDetails structure
             const processedUser: User = {
               _id: userData._id || userData.userId,
-              userId: userData.userId, // Add the userId field
+              userId: userData.userId,
               name: userData.name?.displayName ||
                 (userData.name?.firstName && userData.name?.lastName
                   ? `${userData.name.firstName} ${userData.name.lastName}`
@@ -1736,25 +1736,38 @@ const ManageUsers: React.FC = () => {
               phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
               address: userData.address?.permanent?.street || userData.address?.street || userData.address,
               isActive: userData.isActive !== false,
-              createdAt: userData.createdAt || new Date().toISOString()
+              createdAt: userData.createdAt || new Date().toISOString(),
+              // Initialize studentDetails as an empty object or undefined
+              studentDetails: userData.role === 'student' ? {} : undefined
             };
 
-            // Add role-specific details
-            if (userData.role === 'student') {
-              processedUser.studentDetails = {
-                studentId: userData.userId || userData._id,
-                class: userData.academicInfo?.class || userData.class || 'Not assigned',
-                section: userData.academicInfo?.section || userData.section || 'Not assigned'
+            // Add role-specific details ONLY if the object exists
+            if (userData.role === 'student' && processedUser.studentDetails) {
+              // Assert that studentDetails is not undefined within this block
+              const details = processedUser.studentDetails as { // Type assertion
+                studentId?: string;
+                class?: string;
+                section?: string;
+                // Add other potential studentDetails properties here if needed
               };
-            } else if (userData.role === 'teacher') {
+              details.class = userData.studentDetails?.currentClass || 'Not assigned';
+              details.section = userData.studentDetails?.currentSection || 'Not assigned';
+              details.studentId = userData.userId || userData._id;
+            } else if (userData.role === 'teacher' && userData.teacherDetails) {
+              // Ensure teacherDetails is properly structured if needed later
               processedUser.teacherDetails = {
-                employeeId: userData.employeeId || userData.teacherId || 'Not assigned',
-                subjects: userData.subjects || [],
-                qualification: userData.qualification || 'Not provided',
-                experience: userData.experience || 0
+                employeeId: userData.teacherDetails?.employeeId || userData.employeeId || 'Not assigned',
+                // Make sure subjects is handled correctly as an array
+                subjects: Array.isArray(userData.teacherDetails?.subjects)
+                  ? userData.teacherDetails.subjects
+                  : ((typeof userData.teacherDetails?.subjects === 'string')
+                    ? userData.teacherDetails.subjects.split(',').map(s => s.trim())
+                    : []),
+                qualification: userData.teacherDetails?.qualification || 'Not provided',
+                experience: userData.teacherDetails?.experience || 0
               };
             }
-
+            // Make sure to add the processed user to the list
             allUsers.push(processedUser);
           });
         } else {
@@ -4843,8 +4856,8 @@ const ManageUsers: React.FC = () => {
                 }
               }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'student'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Students ({users.filter(u => u.role === 'student').length})
@@ -4859,8 +4872,8 @@ const ManageUsers: React.FC = () => {
                 }
               }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'teacher'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Teachers ({users.filter(u => u.role === 'teacher').length})
@@ -4875,8 +4888,8 @@ const ManageUsers: React.FC = () => {
                 }
               }}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'admin'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
             >
               Admins ({users.filter(u => u.role === 'admin').length})
@@ -4946,8 +4959,8 @@ const ManageUsers: React.FC = () => {
                   <button
                     onClick={() => setViewMode('table')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'table'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
                       }`}
                   >
                     Table View
@@ -4955,8 +4968,8 @@ const ManageUsers: React.FC = () => {
                   <button
                     onClick={() => setViewMode('hierarchy')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'hierarchy'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
                       }`}
                   >
                     Class View
@@ -5195,10 +5208,12 @@ const ManageUsers: React.FC = () => {
                       {activeTab === 'student' && (
                         <>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(user as any).academicInfo?.class || user.studentDetails?.class || 'Not assigned'}
+                            {/* Reads from the processed studentDetails object */}
+                            {user.studentDetails?.class || 'Not assigned'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(user as any).academicInfo?.section || user.studentDetails?.section || 'Not assigned'}
+                            {/* Reads from the processed studentDetails object */}
+                            {user.studentDetails?.section || 'Not assigned'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             {(user as any).userId || user._id || 'Not assigned'}
@@ -5399,8 +5414,8 @@ const ManageUsers: React.FC = () => {
                         value={formData.generatedPassword || 'Password will be generated when role is selected'}
                         readOnly
                         className={`w-full border rounded-lg px-3 py-2 font-mono ${formData.generatedPassword
-                            ? 'bg-green-50 border-green-300 text-green-800'
-                            : 'bg-gray-100 border-gray-300 text-gray-500'
+                          ? 'bg-green-50 border-green-300 text-green-800'
+                          : 'bg-gray-100 border-gray-300 text-gray-500'
                           }`}
                         placeholder="8-character secure password will appear here"
                       />
