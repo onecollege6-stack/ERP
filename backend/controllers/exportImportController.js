@@ -54,6 +54,10 @@ exports.exportUsers = async (req, res) => {
   }
 };
 
+// ==================================================================
+// START: MODIFIED FUNCTION
+// ==================================================================
+
 // Import users from CSV with comprehensive validation
 exports.importUsers = async (req, res) => {
   try {
@@ -71,8 +75,8 @@ exports.importUsers = async (req, res) => {
     }
 
     // Parse CSV
-    const csvData = await parseCsv(fs.readFileSync(file.path), { 
-      columns: true, 
+    const csvData = await parseCsv(fs.readFileSync(file.path), {
+      columns: true,
       trim: true,
       skip_empty_lines: true
     });
@@ -82,6 +86,33 @@ exports.importUsers = async (req, res) => {
       errors: [],
       total: csvData.length
     };
+
+    // ==================================================================
+    // NEW LOGIC: Get the last user ID *before* the loop starts
+    // We assume a 'student' role import based on your previous errors.
+    // ==================================================================
+    const rolePrefix = 'S'; // 'S' for 'student'
+    const idPrefix = `${schoolCode.toUpperCase()}-${rolePrefix}-`;
+
+    const lastUser = await User.findOne({
+      schoolId: school._id,
+      role: 'student',
+      userId: { $regex: `^${idPrefix}` } // Ensure we get the right format
+    }).sort({ userId: -1 }); // Find the user with the highest ID
+
+    let lastIdNumber = 0;
+    if (lastUser && lastUser.userId) {
+      try {
+        const numberPart = lastUser.userId.split('-')[2];
+        lastIdNumber = parseInt(numberPart) || 0;
+      } catch (e) {
+        lastIdNumber = 0; // Default to 0 if parsing fails
+      }
+    }
+    // ==================================================================
+    // END: NEW LOGIC
+    // ==================================================================
+
 
     // Process each row
     for (let i = 0; i < csvData.length; i++) {
@@ -96,10 +127,22 @@ exports.importUsers = async (req, res) => {
           continue;
         }
 
+        const userRole = row['Role*'] || row['Role'] || 'student';
+
+        // Fail-safe if CSV contains mixed roles
+        if (userRole !== 'student') {
+          results.errors.push({
+            row: rowNumber,
+            error: `Import failed: This import is optimized for students only, but found role '${userRole}'.`,
+            data: row
+          });
+          continue;
+        }
+
         // Check if user already exists
-        const existingUser = await User.findOne({ 
+        const existingUser = await User.findOne({
           email: row['Email*'] || row['Email'],
-          schoolId: school._id 
+          schoolId: school._id
         });
 
         if (existingUser) {
@@ -108,14 +151,21 @@ exports.importUsers = async (req, res) => {
             error: 'User already exists with this email',
             data: { email: row['Email*'] || row['Email'] }
           });
-          continue;
+          continue; // Skip this user, do NOT increment the ID counter
         }
 
-        // Generate user ID
-        const userId = await generateUserId(schoolCode, row['Role*'] || row['Role']);
+        // ==================================================================
+        // MODIFIED LOGIC: Generate ID by incrementing our local counter
+        // This avoids calling the async generator function in a loop.
+        // ==================================================================
+        lastIdNumber++; // Increment the counter *first*
+        const userId = `${idPrefix}${lastIdNumber.toString().padStart(4, '0')}`;
+        // ==================================================================
+        // END: MODIFIED LOGIC
+        // ==================================================================
 
         // Create user data based on role
-        const userData = await createUserFromRow(row, school._id, userId);
+        const userData = await createUserFromRow(row, school._id, userId, schoolCode);
 
         // Create user
         const user = new User(userData);
@@ -126,15 +176,25 @@ exports.importUsers = async (req, res) => {
           email: user.email,
           name: user.name.displayName,
           role: user.role,
-          password: userData.temporaryPassword
+          password: userData.temporaryPassword // Return the plain password
         });
 
       } catch (error) {
-        results.errors.push({
-          row: rowNumber,
-          error: error.message,
-          data: row
-        });
+        // Check if this was a duplicate ID error.
+        if (error.code === 11000) {
+          lastIdNumber--; // Decrement to retry this ID number on the next row
+          results.errors.push({
+            row: rowNumber,
+            error: `Duplicate key error (will retry ID): ${error.message}`,
+            data: row
+          });
+        } else {
+          results.errors.push({
+            row: rowNumber,
+            error: error.message,
+            data: row
+          });
+        }
       }
     }
 
@@ -152,6 +212,10 @@ exports.importUsers = async (req, res) => {
     res.status(500).json({ message: 'Error importing users', error: error.message });
   }
 };
+// ==================================================================
+// END: MODIFIED FUNCTION
+// ==================================================================
+
 
 // Generate template for import
 exports.generateTemplate = async (req, res) => {
@@ -233,7 +297,7 @@ function generateCSV(users, role) {
       const personal = studentDetails.personal || {};
       const family = studentDetails.family || {};
       const academic = studentDetails.academic || {};
-      
+
       return [
         ...baseData,
         studentDetails.studentId || '',
@@ -264,7 +328,7 @@ function generateCSV(users, role) {
       const qualification = teacherDetails.qualification || {};
       const experience = teacherDetails.experience || {};
       const subjects = teacherDetails.subjects || [];
-      
+
       return [
         ...baseData,
         teacherDetails.employeeId || '',
@@ -283,7 +347,7 @@ function generateCSV(users, role) {
       const adminDetails = user.adminDetails || {};
       const qualification = adminDetails.qualification || {};
       const experience = adminDetails.experience || {};
-      
+
       return [
         ...baseData,
         adminDetails.adminId || '',
@@ -364,7 +428,7 @@ function getSampleDataForRole(role) {
 
 function validateUserRow(row, rowNumber) {
   const errors = [];
-  const role = row['Role*'] || row['Role'];
+  const role = row['Role*'] || row['Role'] || 'student';
 
   // Common validations
   if (!row['First Name*'] && !row['First Name']) {
@@ -425,25 +489,68 @@ function validateUserRow(row, rowNumber) {
   return errors;
 }
 
-async function createUserFromRow(row, schoolId, userId) {
-  const role = row['Role*'] || row['Role'];
+// This function is unchanged from the previous correct version.
+async function createUserFromRow(row, schoolId, userId, schoolCode) {
+  const role = row['Role*'] || row['Role'] || 'student';
   const firstName = row['First Name*'] || row['First Name'];
   const lastName = row['Last Name*'] || row['Last Name'];
   const middleName = row['Middle Name'] || '';
   const email = row['Email*'] || row['Email'];
   const phone = row['Phone*'] || row['Phone'];
-  const dateOfBirth = row['Date of Birth* (YYYY-MM-DD)'] || row['Date of Birth'];
-  const gender = row['Gender*'] || row['Gender'];
 
-  // Generate password based on role
+  // --- 1. Fix Date of Birth ---
+  const dateOfBirthString = row['Date of Birth* (YYYY-MM-DD)'] || row['Date of Birth'];
+  let finalDateOfBirth;
+  if (dateOfBirthString) {
+    const parts = dateOfBirthString.split('/');
+    if (parts.length === 3) {
+      // Input is DD/MM/YYYY, convert to YYYY-MM-DD
+      finalDateOfBirth = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+    } else {
+      // Assume YYYY-MM-DD or other valid format
+      finalDateOfBirth = new Date(dateOfBirthString);
+    }
+  }
+
+  // Throw error if date is invalid after parsing
+  if (!finalDateOfBirth || isNaN(finalDateOfBirth.getTime())) {
+    throw new Error(`Invalid Date of Birth format for email ${email}. Expected YYYY-MM-DD or DD/MM/YYYY.`);
+  }
+
+  // --- 2. Generate Password ---
   let temporaryPassword;
-  if (role === 'student' && dateOfBirth) {
-    temporaryPassword = generateStudentPasswordFromDOB(dateOfBirth);
+  if (role === 'student' && dateOfBirthString) {
+    temporaryPassword = generateStudentPasswordFromDOB(dateOfBirthString);
   } else {
     const { generateTempPassword } = require('../utils/passwordGenerator');
     temporaryPassword = generateTempPassword(firstName, userId);
   }
 
+  // --- 3. Fix Enum Values ---
+  const gender = (row['Gender*'] || row['Gender'] || 'male').toLowerCase();
+
+  let rte = row['Is RTE Candidate*'] || row['Is RTE Candidate'] || 'No';
+  if (rte !== 'Yes' && rte !== 'No') {
+    rte = 'No';
+  }
+
+  let disability = row['Disability'] || 'Not Applicable';
+  if (disability.startsWith('SampleData')) {
+    disability = 'Not Applicable';
+  }
+
+  let category = row['Category'] || 'General';
+  if (category.startsWith('SampleData')) {
+    category = 'General';
+  }
+
+  // --- 4. Fix Pincode ---
+  let pincode = row['Pin Code'] || '000000';
+  if (!/^\d{6}$/.test(pincode)) { // Check if it's 6 digits
+    pincode = '000000'; // Default if invalid (e.g., "SampleData1")
+  }
+
+  // --- 5. Build userData object to match Mongoose Schema ---
   const userData = {
     userId,
     name: {
@@ -453,16 +560,33 @@ async function createUserFromRow(row, schoolId, userId) {
       displayName: `${firstName} ${middleName} ${lastName}`.replace(/\s+/g, ' ').trim()
     },
     email,
-    phone,
     role,
     schoolId,
+    schoolCode: schoolCode,
+    password: temporaryPassword, // Assumes pre-save hook hashes it
     temporaryPassword,
     passwordChangeRequired: true,
-    status: 'active',
-    address: row['Address'] || row['Current Address Line 1*'] || '',
-    city: row['City'] || row['Current City*'] || '',
-    state: row['State'] || row['Current State*'] || '',
-    pinCode: row['Pin Code'] || row['Current Pin Code*'] || '',
+    status: row['Status'] || 'active',
+
+    contact: {
+      primaryPhone: phone
+    },
+
+    address: {
+      permanent: {
+        street: row['Address'] || 'Not Provided',
+        city: row['City'] || 'Not Provided',
+        state: row['State'] || 'Not Provided',
+        pincode: pincode,
+        country: 'India'
+      }
+    },
+
+    schoolAccess: {
+      joinedDate: new Date(),
+      assignedBy: schoolId
+    },
+
     district: row['District'] || row['Current District*'] || ''
   };
 
@@ -478,14 +602,14 @@ async function createUserFromRow(row, schoolId, userId) {
         rollNumber: row['Roll Number'] || ''
       },
       personal: {
-        dateOfBirth: new Date(dateOfBirth),
+        dateOfBirth: finalDateOfBirth,
         gender: gender,
         aadhaarNumber: row['Aadhaar Number'] || '',
         religion: row['Religion'] || '',
         caste: row['Caste'] || '',
-        category: row['Category'] || '',
-        disability: row['Disability'] || 'Not Applicable',
-        isRTECandidate: row['Is RTE Candidate*'] || row['Is RTE Candidate'] || 'No'
+        category: category,
+        disability: disability,
+        isRTECandidate: rte
       },
       family: {
         father: {
@@ -540,9 +664,11 @@ async function createUserFromRow(row, schoolId, userId) {
   return userData;
 }
 
+// This helper function is now ONLY used by other parts of the controller (like template generation)
+// and is NOT called inside the import loop, which fixes the race condition.
 async function generateUserId(schoolCode, role) {
-  const { generateUserId } = require('../utils/userIdGenerator');
-  return await generateUserId(role, schoolCode);
+  const UserGenerator = require('../utils/userGenerator');
+  return await UserGenerator.generateUserId(schoolCode, role);
 }
 
 module.exports = {
