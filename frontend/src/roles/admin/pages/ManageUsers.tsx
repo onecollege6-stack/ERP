@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, Download, Upload, Filter, UserCheck, UserX, Eye, Lock, Unlock, Building, RotateCcw, FileText, AlertTriangle, Check } from 'lucide-react';
-import { schoolUserAPI } from '../../../api/schoolUsers';
+import {
+  Search, Plus, Edit, Trash2, Download, Upload, Filter,
+  UserCheck, UserX, Eye, EyeOff, Lock, Unlock, Building, // Added Eye, EyeOff
+  RotateCcw, FileText, AlertTriangle, Check, Users, GraduationCap, Shield, KeyRound // Added KeyRound if needed for reset
+} from 'lucide-react';
+// Use ApiUser alias here
+import { schoolUserAPI, User as ApiUser } from '../../../api/schoolUsers';
+// Keep other imports
 import { exportImportAPI } from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
 import { exportUsers, generateImportTemplate } from '../../../utils/userImportExport';
-import { User, UserFormData, getDefaultFormData, transformUserToFormData } from '../../../types/user';
+import { User, UserFormData, getDefaultFormData, transformUserToFormData } from '../../../types/user'; // Keep original User for form types
 import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
-
+import { ImportUsersDialog } from '../../superadmin/components/ImportUsersDialog'; // Keep if used
+import UserForm from '../../../components/forms/UserForm';
 interface School {
   _id: string;
   name: string;
@@ -15,6 +22,16 @@ interface School {
   logoUrl?: string;
 }
 
+interface DisplayUser extends ApiUser {
+  temporaryPassword?: string | null;
+  // Class/section should be provided top-level by the updated backend controller
+  class?: string | null;
+  section?: string | null;
+  // Explicitly add details objects if you access them directly below
+  studentDetails?: { currentClass?: string | null; currentSection?: string | null; rollNumber?: string | null; };
+  teacherDetails?: { subjects?: string[]; };
+  adminDetails?: { designation?: string; };
+}
 // User interface now imported from standardized types
 
 // Old form data interface replaced with standardized types from '../../../types/user'
@@ -379,7 +396,6 @@ interface OldAddUserFormData {
 
 const ManageUsers: React.FC = () => {
   const { user } = useAuth();
-
   // Use the school classes hook to get dynamic data
   const {
     classesData,
@@ -826,7 +842,7 @@ const ManageUsers: React.FC = () => {
       return newFormData;
     });
   };
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<DisplayUser[]>([]);
   const [school, setSchool] = useState<School | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -835,7 +851,8 @@ const ManageUsers: React.FC = () => {
   const [showCredentials, setShowCredentials] = useState<{ userId: string, password: string, email: string, role: string } | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<DisplayUser | null>(null);
+  const [selectedUser, setSelectedUser] = useState<DisplayUser | null>(null);
   const [activeTab, setActiveTab] = useState<'admin' | 'teacher' | 'student'>('student');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedSection, setSelectedSection] = useState<string>('all');
@@ -1208,6 +1225,35 @@ const ManageUsers: React.FC = () => {
     spouseName: '',
   });
 
+  const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+  // -----------------------------------------
+
+  // --- ADD TOGGLE FUNCTION ---
+  const togglePasswordVisibility = (userId: string, userName: string) => {
+    console.log(`Toggling visibility for user: ${userId}, Current state: ${!!passwordVisibility[userId]}`); // Log entry
+    const isCurrentlyVisible = passwordVisibility[userId];
+
+    if (isCurrentlyVisible) {
+      console.log(`Hiding password for ${userId}`);
+      setPasswordVisibility(prev => {
+        const newState = { ...prev, [userId]: false };
+        console.log("New visibility state (hiding):", newState); // Log state change
+        return newState;
+      });
+    } else {
+      console.log(`Asking confirmation to show password for ${userId} (${userName})`);
+      if (window.confirm(`Are you sure you want to show the password for ${userName}?`)) {
+        console.log(`Admin confirmed, showing password for ${userId}`);
+        setPasswordVisibility(prev => {
+          const newState = { ...prev, [userId]: true };
+          console.log("New visibility state (showing):", newState); // Log state change
+          return newState;
+        });
+      } else {
+        console.log(`Admin cancelled showing password for ${userId}`);
+      }
+    }
+  };
   const resetForm = () => {
     setFormData({
       // Core Fields
@@ -1734,6 +1780,7 @@ const ManageUsers: React.FC = () => {
               email: userData.email || 'No email',
               role: userData.role,
               phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
+              temporaryPassword: userData.tempPassword || null,
               address: userData.address?.permanent?.street || userData.address?.street || userData.address,
               isActive: userData.isActive !== false,
               createdAt: userData.createdAt || new Date().toISOString(),
@@ -1757,6 +1804,7 @@ const ManageUsers: React.FC = () => {
               // Ensure teacherDetails is properly structured if needed later
               processedUser.teacherDetails = {
                 employeeId: userData.teacherDetails?.employeeId || userData.employeeId || 'Not assigned',
+                temporaryPassword: userData.tempPassword || null,
                 // Make sure subjects is handled correctly as an array
                 subjects: Array.isArray(userData.teacherDetails?.subjects)
                   ? userData.teacherDetails.subjects
@@ -1786,6 +1834,7 @@ const ManageUsers: React.FC = () => {
                   email: userData.email || 'No email',
                   role: role,
                   phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
+                  temporaryPassword: userData.tempPassword || null,
                   address: userData.address?.permanent?.street || userData.address?.street || userData.address,
                   isActive: userData.isActive !== false,
                   createdAt: userData.createdAt || new Date().toISOString()
@@ -1814,6 +1863,7 @@ const ManageUsers: React.FC = () => {
         }
 
         console.log('Processed users:', allUsers);
+        console.log('Processed Users with Passwords:', allUsers.filter(u => u.role === 'teacher').map(t => ({ id: t.userId, pass: t.temporaryPassword }))); // Log teacher IDs and passwords
         setUsers(allUsers);
 
       } catch (apiError) {
@@ -2385,7 +2435,20 @@ const ManageUsers: React.FC = () => {
 
       // Show credentials modal using server response
       const serverUserId = createRes?.data?.user?.userId || createRes?.data?.credentials?.userId || createRes?.user?.userId || createRes?.userId;
-      const serverPassword = createRes?.data?.credentials?.password || createRes?.data?.user?.tempPassword || createRes?.user?.tempPassword;
+
+      // ==================================================================
+      // START: EDITED LINE
+      // ==================================================================
+      // Use the password we generated locally as the primary source,
+      // as the API response might not return it for security.
+      const serverPassword = generatedPassword ||
+        createRes?.data?.credentials?.password ||
+        createRes?.data?.user?.tempPassword ||
+        createRes?.user?.tempPassword;
+      // ==================================================================
+      // END: EDITED LINE
+      // ==================================================================
+
       const serverEmail = createRes?.data?.user?.email || createRes?.user?.email || formData.email;
       const serverRole = createRes?.data?.user?.role || createRes?.user?.role || formData.role;
 
@@ -4733,11 +4796,14 @@ const ManageUsers: React.FC = () => {
     const currentDate = new Date().toISOString().split('T')[0];
     const filename = `imported_user_credentials_${currentDate}.csv`;
 
-    const headers = ['User ID', 'Email', 'Password', 'Role', 'Login Instructions'];
+    // 1. Changed 'Password' to 'Default Password'
+    const headers = ['User ID', 'Email', 'Default Password', 'Role', 'Login Instructions'];
+
+    // 2. Changed 'user.password' to the actual instruction
     const rows = importResults.success.map(user => [
       user.userId,
       user.email,
-      user.password,
+      'Use DOB (DDMMYYYY)', // <-- THE FIX
       user.role,
       'Use Date of Birth (DDMMYYYY) as password, change on first login'
     ]);
@@ -4755,7 +4821,6 @@ const ManageUsers: React.FC = () => {
 
     toast.success('User credentials downloaded successfully!');
   };
-
   // Helper function to organize students hierarchically
   const organizeStudentsByClass = () => {
     const students = filteredUsers.filter(user => user.role === 'student');
@@ -4817,7 +4882,7 @@ const ManageUsers: React.FC = () => {
     setSelectedGrade(grade);
     setSelectedSection('all'); // Reset section when grade changes
   };
-
+  const userData = user as DisplayUser;
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -5160,7 +5225,7 @@ const ManageUsers: React.FC = () => {
                   {activeTab === 'teacher' && (
                     <>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subjects</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Password</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
                     </>
                   )}
@@ -5222,16 +5287,50 @@ const ManageUsers: React.FC = () => {
                       )}
                       {activeTab === 'teacher' && (
                         <>
+                          {/* Employee ID Column - Access via user.teacherDetails */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.teacherDetails?.employeeId || 'Not assigned'}
+                            {user.teacherDetails?.employeeId || 'N/A'}
                           </td>
+
+                          {/* Password Column - Access user.temporaryPassword directly */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="max-w-32 truncate">
-                              {user.teacherDetails?.subjects?.join(', ') || 'Not assigned'}
+                            <div className="flex items-center space-x-1">
+                              {/* Display Password with Show/Hide */}
+                              <span className={`flex-grow font-mono text-xs ${!user.temporaryPassword ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                                {/* Use user.userId for the visibility state key */}
+                                {passwordVisibility[user.userId]
+                                  ? (user.temporaryPassword || '-')
+                                  : (user.temporaryPassword ? '********' : '-')
+                                }
+                              </span>
+                              {/* Show/Hide Button */}
+                              {user.temporaryPassword && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Pass user.userId and user.name.displayName
+                                    togglePasswordVisibility(user.userId, user.name?.displayName || 'this user');
+                                  }}
+                                  className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
+                                  title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires confirmation)"}
+                                  type="button"
+                                >
+                                  {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                              )}
+                              {/* Show '-' explicitly if no password exists */}
+                              {!user.temporaryPassword && (
+                                <span className="font-mono text-xs text-gray-400 italic">-</span>
+                              )}
                             </div>
                           </td>
+
+                          {/* Experience Column - Access via user.teacherDetails */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.teacherDetails?.experience ? `${user.teacherDetails.experience} years` : 'Not provided'}
+                            {/* Check if experience is defined and not null */}
+                            {user.teacherDetails?.experience !== undefined && user.teacherDetails?.experience !== null
+                              ? `${user.teacherDetails.experience} years`
+                              : 'N/A'}
                           </td>
                         </>
                       )}

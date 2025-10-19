@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, Filter,
-  UserCheck, UserX, Eye, Lock, RotateCcw, FileText,
+  UserCheck, UserX, Eye, EyeOff, Lock, RotateCcw, FileText,
   AlertTriangle, Check, Users, GraduationCap, Shield
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -9,6 +9,7 @@ import { useAuth } from '../../../auth/AuthContext';
 import { User, UserFormData, getDefaultFormData, transformUserToFormData } from '../../../types/user';
 import UserForm from '../../../components/forms/UserForm';
 import { exportUsers, generateImportTemplate } from '../../../utils/userImportExport';
+import { schoolUserAPI, User as ApiUser } from '../../../api/schoolUsers';
 
 interface School {
   _id: string;
@@ -16,7 +17,12 @@ interface School {
   code: string;
   logoUrl?: string;
 }
-
+interface DisplayUser extends ApiUser {
+  temporaryPassword?: string | null;
+  // Add class/section directly if not already in ApiUser from backend modification
+  class?: string | null;
+  section?: string | null;
+}
 const ManageUsersV2: React.FC = () => {
   const { user, token } = useAuth();
 
@@ -695,8 +701,8 @@ const ManageUsersV2: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${userData.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
                         }`}>
                         {userData.isActive ? 'Active' : 'Inactive'}
                       </span>

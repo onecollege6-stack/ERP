@@ -14,11 +14,13 @@ exports.getAllUsers = async (req, res) => {
 
     console.log(`🔍 Fetching all users for school: ${upperSchoolCode}`);
 
+    // Find the school details from the central database
     const school = await School.findOne({ code: upperSchoolCode });
     if (!school) {
       return res.status(404).json({ success: false, message: 'School not found' });
     }
 
+    // Get connection to the specific school's database
     let connection;
     try {
       connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode);
@@ -27,6 +29,7 @@ exports.getAllUsers = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Could not connect to school database' });
     }
     if (!connection) {
+      // This case might occur if getSchoolConnection returns null/undefined without throwing
       return res.status(500).json({ success: false, message: 'Database connection object invalid' });
     }
 
@@ -34,43 +37,49 @@ exports.getAllUsers = async (req, res) => {
     const collections = ['admins', 'teachers', 'students', 'parents'];
     let allUsers = [];
 
+    // Iterate over each user collection for the school
     for (const collection of collections) {
       try {
+        // Find active users in the current collection
+        // Ensure temporaryPassword is fetched if it exists
         const users = await db.collection(collection).find({ isActive: { $ne: false } }).toArray();
 
+        // Process each user found into a standardized format
         const processedUsers = users.map(user => {
-          // --- *** FINAL CORRECTED NAME LOGIC *** ---
-          const firstName = user.name?.firstName?.trim() || ''; // Safely access and trim
+          // --- Name Logic ---
+          const firstName = user.name?.firstName?.trim() || '';
           const lastName = user.name?.lastName?.trim() || '';
-          // Construct displayName ONLY if it's missing or blank
           let displayName = user.name?.displayName?.trim();
           if (!displayName) {
             displayName = `${firstName} ${lastName}`.trim();
           }
-          // Final fallback
-          if (!displayName) {
+          if (!displayName) { // Final fallback
             displayName = user.userId || user.email || 'Unknown User';
           }
-          // --- *** END CORRECTION *** ---
+          // --- End Name Logic ---
 
-          return {
+          // Construct the base user object to return
+          const baseUser = {
             _id: user._id,
             userId: user.userId,
             schoolCode: user.schoolCode || upperSchoolCode,
+            // Determine role based on user record or collection name
             role: user.role || collection.slice(0, -1),
             email: user.email || 'no-email@example.com',
+            // Default isActive to true if undefined or null
             isActive: user.isActive !== false,
             createdAt: user.createdAt || new Date(0).toISOString(),
             updatedAt: user.updatedAt || user.createdAt || new Date(0).toISOString(),
 
-            // Corrected Name section
+            // Name details
             name: {
               firstName: firstName,
-              middleName: user.name?.middleName?.trim() || '', // Trim middle name too
+              middleName: user.name?.middleName?.trim() || '',
               lastName: lastName,
-              displayName: displayName // Use the corrected displayName
+              displayName: displayName
             },
 
+            // Contact details
             contact: {
               primaryPhone: user.contact?.primaryPhone || user.phone || 'No phone',
               secondaryPhone: user.contact?.secondaryPhone || '',
@@ -78,36 +87,58 @@ exports.getAllUsers = async (req, res) => {
               emergencyContact: user.contact?.emergencyContact
             },
 
-            // Flattened class/section for display
-            'class': (user.role === 'student' && user.studentDetails)
-              ? user.studentDetails.currentClass || 'Not assigned'
-              : '',
-            'section': (user.role === 'student' && user.studentDetails)
-              ? user.studentDetails.currentSection || 'Not assigned'
-              : '',
+            // --- Conditionally add temporaryPassword for teachers ---
+            ...((user.role === 'teacher' || collection === 'teachers') ? // Check both user.role and collection name
+              { temporaryPassword: user.temporaryPassword || null } // Include password, default to null if missing
+              : {} // Empty object otherwise
+            ),
+            // --------------------------------------------------------
 
-            // Optional nested details
-            ...(user.role === 'student' && user.studentDetails ? { studentDetails: user.studentDetails } : {}),
-            ...(user.role === 'teacher' && user.teacherDetails ? { teacherDetails: user.teacherDetails } : {}),
-            ...(user.role === 'admin' && user.adminDetails ? { adminDetails: user.adminDetails } : {}),
+            // --- Conditionally add class/section for students ---
+            ...((user.role === 'student' || collection === 'students') && user.studentDetails ?
+              {
+                'class': user.studentDetails.currentClass || 'Not assigned',
+                'section': user.studentDetails.currentSection || 'Not assigned'
+              }
+              : {}
+            ),
+            // ----------------------------------------------------
+
+            // Include full details if needed (optional)
+            ...(user.studentDetails ? { studentDetails: user.studentDetails } : {}),
+            ...(user.teacherDetails ? { teacherDetails: user.teacherDetails } : {}),
+            ...(user.adminDetails ? { adminDetails: user.adminDetails } : {}),
+            ...(user.parentDetails ? { parentDetails: user.parentDetails } : {}), // Added parentDetails
+
             passwordChangeRequired: user.passwordChangeRequired || false,
             schoolAccess: user.schoolAccess
-          };
-        });
+          }; // End baseUser object
+
+          return baseUser;
+        }); // End map
 
         allUsers.push(...processedUsers);
       } catch (collectionError) {
         console.warn(`Error fetching from collection ${collection} for school ${upperSchoolCode}: ${collectionError.message}`);
-        if (collectionError.codeName !== 'NamespaceNotFound') { console.error(collectionError); }
+        // Log error only if it's not a simple 'NamespaceNotFound' (collection doesn't exist yet)
+        if (collectionError.codeName !== 'NamespaceNotFound') {
+          console.error(collectionError);
+        }
       }
-    }
+    } // End for loop over collections
 
     console.log(`✅ Found ${allUsers.length} users for school ${upperSchoolCode}`);
 
+    // Sort users alphabetically by displayName before sending response
+    allUsers.sort((a, b) => a.name.displayName.localeCompare(b.name.displayName));
+
+
+    // Send the combined list of users
     res.json({
       success: true,
       data: allUsers,
       total: allUsers.length,
+      // Provide a breakdown count per role
       breakdown: {
         students: allUsers.filter(u => u.role === 'student').length,
         teachers: allUsers.filter(u => u.role === 'teacher').length,
