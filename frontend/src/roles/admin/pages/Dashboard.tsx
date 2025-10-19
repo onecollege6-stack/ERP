@@ -264,6 +264,7 @@ const Dashboard: React.FC = () => {
 
     fetchSchoolAndUsers();
   }, [user]);
+  console.log(user);
 
   // Calculate stats from actual user data
   const totalStudents = users.filter(user => user.role === 'student').length;
@@ -618,9 +619,9 @@ const Dashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                              user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
-                                user.role === 'student' ? 'bg-green-100 text-green-800' :
-                                  'bg-gray-100 text-gray-800'
+                            user.role === 'teacher' ? 'bg-blue-100 text-blue-800' :
+                              user.role === 'student' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
                             }`}>
                             {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                           </span>
@@ -722,7 +723,7 @@ const Dashboard: React.FC = () => {
                 {recentActivities.map((activity, index) => (
                   <div key={index} className="flex items-center p-3 rounded-lg bg-gray-50">
                     <div className={`w-3 h-3 rounded-full mr-3 ${activity.type === 'success' ? 'bg-green-500' :
-                        activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                      activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                       }`}></div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{activity.action}</p>
@@ -735,7 +736,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          {/* <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Link to="/admin/users" className="flex items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
@@ -751,7 +752,7 @@ const Dashboard: React.FC = () => {
                 <span className="text-sm font-medium text-yellow-700">Assignments</span>
               </Link>
             </div>
-          </div>
+          </div> */}
         </>
       )}
     </div>
