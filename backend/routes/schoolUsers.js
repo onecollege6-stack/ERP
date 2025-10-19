@@ -1,7 +1,17 @@
+//
+// File: jayeshsardesai/erp/ERP-7a5c138ae65bf53237b3e294be93792d26fb324a/backend/routes/schoolUsers.js
+//
 const express = require('express');
 const router = express.Router();
 const schoolUserController = require('../controllers/schoolUserController');
 const authMiddleware = require('../middleware/auth');
+
+// --- ADD THESE IMPORTS ---
+const exportImportController = require('../controllers/exportImportController');
+const multer = require('multer');
+// Configure Multer for file uploads
+const upload = multer({ dest: 'backend/uploads/temp' }); // Ensure this 'temp' directory exists
+// -------------------------
 
 // Apply authentication middleware to all routes
 router.use(authMiddleware.auth);
@@ -43,5 +53,25 @@ router.get('/:schoolCode/timetables/:className/:section', schoolUserController.g
 router.post('/:schoolCode/timetables', schoolUserController.createTimetable);
 router.put('/:schoolCode/timetables/:className/:section', schoolUserController.updateTimetable);
 router.delete('/:schoolCode/timetables/:className/:section', schoolUserController.deleteTimetable);
+
+
+// --- ADD THESE NEW ROUTES FOR IMPORT/EXPORT ---
+// Note: The path is /:schoolCode/import/users, which will be /api/school-users/:schoolCode/import/users
+router.post(
+    '/:schoolCode/import/users',
+    upload.single('file'), // 'file' must match the FormData key
+    exportImportController.importUsers // This controller function will read the 'role' from req.body
+);
+
+router.get(
+    '/:schoolCode/export/users',
+    exportImportController.exportUsers
+);
+
+router.get(
+    '/:schoolCode/import/template',
+    exportImportController.generateTemplate
+);
+// --------------------------------------------
 
 module.exports = router;

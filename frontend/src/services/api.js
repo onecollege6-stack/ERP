@@ -17,12 +17,12 @@ api.interceptors.request.use(
     // Try to get token from multiple possible storage locations
     let token = localStorage.getItem('token');
     console.log('[API] Token from localStorage (token):', token);
-    
+
     if (!token) {
       token = localStorage.getItem('authToken');
       console.log('[API] Token from localStorage (authToken):', token);
     }
-    
+
     if (!token) {
       // Try to get from auth context storage
       const authData = localStorage.getItem('erp.auth');
@@ -36,7 +36,7 @@ api.interceptors.request.use(
         }
       }
     }
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log('[API] Authorization header set.');
@@ -57,19 +57,19 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error.config?.url, error.response?.status, error.message);
-    
+
     // Only redirect on auth errors if not a school or user API call
     // This prevents redirect loops when the dashboard is loading
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
       const isSchoolOrUserApi = url.includes('/schools/') || url.includes('/users/');
-      
+
       // For school API failures, don't redirect immediately
       if (!isSchoolOrUserApi) {
         console.log('Unauthorized access. Redirecting to login...');
         localStorage.removeItem('token');
         localStorage.removeItem('erp.auth');
-        
+
         // Use timeout to avoid immediate redirect, allowing error messages to be shown
         setTimeout(() => {
           window.location.href = '/login?session=expired';
@@ -156,24 +156,27 @@ export const attendanceAPI = {
 // Export/Import APIs
 export const exportImportAPI = {
   // Export users to CSV/Excel
-  exportUsers: (schoolCode, params) => api.get(`/schools/${schoolCode}/export/users`, { 
+  exportUsers: (schoolCode, params) => api.get(`/export-import/${schoolCode}/export/users`, { // <-- Corrected path
     params,
     responseType: 'blob'
   }),
-  
+
   // Import users from CSV
   importUsers: (schoolCode, file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post(`/schools/${schoolCode}/import/users`, formData, {
+    // You might need to add the role here if the backend expects it for import routing
+    // formData.append('role', 'student'); // Or 'teacher', 'admin' depending on context
+    return api.post(`/export-import/${schoolCode}/import`, formData, { // <-- Corrected path
       headers: {
         'Content-Type': 'multipart/form-data'
       }
+      // Add onUploadProgress here if needed
     });
   },
-  
+
   // Generate template for import
-  generateTemplate: (schoolCode, role) => api.get(`/schools/${schoolCode}/template/${role}`, {
+  generateTemplate: (schoolCode, role) => api.get(`/export-import/${schoolCode}/template/${role}`, { // <-- Corrected path
     responseType: 'blob'
   })
 };
@@ -181,25 +184,25 @@ export const exportImportAPI = {
 // Academic Results APIs
 export const resultsAPI = {
   // Get students for a specific class and section
-  getStudents: (schoolCode, params) => api.get('/users/role/student', { 
+  getStudents: (schoolCode, params) => api.get('/users/role/student', {
     params,
     headers: {
       'X-School-Code': schoolCode
     }
   }),
-  
+
   // Save student results for a test
   saveResults: (resultsData) => api.post('/results/save', resultsData),
-  
+
   // Get existing results for a test
   getResults: (params) => api.get('/results', { params }),
-  
+
   // Update a specific result
   updateResult: (resultId, updateData) => api.put(`/results/${resultId}`, updateData),
-  
+
   // Delete a result
   deleteResult: (resultId) => api.delete(`/results/${resultId}`),
-  
+
   // Get results statistics
   getResultsStats: (params) => api.get('/results/stats', { params }),
 };

@@ -1,9 +1,20 @@
+// backend/server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const DatabaseManager = require('./utils/databaseManager');
 require('dotenv').config();
+const path = require('path'); // Import path module
+const multer = require('multer'); // <-- Import multer
+
+// Import your controller
+const exportImportController = require('./controllers/exportImportController'); // <-- Import exportImportController
+
+// Import middleware
+const { auth } = require('./middleware/auth'); // <-- Import auth middleware (adjust path if needed)
+const { setMainDbContext } = require('./middleware/schoolContext'); // <-- Import context middleware (adjust path if needed)
+
 
 const app = express();
 const PORT = process.env.PORT || 5050;
@@ -11,15 +22,34 @@ const PORT = process.env.PORT || 5050;
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // Added for handling form data potentially from import
+
+// Configure multer for file uploads
+// Make sure the 'uploads/' directory exists in your backend folder
+const upload = multer({ dest: path.join(__dirname, 'uploads/') });
 
 // Middleware to attach mainDb to req
 app.use((req, res, next) => {
   req.mainDb = mongoose.connection.db;
-  console.log('[DEBUG] mainDb middleware executed. mainDb:', req.mainDb);
+  console.log('[DEBUG] mainDb middleware executed.'); // Keep debug log concise
   next();
 });
 
-// Import routes
+// Middleware to verify admin/superadmin access
+const requireAdminAccess = (req, res, next) => {
+  // Check if req.user exists and has the required role
+  if (req.user && ['admin', 'superadmin'].includes(req.user.role)) {
+    return next(); // User has access, proceed
+  }
+  // Access denied
+  console.warn(`[AUTH] Access denied for user ${req.user?._id} with role ${req.user?.role} to admin route ${req.originalUrl}`);
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied. Admin privileges required.'
+  });
+};
+
+// Import other routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const schoolRoutes = require('./routes/schools');
@@ -45,7 +75,7 @@ const feesRoutes = require('./routes/fees');
 const reportsRoutes = require('./routes/reports');
 
 // Serve uploads statically
-app.use('/uploads', express.static(require('path').join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Test endpoint for debugging
 app.get('/api/test-endpoint', (req, res) => {
@@ -61,156 +91,65 @@ app.get('/api/test-endpoint', (req, res) => {
 // Direct test endpoint for class subjects
 app.get('/api/direct-test/class-subjects/:className', async (req, res) => {
   try {
-    // Get school code from request header, query param, or fallback to 'z'
     let schoolCode = req.headers['x-school-code'] || req.query.schoolCode;
-    
-    // If user is authenticated, use their school code
-    if (req.user && req.user.schoolCode) {
-      schoolCode = req.user.schoolCode;
-    }
-    
-    // Fallback if no school code is provided
-    if (!schoolCode) {
-      console.log('[DIRECT TEST] No school code provided, using default from query param');
-      schoolCode = req.query.schoolCode;
-    }
-    
-    if (!schoolCode) {
-      return res.status(400).json({
-        success: false,
-        message: 'School code is required. Please provide in header or query parameter.'
-      });
-    }
-    
+    if (req.user && req.user.schoolCode) { schoolCode = req.user.schoolCode; }
+    if (!schoolCode) { schoolCode = req.query.schoolCode; }
+    if (!schoolCode) { return res.status(400).json({ success: false, message: 'School code is required.' }); }
+
     console.log('[DIRECT TEST] Request received for class:', req.params.className, 'in school:', schoolCode);
-    
     const className = req.params.className;
     const academicYear = req.query.academicYear || '2024-25';
-    
-    // Get school connection directly
     const schoolConn = await DatabaseManager.getSchoolConnection(schoolCode);
     const ClassSubjectsSimple = require('./models/ClassSubjectsSimple');
     const SchoolClassSubjects = ClassSubjectsSimple.getModelForConnection(schoolConn);
-    
+
     console.log(`[DIRECT TEST] Looking for class "${className}" in school "${schoolCode}"`);
-    
-    try {
-      const classSubjects = await SchoolClassSubjects.findOne({
-        schoolCode,
-        className,
-        academicYear,
-        isActive: true
-      });
-      
-      if (!classSubjects) {
-        console.log(`[DIRECT TEST] Class "${className}" not found in school "${schoolCode}"`);
-        return res.status(404).json({
-          success: false,
-          message: `Class "${className}" not found in school "${schoolCode}"`
-        });
-      }
-      
-      console.log(`[DIRECT TEST] Found class "${className}" with ${classSubjects.subjects.length} subjects`);
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Direct test successful',
-        data: {
-          classId: classSubjects._id,
-          className: classSubjects.className,
-          grade: classSubjects.grade,
-          section: classSubjects.section,
-          academicYear: classSubjects.academicYear,
-          schoolCode: schoolCode,
-          subjects: classSubjects.subjects.filter(s => s.isActive).map(s => ({ 
-            name: s.name, 
-            isActive: s.isActive 
-          }))
-        }
-      });
-    } catch (error) {
-      console.error(`[DIRECT TEST] Database error for school "${schoolCode}":`, error);
-      return res.status(500).json({
-        success: false,
-        message: `Error accessing class data for school "${schoolCode}"`,
-        error: error.message
-      });
+    const classSubjects = await SchoolClassSubjects.findOne({ schoolCode, className, academicYear, isActive: true });
+
+    if (!classSubjects) {
+      console.log(`[DIRECT TEST] Class "${className}" not found in school "${schoolCode}"`);
+      return res.status(404).json({ success: false, message: `Class "${className}" not found` });
     }
+    console.log(`[DIRECT TEST] Found class "${className}"`);
+    return res.status(200).json({
+      success: true, message: 'Direct test successful',
+      data: {
+        classId: classSubjects._id, className: classSubjects.className, grade: classSubjects.grade, section: classSubjects.section,
+        academicYear: classSubjects.academicYear, schoolCode: schoolCode,
+        subjects: classSubjects.subjects.filter(s => s.isActive).map(s => ({ name: s.name, isActive: s.isActive }))
+      }
+    });
   } catch (error) {
     console.error('[DIRECT TEST] Error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Direct test failed',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Direct test failed', error: error.message });
   }
 });
 
 // Direct test endpoint for assignments
 app.get('/api/direct-test/assignments', async (req, res) => {
   try {
-    // Get school code from request header, query param, or fallback
     let schoolCode = req.headers['x-school-code'] || req.query.schoolCode;
-    
-    // If user is authenticated, use their school code
-    if (req.user && req.user.schoolCode) {
-      schoolCode = req.user.schoolCode;
-    }
-    
-    // Fallback if no school code is provided
-    if (!schoolCode) {
-      console.log('[DIRECT TEST ASSIGNMENTS] No school code provided, using default from query param');
-      schoolCode = req.query.schoolCode;
-    }
-    
-    if (!schoolCode) {
-      return res.status(400).json({
-        success: false,
-        message: 'School code is required. Please provide in header or query parameter.'
-      });
-    }
-    
+    if (req.user && req.user.schoolCode) { schoolCode = req.user.schoolCode; }
+    if (!schoolCode) { schoolCode = req.query.schoolCode; }
+    if (!schoolCode) { return res.status(400).json({ success: false, message: 'School code is required.' }); }
+
     console.log('[DIRECT TEST ASSIGNMENTS] Request received for school:', schoolCode);
-    
-    // Get school connection directly
     const schoolConn = await DatabaseManager.getSchoolConnection(schoolCode);
     const AssignmentMultiTenant = require('./models/AssignmentMultiTenant');
     const SchoolAssignment = AssignmentMultiTenant.getModelForConnection(schoolConn);
-    
+
     console.log(`[DIRECT TEST ASSIGNMENTS] Looking for assignments in school "${schoolCode}"`);
-    
-    try {
-      const assignments = await SchoolAssignment.find({
-        schoolCode,
-        isPublished: true
-      }).sort({ createdAt: -1 });
-      
-      console.log(`[DIRECT TEST ASSIGNMENTS] Found ${assignments.length} assignments in school "${schoolCode}"`);
-      return res.status(200).json({
-        success: true,
-        message: `Found ${assignments.length} assignments in school "${schoolCode}"`,
-        assignments,
-        schoolCode
-      });
-    } catch (error) {
-      console.error('[DIRECT TEST ASSIGNMENTS] Error fetching assignments:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Error fetching assignments',
-        error: error.message
-      });
-    }
+    const assignments = await SchoolAssignment.find({ schoolCode, isPublished: true }).sort({ createdAt: -1 });
+
+    console.log(`[DIRECT TEST ASSIGNMENTS] Found ${assignments.length} assignments`);
+    return res.status(200).json({ success: true, message: `Found ${assignments.length} assignments`, assignments, schoolCode });
   } catch (error) {
     console.error('[DIRECT TEST ASSIGNMENTS] Error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
-// Use routes
+// Use other routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/schools', schoolRoutes);
@@ -235,45 +174,81 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/fees', feesRoutes);
 app.use('/api/reports', reportsRoutes);
 
+
+// --- Define Export/Import Routes Directly ---
+
+// Generate Template Route
+// GET /api/export-import/:schoolCode/template?role=student
+app.get('/api/export-import/:schoolCode/template',
+  auth,               // 1. Authenticate the user
+  setMainDbContext,   // 2. Set DB context (might not be strictly needed if controller fetches schoolId again)
+  requireAdminAccess, // 3. Check if user is admin/superadmin
+  exportImportController.generateTemplate // 4. Call the controller function
+);
+
+// Import Users Route
+// POST /api/export-import/:schoolCode/import
+app.post('/api/export-import/:schoolCode/import',
+  auth,               // 1. Authenticate
+  setMainDbContext,   // 2. Set DB context
+  requireAdminAccess, // 3. Check role
+  upload.single('file'), // 4. Use multer middleware to handle the 'file' upload
+  exportImportController.importUsers // 5. Call the controller function
+);
+
+// Export Users Route
+// GET /api/export-import/:schoolCode/export?role=student&format=csv
+app.get('/api/export-import/:schoolCode/export',
+  auth,               // 1. Authenticate
+  setMainDbContext,   // 2. Set DB context
+  requireAdminAccess, // 3. Check role
+  exportImportController.exportUsers // 4. Call the controller function
+);
+
+// --- End Export/Import Routes ---
+
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// MongoDB connection URI (always use primary URI)
+// MongoDB connection URI
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/institute_erp';
 
-mongoose.connect(MONGODB_URI, {
-  maxPoolSize: 50, // Maintain up to 50 socket connections
-  serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-  socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-  bufferCommands: false // Disable mongoose buffering
-})
-.then(async () => {
-  console.log('✅ Connected to MongoDB Atlas with optimizations');
-  console.log('📊 Connection pool size: 50');
-  
-  // Initialize Database Manager
-  await DatabaseManager.initialize();
-  console.log('✅ Database Manager initialized');
-  
-  console.log('🚀 Server ready for multi-tenant operations');
-  
-  // Start server only after successful DB connection and initialization
-  app.listen(PORT, () => {
-    console.log(`🌐 Server running on port ${PORT}`);
-    console.log(`🏫 Multi-tenant school ERP system ready`);
-  });
-})
-.catch((error) => {
-  console.error('❌ MongoDB connection error:', error);
-});
-
-// Ensure JWT_SECRET is set
+// Ensure JWT_SECRET is set before starting server logic that might use it
 if (!process.env.JWT_SECRET) {
   console.warn('⚠️ JWT_SECRET is not set. Using a default secret for development purposes.');
   process.env.JWT_SECRET = 'default_development_secret';
 }
+
+mongoose.connect(MONGODB_URI, {
+  maxPoolSize: 50,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  bufferCommands: false
+})
+  .then(async () => {
+    console.log('✅ Connected to MongoDB Atlas with optimizations');
+    console.log('📊 Connection pool size: 50');
+
+    // Initialize Database Manager
+    await DatabaseManager.initialize();
+    console.log('✅ Database Manager initialized');
+
+    console.log('🚀 Server ready for multi-tenant operations');
+
+    // Start server only after successful DB connection and initialization
+    app.listen(PORT, () => {
+      console.log(`🌐 Server running on port ${PORT}`);
+      console.log(`🏫 Multi-tenant school ERP system ready`);
+    });
+  })
+  .catch((error) => {
+    console.error('❌ MongoDB connection error:', error);
+    process.exit(1); // Exit if DB connection fails
+  });
+
 
 // Graceful shutdown handling
 process.on('SIGINT', async () => {

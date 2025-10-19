@@ -16,50 +16,50 @@ const requireAdminAccess = (req, res, next) => {
 };
 
 // Get all users for a school
-router.get('/:schoolCode/users', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.get('/:schoolCode/users',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.getAllUsers
 );
 
 // Get user by ID
-router.get('/:schoolCode/users/:userId', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.get('/:schoolCode/users/:userId',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.getUserById
 );
 
 // Create new user
-router.post('/:schoolCode/users', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.post('/:schoolCode/users',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.createUser
 );
 
 // Update user
-router.put('/:schoolCode/users/:userId', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.put('/:schoolCode/users/:userId',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.updateUser
 );
 
 // Delete user
-router.delete('/:schoolCode/users/:userId', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.delete('/:schoolCode/users/:userId',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.deleteUser
 );
 
 // Reset user password (admin/teacher only)
-router.post('/:schoolCode/users/:userId/reset-password', 
-  auth, 
-  setMainDbContext, 
-  requireAdminAccess, 
+router.post('/:schoolCode/users/:userId/reset-password',
+  auth,
+  setMainDbContext,
+  requireAdminAccess,
   userManagementController.resetPassword
 );
 

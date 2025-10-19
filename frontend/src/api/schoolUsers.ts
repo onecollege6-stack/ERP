@@ -1,3 +1,6 @@
+//
+// File: jayeshsardesai/erp/ERP-7a5c138ae65bf53237b3e294be93792d26fb324a/frontend/src/api/schoolUsers.ts
+//
 import axios from 'axios';
 import api from './axios'; // Use the same axios instance
 
@@ -29,7 +32,7 @@ export const schoolUserAPI = {
     try {
       console.log(`🔍 Calling API: GET ${API_BASE_URL}/school-users/${schoolCode}/users`);
       console.log(`🔐 Using token: ${token ? token.substring(0, 20) + '...' : 'MISSING'}`);
-      
+
       const response = await axios.get(
         `${API_BASE_URL}/school-users/${schoolCode}/users`,
         {
@@ -38,7 +41,7 @@ export const schoolUserAPI = {
           }
         }
       );
-      
+
       console.log('✅ API Response:', response);
       // Return the data field which contains the grouped users, with proper null checking
       return response.data || {};
@@ -51,7 +54,7 @@ export const schoolUserAPI = {
         url: error.config?.url,
         headers: error.config?.headers
       });
-      
+
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch users';
       throw new Error(errorMessage);
     }
@@ -209,7 +212,39 @@ export const schoolUserAPI = {
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to update access matrix');
     }
+  },
+
+  // --- ADD THIS NEW FUNCTION FOR FILE IMPORT ---
+  importUsers: async (schoolCode: string, file: File, role: 'student' | 'teacher', token: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('role', role); // Send the selected role to the backend
+
+      // This path now matches the route we added in schoolUsers.js
+      const response = await axios.post(
+        `${API_BASE_URL}/school-users/${schoolCode}/import/users`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data' // Required for file uploads
+          }
+        }
+      );
+      return response; // Return the whole response so .data can be accessed in the component
+    } catch (error: any) {
+      // Throw the structure the component expects
+      if (error.response) {
+        // Use the error structure from the backend if available
+        throw error.response.data;
+      } else {
+        // Generic fallback error
+        throw new Error('Import failed: An unknown error occurred');
+      }
+    }
   }
+  // ---------------------------------------------
 };
 
 // School login API

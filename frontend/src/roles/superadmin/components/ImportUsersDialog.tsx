@@ -1,3 +1,6 @@
+//
+// File: jayeshsardesai/erp/ERP-7a5c138ae65bf53237b3e294be93792d26fb324a/frontend/src/roles/superadmin/components/ImportUsersDialog.tsx
+//
 import React, { useState, useRef } from 'react';
 import { Upload, X, FileText, AlertTriangle, Check, Download, Loader2 } from 'lucide-react';
 import { schoolUserAPI } from '../../../api/schoolUsers'; // Import the API
@@ -37,6 +40,11 @@ export function ImportUsersDialog({ schoolCode, onClose, onSuccess }: ImportUser
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [importResults, setImportResults] = useState<ImportResponse | null>(null); // State to hold results
+
+  // --- ADD THIS STATE ---
+  const [selectedRole, setSelectedRole] = useState<'student' | 'teacher'>('student');
+  // -----------------------
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Helper to get auth token
@@ -92,8 +100,8 @@ export function ImportUsersDialog({ schoolCode, onClose, onSuccess }: ImportUser
     setImportResults(null);
 
     try {
-      // **Call the correct API function** to upload the file
-      const response = await schoolUserAPI.importUsers(schoolCode, file, token);
+      // **Call the correct API function with the selectedRole**
+      const response = await schoolUserAPI.importUsers(schoolCode, file, selectedRole, token);
 
       // **Store the response data in state**
       // This will trigger the re-render to show the results view
@@ -160,7 +168,7 @@ export function ImportUsersDialog({ schoolCode, onClose, onSuccess }: ImportUser
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `${schoolCode}_student_credentials.csv`);
+    link.setAttribute("download", `${schoolCode}_${selectedRole}_credentials.csv`); // Use selectedRole in filename
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -181,6 +189,37 @@ export function ImportUsersDialog({ schoolCode, onClose, onSuccess }: ImportUser
         )}
 
         <div className="space-y-4">
+
+          {/* --- ADD ROLE SELECTOR --- */}
+          <div className="">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Role to Import:</label>
+            <div className="flex space-x-4">
+              <label className="flex items-center cursor-pointer p-2 rounded-md hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="role"
+                  value="student"
+                  checked={selectedRole === 'student'}
+                  onChange={() => setSelectedRole('student')}
+                  className="form-radio h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+                />
+                <span className="ml-2 text-sm text-gray-800">Student</span>
+              </label>
+              <label className="flex items-center cursor-pointer p-2 rounded-md hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="role"
+                  value="teacher"
+                  checked={selectedRole === 'teacher'}
+                  onChange={() => setSelectedRole('teacher')}
+                  className="form-radio h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+                />
+                <span className="ml-2 text-sm text-gray-800">Teacher</span>
+              </label>
+            </div>
+          </div>
+          {/* ------------------------- */}
+
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50 hover:bg-gray-100 transition-colors">
             <input
               type="file"
@@ -223,12 +262,25 @@ export function ImportUsersDialog({ schoolCode, onClose, onSuccess }: ImportUser
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="font-medium text-blue-800 mb-2 text-sm">Instructions:</h4>
-            <ul className="list-disc list-inside text-sm text-blue-700 space-y-1">
-              <li>Ensure your CSV has headers (e.g., `firstname`, `lastname`, `email`, `class`, `section`).</li>
-              <li>Required fields: `firstname`, `lastname`, `email`, `primaryphone`, `dateofbirth`, `gender`, `currentclass`, `currentsection`, `fathername`, `mothername`.</li>
-              <li>Date format should be `DD-MM-YYYY`, `DD/MM/YYYY`, or `YYYY-MM-DD`.</li>
-              <li><a href="/path-to-template/student_import_template.csv" download className="underline hover:text-blue-900">Download template</a> (Update path if needed)</li>
-            </ul>
+
+            {/* --- MAKE INSTRUCTIONS DYNAMIC --- */}
+            {selectedRole === 'student' ? (
+              <ul className="list-disc list-inside text-sm text-blue-700 space-y-1">
+                <li>Ensure your CSV has headers (e.g., `firstname`, `lastname`, `email`, `class`, `section`).</li>
+                <li>Required fields: `firstname`, `lastname`, `email`, `primaryphone`, `dateofbirth`, `gender`, `currentclass`, `currentsection`, `fathername`, `mothername`.</li>
+                <li>Date format should be `DD-MM-YYYY`, `DD/MM/YYYY`, or `YYYY-MM-DD`.</li>
+                <li><a href="/api/public/templates/student_import_template.csv" download className="underline hover:text-blue-900">Download student template</a></li>
+              </ul>
+            ) : (
+              <ul className="list-disc list-inside text-sm text-blue-700 space-y-1">
+                <li>Ensure your CSV has headers (e.g., `firstName`, `lastName`, `email`, `primaryPhone`).</li>
+                <li>Required fields: `firstName`, `lastName`, `email`, `primaryPhone`, `dateOfBirth`, `gender`, `joiningDate`, `highestQualification`, `totalExperience`.</li>
+                <li>Recommended fields: `subjects` (comma-separated), `specialization`, `employeeId`.</li>
+                <li>Date format should be `DD-MM-YYYY`, `DD/MM/YYYY`, or `YYYY-MM-DD`.</li>
+                <li><a href="/api/public/templates/teacher_import_template.csv" download className="underline hover:text-blue-900">Download teacher template</a></li>
+              </ul>
+            )}
+            {/* ------------------------------- */}
           </div>
         </div>
       </div>
