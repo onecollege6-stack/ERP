@@ -11,4 +11,6 @@ export const admissionAPI = (ApiNs as any).admissionAPI;
 export const assignmentAPI = (ApiNs as any).assignmentAPI;
 export const attendanceAPI = (ApiNs as any).attendanceAPI;
 export const apiUtils = (ApiNs as any).apiUtils;
+export const classesAPI = (ApiNs as any).classesAPI;
+export const feesAPI = (ApiNs as any).feesAPI;
 export default (ApiNs as any).default;

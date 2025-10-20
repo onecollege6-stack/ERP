@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Save, Trash2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../../auth/AuthContext';
 import ClassSectionSelect from '../components/ClassSectionSelect';
+import { feesAPI } from '../../../services/api';
 
 interface Installment {
   name: string;
@@ -29,6 +30,7 @@ const FeeStructureTab: React.FC = () => {
     }
   ]);
   const [applyToStudents, setApplyToStudents] = useState(false);
+  const [existingStructures, setExistingStructures] = useState<any[]>([]);
   
   // UI state
   const [loading, setLoading] = useState(false);
@@ -36,6 +38,29 @@ const FeeStructureTab: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   console.log('FeeStructureTab render');
+
+  // Load existing fee structures
+  React.useEffect(() => {
+    const fetchStructures = async () => {
+      try {
+        const res = await feesAPI.getFeeStructures({
+          class: selectedClass,
+          section: selectedSection,
+        });
+        if (res.data?.success) {
+          setExistingStructures(res.data.data || []);
+        } else if (Array.isArray(res)) {
+          // In case API helper returns parsed data directly
+          setExistingStructures(res || []);
+        } else {
+          setExistingStructures([]);
+        }
+      } catch (e) {
+        setExistingStructures([]);
+      }
+    };
+    fetchStructures();
+  }, [selectedClass, selectedSection]);
 
   // Add installment
   const handleAddInstallment = () => {
@@ -81,10 +106,34 @@ const FeeStructureTab: React.FC = () => {
 
     try {
       setLoading(true);
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccess('Fee structure saved successfully! (This is a demo)');
+      const payload = {
+        name,
+        description,
+        class: selectedClass,
+        section: selectedSection,
+        totalAmount: Number(totalAmount),
+        installments: installments.map((i) => ({
+          name: i.name,
+          amount: Number(i.amount || 0),
+          dueDate: i.dueDate,
+          description: i.description,
+        })),
+        academicYear,
+        applyToStudents,
+      };
+      const res = await feesAPI.createFeeStructure(payload);
+      const applied = res.data?.data?.appliedToStudents;
+      setSuccess(
+        applied !== undefined
+          ? `Fee structure saved successfully. Applied to ${applied} students.`
+          : 'Fee structure saved successfully.'
+      );
+
+      // Refresh existing structures
+      try {
+        const list = await feesAPI.getFeeStructures({});
+        if (list.data?.success) setExistingStructures(list.data.data || []);
+      } catch {}
       
       // Reset form
       setName('');
@@ -101,7 +150,7 @@ const FeeStructureTab: React.FC = () => {
       setApplyToStudents(false);
       
     } catch (error: any) {
-      setError('Failed to save fee structure');
+      setError(error?.response?.data?.message || 'Failed to save fee structure');
     } finally {
       setLoading(false);
     }
@@ -300,9 +349,38 @@ const FeeStructureTab: React.FC = () => {
       {/* Existing Fee Structures */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Existing Fee Structures</h2>
-        <div className="text-center py-8 text-gray-500">
-          No fee structures created yet. This is a demo version.
-        </div>
+        {existingStructures.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">No fee structures found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Installments</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {existingStructures.map((s: any) => (
+                  <tr key={s.id}>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.name}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.class}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.section}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">₹{(s.totalAmount || 0).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.installmentsCount}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.appliedToStudents || 0}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{s.academicYear}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
