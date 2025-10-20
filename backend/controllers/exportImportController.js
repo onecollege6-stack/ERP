@@ -279,6 +279,31 @@ exports.importUsers = async (req, res) => {
       let validationErrors = [];
       if (userRole === 'student') {
         validationErrors = validateStudentRowRobust(row, rowNumber);
+        
+        // Additional validation: Check if class and section exist
+        if (validationErrors.length === 0) {
+          const currentClass = row['currentclass'];
+          const currentSection = row['currentsection'];
+          
+          if (currentClass && currentSection) {
+            const classesCollection = db.collection('classes');
+            const classExists = await classesCollection.findOne({
+              schoolId: school._id.toString(),
+              className: currentClass,
+              sections: currentSection,
+              isActive: true
+            });
+            
+            if (!classExists) {
+              validationErrors.push({
+                row: rowNumber,
+                field: 'currentclass/currentsection',
+                error: `Class "${currentClass}" with Section "${currentSection}" does not exist. Please add this class/section in SuperAdmin before importing students.`
+              });
+              console.warn(`⚠️ Row ${rowNumber}: Class ${currentClass} Section ${currentSection} not found. Skipping student.`);
+            }
+          }
+        }
       } else { // inferredRole is 'teacher'
         validationErrors = validateTeacherRow(row, rowNumber);
       }
@@ -294,24 +319,15 @@ exports.importUsers = async (req, res) => {
         throw new Error(`User already exists in ${collectionName} collection with this email: ${email}`);
       }
 
-      const userId = await generateSequentialUserId(upperSchoolCode, userRole);
-
-      // --- DYNAMIC DATA OBJECT CREATION ---
-      let userData;
-      if (userRole === 'student') {
-        userData = await createStudentFromRowRobust(row, school._id, userId, upperSchoolCode, creatingUserId);
-      } else { // inferredRole is 'teacher'
-        userData = await createTeacherFromRow(row, school._id, userId, upperSchoolCode, creatingUserId);
-      }
-      // ------------------------------------
-
-      usersToInsert.push(userData);
-      results.success.push({
-        row: rowNumber,
-        userId: userData.userId,
-        email: userData.email,
-        name: userData.name.displayName,
-        password: userData.temporaryPassword
+      // Store row data temporarily - will generate userId during bulk insert preparation
+      usersToInsert.push({
+        _tempRowData: row,
+        _tempSchoolId: school._id,
+        _tempSchoolCode: upperSchoolCode,
+        _tempCreatingUserId: creatingUserId,
+        _tempUserRole: userRole,
+        _tempRowNumber: rowNumber,
+        _tempEmail: email
       });
 
     } catch (error) {
@@ -323,12 +339,58 @@ exports.importUsers = async (req, res) => {
   } // --- End of Loop ---
   console.log(`Row processing finished. ${usersToInsert.length} ${collectionName} prepared for insertion.`);
 
+  // --- Generate UserIds and Create User Objects (ONLY for validated rows) ---
+  const finalUsersToInsert = [];
+  for (const tempData of usersToInsert) {
+    try {
+      // Generate userId ONLY now, after all validation passed
+      const userId = await generateSequentialUserId(tempData._tempSchoolCode, tempData._tempUserRole);
+      
+      // Create actual user data object
+      let userData;
+      if (tempData._tempUserRole === 'student') {
+        userData = await createStudentFromRowRobust(
+          tempData._tempRowData,
+          tempData._tempSchoolId,
+          userId,
+          tempData._tempSchoolCode,
+          tempData._tempCreatingUserId
+        );
+      } else {
+        userData = await createTeacherFromRow(
+          tempData._tempRowData,
+          tempData._tempSchoolId,
+          userId,
+          tempData._tempSchoolCode,
+          tempData._tempCreatingUserId
+        );
+      }
+      
+      finalUsersToInsert.push(userData);
+      results.success.push({
+        row: tempData._tempRowNumber,
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name.displayName,
+        password: userData.temporaryPassword
+      });
+    } catch (error) {
+      console.error(`❌ Error creating user object for row ${tempData._tempRowNumber}:`, error.message);
+      results.errors.push({
+        row: tempData._tempRowNumber,
+        data: tempData._tempRowData,
+        error: `Failed to create user: ${error.message}`
+      });
+    }
+  }
+  console.log(`User objects created. ${finalUsersToInsert.length} ready for bulk insert.`);
+
   // --- Perform Bulk Insert ---
   let insertedCount = 0;
-  if (usersToInsert.length > 0) {
-    console.log(`Attempting to bulk insert ${usersToInsert.length} processed users into ${collectionName}...`);
+  if (finalUsersToInsert.length > 0) {
+    console.log(`Attempting to bulk insert ${finalUsersToInsert.length} processed users into ${collectionName}...`);
     try {
-      const insertResult = await userCollection.insertMany(usersToInsert, { ordered: false });
+      const insertResult = await userCollection.insertMany(finalUsersToInsert, { ordered: false });
       insertedCount = insertResult.insertedCount;
       console.log(`✅ Bulk insert attempted for ${upperSchoolCode}. Acknowledged inserts: ${insertedCount}.`);
     } catch (bulkError) {
@@ -379,15 +441,15 @@ exports.importUsers = async (req, res) => {
   // Message logic based on validation and insertion results
   if (results.total === 0) {
     finalMessage = 'Import process completed. The CSV file contained no data rows.';
-  } else if (usersToInsert.length === 0 && finalErrorCount > 0) {
+  } else if (finalUsersToInsert.length === 0 && finalErrorCount > 0) {
     // All rows failed validation
     finalMessage += ` Rows successfully processed: 0. Rows with validation errors: ${finalErrorCount}. No ${inferredRole}s were inserted. Please review the errors.`;
-  } else if (usersToInsert.length > 0) {
+  } else if (finalUsersToInsert.length > 0) {
     // Some rows were prepared for insert
-    finalMessage += ` Rows prepared for insert: ${usersToInsert.length}. Rows with validation errors: ${results.errors.filter(e => e.row !== 'N/A').length}.`; // Count only validation errors here
+    finalMessage += ` Rows prepared for insert: ${finalUsersToInsert.length}. Rows with validation errors: ${results.errors.filter(e => e.row !== 'N/A').length}.`; // Count only validation errors here
     finalMessage += ` Actual documents inserted: ${insertedCount}.`;
-    if (insertedCount < usersToInsert.length) {
-      const bulkInsertFailures = usersToInsert.length - insertedCount;
+    if (insertedCount < finalUsersToInsert.length) {
+      const bulkInsertFailures = finalUsersToInsert.length - insertedCount;
       finalMessage += ` ${bulkInsertFailures} prepared rows failed during bulk insert (e.g., duplicate email/ID). Check errors list (marked 'N/A' or 'Insert Error').`;
     } else if (finalErrorCount > 0) {
       finalMessage += ` Some initial rows failed validation (check errors list).`;
@@ -395,10 +457,10 @@ exports.importUsers = async (req, res) => {
   }
 
   // Overall success means no validation errors AND all prepared rows were inserted successfully.
-  const overallSuccess = results.errors.filter(e => e.row !== 'N/A').length === 0 && (usersToInsert.length === 0 || insertedCount === usersToInsert.length);
+  const overallSuccess = results.errors.filter(e => e.row !== 'N/A').length === 0 && (finalUsersToInsert.length === 0 || insertedCount === finalUsersToInsert.length);
 
 
-  res.status(overallSuccess && results.total > 0 ? 201 : (finalErrorCount > 0 || insertedCount < usersToInsert.length ? 400 : 200)).json({
+  res.status(overallSuccess && results.total > 0 ? 201 : (finalErrorCount > 0 || insertedCount < finalUsersToInsert.length ? 400 : 200)).json({
     success: overallSuccess,
     message: finalMessage,
     results: {

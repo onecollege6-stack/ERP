@@ -4404,8 +4404,22 @@ const ManageUsers: React.FC = () => {
 
     } catch (error: any) {
       console.error('Import error:', error);
-      toast.error(error.response?.data?.message || 'Failed to import users. Please try again.');
-      setImportResults({ success: [], errors: [{ row: 0, error: error.message, data: {} }] });
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to import users. Please try again.';
+      toast.error(errorMessage);
+      
+      // Check if there are partial results in the error response
+      const partialResults = error.response?.data?.results;
+      if (partialResults) {
+        setImportResults({
+          success: partialResults.successData || partialResults.success || [],
+          errors: partialResults.errors || []
+        });
+      } else {
+        setImportResults({ 
+          success: [], 
+          errors: [{ row: 'N/A', error: errorMessage, data: {} }] 
+        });
+      }
     } finally {
       setIsImporting(false);
     }

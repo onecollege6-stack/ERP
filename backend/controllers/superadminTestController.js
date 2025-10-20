@@ -70,13 +70,20 @@ exports.getSchoolTests = async (req, res) => {
 exports.addTest = async (req, res) => {
   try {
     const { schoolId } = req.params;
-    const { name, className, description, maxMarks = 100, weightage = 25, sections = [] } = req.body;
+    const { name, className, description, sections = [], allSections = false, allClasses = false } = req.body;
 
     // Validate input
-    if (!name || !className) {
+    if (!name) {
       return res.status(400).json({
         success: false,
-        message: 'Test name and class name are required'
+        message: 'Test name is required'
+      });
+    }
+
+    if (!allClasses && !className) {
+      return res.status(400).json({
+        success: false,
+        message: 'Class name is required when not creating for all classes'
       });
     }
 
@@ -92,54 +99,119 @@ exports.addTest = async (req, res) => {
     // Get school database connection
     const schoolConnection = await getSchoolConnectionWithFallback(school.code);
     const testDetailsCollection = schoolConnection.collection('testdetails');
+    const classesCollection = schoolConnection.collection('classes');
 
-    // Check if test already exists for this class
-    const existingTest = await testDetailsCollection.findOne({
-      schoolId: schoolId,
-      name: name,
-      className: className,
-      isActive: true
-    });
+    let classesToCreate = [];
+    
+    // If creating for all classes, fetch all classes
+    if (allClasses) {
+      const allClassesData = await classesCollection.find({
+        schoolId: schoolId,
+        isActive: true
+      }).toArray();
+      
+      classesToCreate = allClassesData.map(cls => ({
+        className: cls.className,
+        sections: allSections ? cls.sections : (sections.length > 0 ? sections : cls.sections)
+      }));
+    } else {
+      // Single class - get sections if allSections is true
+      if (allSections) {
+        const classData = await classesCollection.findOne({
+          schoolId: schoolId,
+          className: className,
+          isActive: true
+        });
+        
+        if (classData) {
+          classesToCreate = [{
+            className: className,
+            sections: classData.sections || []
+          }];
+        } else {
+          classesToCreate = [{
+            className: className,
+            sections: sections
+          }];
+        }
+      } else {
+        classesToCreate = [{
+          className: className,
+          sections: sections
+        }];
+      }
+    }
 
-    if (existingTest) {
+    // Create tests for all specified classes
+    const createdTests = [];
+    const errors = [];
+
+    for (const classInfo of classesToCreate) {
+      try {
+        // Check if test already exists for this class
+        const existingTest = await testDetailsCollection.findOne({
+          schoolId: schoolId,
+          name: name,
+          className: classInfo.className,
+          isActive: true
+        });
+
+        if (existingTest) {
+          errors.push(`Test "${name}" already exists for Class ${classInfo.className}`);
+          continue;
+        }
+
+        // Generate test ID
+        const testId = `${school.code}_${classInfo.className}_${name.replace(/\s+/g, '_')}_${Date.now()}`;
+
+        // Create new test document - NO maxMarks or weightage (Admin will configure)
+        const newTest = {
+          testId: testId,
+          name: name,
+          className: classInfo.className,
+          description: description || `Test for Class ${classInfo.className}`,
+          sections: classInfo.sections, // Array of sections this test applies to
+          schoolId: schoolId,
+          schoolCode: school.code,
+          academicYear: '2024-25',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        // Insert new test
+        const result = await testDetailsCollection.insertOne(newTest);
+        createdTests.push({
+          _id: result.insertedId,
+          testId: testId,
+          name: name,
+          className: classInfo.className,
+          sections: classInfo.sections
+        });
+
+      } catch (error) {
+        errors.push(`Error creating test for Class ${classInfo.className}: ${error.message}`);
+      }
+    }
+
+    if (createdTests.length === 0) {
       return res.status(400).json({
         success: false,
-        message: `Test "${name}" already exists for Class ${className}`
+        message: 'No tests were created',
+        errors: errors
       });
     }
 
-    // Generate test ID
-    const testId = `${school.code}_${className}_${name.replace(/\s+/g, '_')}_${Date.now()}`;
-
-    // Create new test document
-    const newTest = {
-      testId: testId,
-      name: name,
-      className: className,
-      description: description || `Test for Class ${className}`,
-      maxMarks: maxMarks,
-      weightage: weightage,
-      sections: sections, // Array of sections this test applies to
-      schoolId: schoolId,
-      schoolCode: school.code,
-      academicYear: '2024-25',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Insert new test
-    const result = await testDetailsCollection.insertOne(newTest);
+    const message = allClasses 
+      ? `Test "${name}" created for ${createdTests.length} class(es)`
+      : `Test "${name}" created successfully for Class ${className}`;
 
     res.status(201).json({
       success: true,
-      message: `Test "${name}" created successfully for Class ${className}`,
+      message: message,
       data: {
-        _id: result.insertedId,
-        testId: testId,
-        name: name,
-        className: className,
-        sections: sections
+        created: createdTests,
+        errors: errors.length > 0 ? errors : undefined
       }
     });
 

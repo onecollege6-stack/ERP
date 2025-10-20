@@ -39,4 +39,12 @@ router.get('/:schoolCode/tests',
   adminClassController.getSchoolTests
 );
 
+// Save test scoring configuration
+router.post('/:schoolCode/test-scoring', 
+  auth, 
+  setMainDbContext, 
+  requireAdminAccess, 
+  adminClassController.saveTestScoring
+);
+
 module.exports = router;
