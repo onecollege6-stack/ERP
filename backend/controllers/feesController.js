@@ -1,8 +1,9 @@
 const FeeStructure = require('../models/FeeStructure');
 const StudentFeeRecord = require('../models/StudentFeeRecord');
 const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
+const { ObjectId } = require('mongodb');
 
-// Create fee structure
+// Create fee structure (per-school DB)
 exports.createFeeStructure = async (req, res) => {
   try {
     console.log('💰 Creating fee structure:', req.body);
@@ -43,10 +44,16 @@ exports.createFeeStructure = async (req, res) => {
       });
     }
     
-    // Create fee structure
+    // Per-school DB connection
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const feeStructuresCol = db.collection('feestructures');
+
+    // Create fee structure in school DB
     const feeStructureData = {
-      schoolId: req.user.schoolId,
-      createdBy: req.user._id,
+      schoolId: new ObjectId(req.user.schoolId),
+      createdBy: new ObjectId(req.user._id),
       name,
       description,
       class: targetClass,
@@ -63,18 +70,19 @@ exports.createFeeStructure = async (req, res) => {
       })),
       academicYear,
       isActive: true,
-      status: 'active'
+      status: 'active',
+      appliedToStudents: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
-    
-    const feeStructure = new FeeStructure(feeStructureData);
-    await feeStructure.save();
-    
+    const insertRes = await feeStructuresCol.insertOne(feeStructureData);
+    const feeStructure = { _id: insertRes.insertedId, ...feeStructureData };
     console.log(`✅ Fee structure created: ${feeStructure._id}`);
     
     // Apply to students if requested
     let appliedCount = 0;
     if (applyToStudents) {
-      appliedCount = await applyFeeStructureToStudents(feeStructure, req.user.schoolCode);
+      appliedCount = await applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode);
     }
     
     res.json({
@@ -96,25 +104,60 @@ exports.createFeeStructure = async (req, res) => {
   }
 };
 
-// Apply fee structure to students
-async function applyFeeStructureToStudents(feeStructure, schoolCode) {
+// Apply fee structure to students (per-school DB)
+async function applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode) {
   try {
     const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
-    const db = connection.db;
+    const db = connection.db || connection;
     
-    // Build student query
-    const studentQuery = { 
+    // Build student query (robust across possible schemas)
+    const studentQueryBase = { 
       role: 'student',
       _placeholder: { $ne: true }
     };
-    
+    const andFilters = [];
+
     if (feeStructure.class !== 'ALL') {
-      studentQuery.class = feeStructure.class;
+      const cls = String(feeStructure.class).trim();
+      andFilters.push({
+        $or: [
+          { class: cls },
+          { studentClass: cls },
+          { currentClass: cls },
+          { 'studentDetails.currentClass': cls },
+          // Also try numeric if possible
+          ...(isNaN(Number(cls)) ? [] : [
+            { class: Number(cls) },
+            { studentClass: Number(cls) },
+            { currentClass: Number(cls) },
+          ])
+        ]
+      });
     }
-    
+
     if (feeStructure.section !== 'ALL') {
-      studentQuery.section = feeStructure.section;
+      const sec = String(feeStructure.section).trim();
+      const secUpper = sec.toUpperCase();
+      const secLower = sec.toLowerCase();
+      andFilters.push({
+        $or: [
+          { section: sec },
+          { section: secUpper },
+          { section: secLower },
+          { studentSection: sec },
+          { studentSection: secUpper },
+          { studentSection: secLower },
+          { currentSection: sec },
+          { 'studentDetails.currentSection': sec }
+        ]
+      });
     }
+
+    const studentQuery = andFilters.length > 0 
+      ? { ...studentQueryBase, $and: andFilters }
+      : studentQueryBase;
+
+    console.log('[Fees] Applying to students with query:', JSON.stringify(studentQuery));
     
     // Find matching students
     const studentsCollection = db.collection('students');
@@ -124,9 +167,9 @@ async function applyFeeStructureToStudents(feeStructure, schoolCode) {
     
     // Create student fee records
     const studentFeeRecords = students.map(student => ({
-      schoolId: feeStructure.schoolId,
-      studentId: student._id,
-      feeStructureId: feeStructure._id,
+      schoolId: new ObjectId(feeStructure.schoolId),
+      studentId: new ObjectId(student._id),
+      feeStructureId: new ObjectId(feeStructure._id),
       studentName: student.name?.displayName || `${student.name?.firstName} ${student.name?.lastName}`,
       studentClass: student.class,
       studentSection: student.section,
@@ -135,7 +178,7 @@ async function applyFeeStructureToStudents(feeStructure, schoolCode) {
       academicYear: feeStructure.academicYear,
       totalAmount: feeStructure.totalAmount,
       installments: feeStructure.installments.map(inst => ({
-        installmentId: new require('mongoose').Types.ObjectId(),
+        installmentId: new ObjectId(),
         name: inst.name,
         amount: inst.amount,
         dueDate: inst.dueDate,
@@ -143,18 +186,28 @@ async function applyFeeStructureToStudents(feeStructure, schoolCode) {
         status: 'pending',
         lateFeeAmount: inst.lateFeeAmount,
         remarks: ''
-      }))
+      })),
+      payments: [],
+      status: 'pending',
+      totalPaid: 0,
+      totalPending: feeStructure.totalAmount,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }));
     
     // Bulk insert student fee records
     if (studentFeeRecords.length > 0) {
-      await StudentFeeRecord.insertMany(studentFeeRecords);
+      const studentFeeCol = db.collection('studentfeerecords');
+      await studentFeeCol.insertMany(studentFeeRecords);
       console.log(`✅ Created ${studentFeeRecords.length} student fee records`);
     }
-    
-    // Update fee structure with applied count
-    feeStructure.appliedToStudents = students.length;
-    await feeStructure.save();
+
+    // Update fee structure with applied count in per-school DB
+    const feeStructuresCol = db.collection('feestructures');
+    await feeStructuresCol.updateOne(
+      { _id: new ObjectId(feeStructure._id) },
+      { $set: { appliedToStudents: students.length, updatedAt: new Date() } }
+    );
     
     return students.length;
     
@@ -164,27 +217,27 @@ async function applyFeeStructureToStudents(feeStructure, schoolCode) {
   }
 }
 
-// Get fee structures
+// Get fee structures (per-school DB)
 exports.getFeeStructures = async (req, res) => {
   try {
-    const { schoolId, class: targetClass, section: targetSection } = req.query;
-    
+    const { class: targetClass, section: targetSection } = req.query;
+
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const feeStructuresCol = db.collection('feestructures');
+
     const query = {
-      schoolId: req.user.schoolId,
+      schoolId: new ObjectId(req.user.schoolId),
       isActive: true
     };
-    
-    if (targetClass && targetClass !== 'ALL') {
-      query.class = targetClass;
-    }
-    
-    if (targetSection && targetSection !== 'ALL') {
-      query.section = targetSection;
-    }
-    
-    const feeStructures = await FeeStructure.find(query)
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 });
+    if (targetClass && targetClass !== 'ALL') query.class = targetClass;
+    if (targetSection && targetSection !== 'ALL') query.section = targetSection;
+
+    const feeStructures = await feeStructuresCol
+      .find(query)
+      .sort({ createdAt: -1 })
+      .toArray();
     
     res.json({
       success: true,
@@ -195,12 +248,12 @@ exports.getFeeStructures = async (req, res) => {
         class: structure.class,
         section: structure.section,
         totalAmount: structure.totalAmount,
-        installmentsCount: structure.installments.length,
+        installmentsCount: (structure.installments || []).length,
         academicYear: structure.academicYear,
         appliedToStudents: structure.appliedToStudents,
         status: structure.status,
         createdAt: structure.createdAt,
-        createdBy: structure.createdBy?.name?.displayName || 'Unknown'
+        createdBy: 'Admin'
       }))
     });
     
@@ -214,11 +267,10 @@ exports.getFeeStructures = async (req, res) => {
   }
 };
 
-// Get student fee records
+// Get student fee records (per-school DB)
 exports.getStudentFeeRecords = async (req, res) => {
   try {
     const { 
-      schoolId, 
       class: targetClass, 
       section: targetSection, 
       page = 1, 
@@ -227,17 +279,52 @@ exports.getStudentFeeRecords = async (req, res) => {
       status
     } = req.query;
     
-    // Build query
-    const query = {
-      schoolId: req.user.schoolId
-    };
-    
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const studentFeeCol = db.collection('studentfeerecords');
+
+    // Build query (robust matching for class/section)
+    const query = { schoolId: new ObjectId(req.user.schoolId) };
+    const andFilters = [];
+
     if (targetClass && targetClass !== 'ALL') {
-      query.studentClass = targetClass;
+      const clsRaw = String(targetClass).trim();
+      const clsNumber = Number(clsRaw.replace(/[^0-9]/g, '')); // extract 7 from 'Class 7'
+      const clsCandidate = (clsRaw.replace(/^class\s*/i, '').trim() || clsRaw);
+      const clsRegex = new RegExp(`(^|\\b)(class\\s*)?${clsCandidate}(\\b|$)`, 'i');
+      andFilters.push({
+        $or: [
+          // direct matches on primary field
+          { studentClass: clsCandidate },
+          // alternate field name that might exist in legacy docs
+          { class: clsCandidate },
+          // regex contains for both fields (handles 'Class 7', '7', 'Std 7')
+          { studentClass: { $regex: clsRegex } },
+          { class: { $regex: clsRegex } },
+          // numeric coercion matches
+          ...(isNaN(clsNumber) ? [] : [
+            { studentClass: String(clsNumber) },
+            { studentClass: clsNumber },
+            { class: String(clsNumber) },
+            { class: clsNumber },
+          ])
+        ]
+      });
     }
     
     if (targetSection && targetSection !== 'ALL') {
-      query.studentSection = targetSection;
+      const sec = String(targetSection).trim();
+      andFilters.push({
+        $or: [
+          { studentSection: { $regex: `^${sec}$`, $options: 'i' } },
+          { section: { $regex: `^${sec}$`, $options: 'i' } }
+        ]
+      });
+    }
+
+    if (andFilters.length) {
+      query.$and = andFilters;
     }
     
     if (status && status !== 'ALL') {
@@ -256,13 +343,15 @@ exports.getStudentFeeRecords = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     // Execute query with pagination
-    const records = await StudentFeeRecord.find(query)
+    const cursor = studentFeeCol
+      .find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
+    const records = await cursor.toArray();
     
     // Get total count for pagination
-    const totalRecords = await StudentFeeRecord.countDocuments(query);
+    const totalRecords = await studentFeeCol.countDocuments(query);
     
     // Format response
     const formattedRecords = records.map(record => ({
@@ -305,7 +394,7 @@ exports.getStudentFeeRecords = async (req, res) => {
   }
 };
 
-// Record offline payment
+// Record offline payment (per-school DB)
 exports.recordOfflinePayment = async (req, res) => {
   try {
     console.log('💳 Recording offline payment:', req.body);
@@ -328,10 +417,15 @@ exports.recordOfflinePayment = async (req, res) => {
       });
     }
     
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const studentFeeCol = db.collection('studentfeerecords');
+
     // Find student fee record
-    const feeRecord = await StudentFeeRecord.findOne({
-      studentId,
-      schoolId: req.user.schoolId
+    const feeRecord = await studentFeeCol.findOne({
+      studentId: new ObjectId(studentId),
+      schoolId: new ObjectId(req.user.schoolId)
     });
     
     if (!feeRecord) {
@@ -342,7 +436,7 @@ exports.recordOfflinePayment = async (req, res) => {
     }
     
     // Check if installment exists
-    const installment = feeRecord.installments.find(inst => inst.name === installmentName);
+    const installment = (feeRecord.installments || []).find(inst => inst.name === installmentName);
     if (!installment) {
       return res.status(400).json({
         success: false,
@@ -355,23 +449,69 @@ exports.recordOfflinePayment = async (req, res) => {
     
     // Create payment record
     const payment = {
-      paymentId: new require('mongoose').Types.ObjectId(),
+      paymentId: new ObjectId(),
       installmentName,
       amount: parseFloat(amount),
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       paymentMethod,
       paymentReference: paymentReference || '',
-      receivedBy: req.user._id,
+      receivedBy: new ObjectId(req.user._id),
       remarks: remarks || '',
       receiptNumber,
       isVerified: false
     };
     
-    // Add payment to record
-    feeRecord.payments.push(payment);
-    
-    // Save the updated record (this will trigger pre-save middleware to update totals)
-    await feeRecord.save();
+    // Push payment and recompute fields
+    const updatedPayments = [...(feeRecord.payments || []), payment];
+
+    // Recompute totals and installment statuses
+    const totalPaid = updatedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalPending = Math.max(0, (feeRecord.totalAmount || 0) - totalPaid);
+
+    const installments = (feeRecord.installments || []).map(inst => {
+      const paid = updatedPayments
+        .filter(p => p.installmentName === inst.name)
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+      let status = 'pending';
+      if (paid >= inst.amount) status = 'paid';
+      else if (paid > 0) status = 'partial';
+      else if (new Date() > new Date(inst.dueDate)) status = 'overdue';
+      return { ...inst, paidAmount: paid, status };
+    });
+
+    // Overall status
+    let status = 'pending';
+    if (totalPaid >= (feeRecord.totalAmount || 0)) status = 'paid';
+    else if (totalPaid > 0) status = 'partial';
+    else if (installments.some(i => i.status === 'overdue')) status = 'overdue';
+
+    // Overdue days and nextDueDate
+    const overdueInst = installments.filter(i => i.status === 'overdue');
+    let overdueDays = feeRecord.overdueDays || 0;
+    if (overdueInst.length > 0) {
+      const oldest = overdueInst.reduce((o, i) => (!o || new Date(i.dueDate) < new Date(o.dueDate) ? i : o), null);
+      overdueDays = Math.max(0, Math.floor((Date.now() - new Date(oldest.dueDate).getTime()) / (1000 * 60 * 60 * 24)));
+    }
+    const pendingInst = installments.filter(i => i.status === 'pending');
+    const nextDueDate = pendingInst.length > 0
+      ? pendingInst.reduce((n, i) => (!n || new Date(i.dueDate) < new Date(n.dueDate) ? i : n), null).dueDate
+      : null;
+
+    await studentFeeCol.updateOne(
+      { _id: new ObjectId(feeRecord._id) },
+      {
+        $set: {
+          payments: updatedPayments,
+          installments,
+          totalPaid,
+          totalPending,
+          status,
+          overdueDays,
+          nextDueDate,
+          updatedAt: new Date(),
+        }
+      }
+    );
     
     console.log(`✅ Payment recorded: ${receiptNumber}`);
     
@@ -381,9 +521,10 @@ exports.recordOfflinePayment = async (req, res) => {
       data: {
         receiptNumber: payment.receiptNumber,
         paymentId: payment.paymentId,
-        totalPaid: feeRecord.totalPaid,
-        totalPending: feeRecord.totalPending,
-        status: feeRecord.status
+        // Return recalculated values
+        totalPaid,
+        totalPending,
+        status
       }
     });
     
@@ -397,14 +538,17 @@ exports.recordOfflinePayment = async (req, res) => {
   }
 };
 
-// Get fee statistics
+// Get fee statistics (per-school DB)
 exports.getFeeStats = async (req, res) => {
   try {
-    const { schoolId } = req.query;
-    
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const studentFeeCol = db.collection('studentfeerecords');
+
     // Get aggregated statistics
-    const stats = await StudentFeeRecord.aggregate([
-      { $match: { schoolId: req.user.schoolId } },
+    const stats = await studentFeeCol.aggregate([
+      { $match: { schoolId: new ObjectId(req.user.schoolId) } },
       {
         $group: {
           _id: null,
@@ -412,24 +556,12 @@ exports.getFeeStats = async (req, res) => {
           totalCollected: { $sum: '$totalPaid' },
           totalOutstanding: { $sum: '$totalPending' },
           totalRecords: { $sum: 1 },
-          paidRecords: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'paid'] }, 1, 0]
-            }
-          },
-          partialRecords: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'partial'] }, 1, 0]
-            }
-          },
-          overdueRecords: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'overdue'] }, 1, 0]
-            }
-          }
+          paidRecords: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, 1, 0] } },
+          partialRecords: { $sum: { $cond: [{ $eq: ['$status', 'partial'] }, 1, 0] } },
+          overdueRecords: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, 1, 0] } }
         }
       }
-    ]);
+    ]).toArray();
     
     const result = stats[0] || {
       totalBilled: 0,
