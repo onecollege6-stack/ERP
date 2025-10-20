@@ -1,3 +1,5 @@
+// backend/controllers/messagesController.js
+
 const Message = require('../models/Message');
 const User = require('../models/User');
 const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
@@ -8,7 +10,7 @@ exports.sendMessage = async (req, res) => {
     console.log('📨 Sending message:', req.body);
     
     // Validate required fields
-    const { title, body, class: targetClass, section: targetSection, schoolId } = req.body;
+    const { title, body, class: targetClass, section: targetSection } = req.body;
     
     if (!title || !body) {
       return res.status(400).json({
@@ -17,7 +19,7 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // Verify school ownership
+    // Verify school ownership - use schoolId from authenticated user
     const userSchoolId = req.user.schoolId;
     if (!userSchoolId) {
       return res.status(400).json({
@@ -26,12 +28,11 @@ exports.sendMessage = async (req, res) => {
       });
     }
 
-    // For super admin, allow any schoolId; for admin, must match their school
-    if (req.user.role === 'admin' && userSchoolId.toString() !== schoolId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Cannot send messages to other schools'
-      });
+    console.log(`🔍 sendMessage: Using authenticated school ID: ${userSchoolId}`);
+    
+    // For admin users, they can only send messages to their own school (already enforced by userSchoolId)
+    if (req.user.role === 'admin') {
+        console.log(`✅ Admin user sending message to their school: ${userSchoolId}`);
     }
     
     // Get school connection for student queries
@@ -46,27 +47,87 @@ exports.sendMessage = async (req, res) => {
     const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
     const db = connection.db;
     
-    // Build student query using canonical class/section fields
+    // Build student query to handle all possible data structures:
+    // 1. class/section at root level (populateSchoolP.js)
+    // 2. studentDetails.academic.currentClass/currentSection (quickPopulate.js)
+    // 3. studentDetails.currentClass/currentSection (Excel import)
     const studentQuery = { 
       role: 'student',
       _placeholder: { $ne: true } // Exclude placeholder documents
     };
     
+    // Build $or query to check all possible locations (case-insensitive)
+    const classConditions = [];
     if (targetClass && targetClass !== 'ALL') {
-      studentQuery.class = targetClass;
+      // Use regex for case-insensitive matching
+      const classRegex = new RegExp(`^${targetClass}$`, 'i');
+      classConditions.push(
+        { class: classRegex },
+        { 'studentDetails.academic.currentClass': classRegex },
+        { 'studentDetails.currentClass': classRegex }
+      );
     }
     
+    const sectionConditions = [];
     if (targetSection && targetSection !== 'ALL') {
-      studentQuery.section = targetSection;
+      // Use regex for case-insensitive matching
+      const sectionRegex = new RegExp(`^${targetSection}$`, 'i');
+      sectionConditions.push(
+        { section: sectionRegex },
+        { 'studentDetails.academic.currentSection': sectionRegex },
+        { 'studentDetails.currentSection': sectionRegex }
+      );
     }
     
-    console.log('🔍 Student query:', studentQuery);
+    // Combine conditions
+    if (classConditions.length > 0 && sectionConditions.length > 0) {
+      studentQuery.$and = [
+        { $or: classConditions },
+        { $or: sectionConditions }
+      ];
+    } else if (classConditions.length > 0) {
+      studentQuery.$or = classConditions;
+    } else if (sectionConditions.length > 0) {
+      studentQuery.$or = sectionConditions;
+    }
+    
+    console.log('🔍 Student query:', JSON.stringify(studentQuery, null, 2));
     
     // Find matching students
     const studentsCollection = db.collection('students');
     const students = await studentsCollection.find(studentQuery).toArray();
     
     console.log(`👥 Found ${students.length} students matching criteria`);
+    
+    // Log sample student structure for debugging
+    if (students.length > 0) {
+      console.log('🔍 Sample student structure:', {
+        class: students[0].class,
+        section: students[0].section,
+        academicClass: students[0].studentDetails?.academic?.currentClass,
+        academicSection: students[0].studentDetails?.academic?.currentSection,
+        currentClass: students[0].studentDetails?.currentClass,
+        currentSection: students[0].studentDetails?.currentSection
+      });
+    } else {
+      // Debug: Check total students in collection
+      const totalStudents = await studentsCollection.countDocuments({ role: 'student' });
+      console.log(`⚠️ No students found. Total students in collection: ${totalStudents}`);
+      
+      // Debug: Get sample student to see structure
+      const sampleStudent = await studentsCollection.findOne({ role: 'student' });
+      if (sampleStudent) {
+        console.log('🔍 Sample student structure from DB:', {
+          class: sampleStudent.class,
+          section: sampleStudent.section,
+          academicClass: sampleStudent.studentDetails?.academic?.currentClass,
+          academicSection: sampleStudent.studentDetails?.academic?.currentSection,
+          currentClass: sampleStudent.studentDetails?.currentClass,
+          currentSection: sampleStudent.studentDetails?.currentSection,
+          userId: sampleStudent.userId
+        });
+      }
+    }
     
     if (students.length === 0) {
       return res.status(400).json({
@@ -86,9 +147,10 @@ exports.sendMessage = async (req, res) => {
       status: 'sent',
       sentAt: new Date(),
       totalRecipients: students.length,
+      // CONFIRMATION: The data is saved here under target.class and target.section
       target: {
-        class: targetClass || 'ALL',
-        section: targetSection || 'ALL'
+        class: targetClass || 'ALL', 
+        section: targetSection || 'ALL' 
       },
       sentTo: students.map(student => student._id),
       recipients: students.map(student => ({
@@ -98,6 +160,12 @@ exports.sendMessage = async (req, res) => {
       readBy: new Map() // Initialize empty readBy map
     };
     
+    console.log('✅ Message Data to be Saved:', {
+        subject: messageData.subject,
+        target: messageData.target, 
+        totalRecipients: messageData.totalRecipients
+    }); 
+    
     // Save message to main database
     const message = new Message(messageData);
     await message.save();
@@ -105,8 +173,6 @@ exports.sendMessage = async (req, res) => {
     console.log(`✅ Message sent successfully to ${students.length} students`);
     
     // Dispatch background job for notifications (FCM, email, etc.)
-    // This would be implemented in a notification service
-    // For now, we'll just log it
     console.log('📱 Dispatching background notification job...');
     
     res.json({
@@ -117,9 +183,9 @@ exports.sendMessage = async (req, res) => {
         sentCount: students.length,
         recipients: students.map(s => ({
           id: s._id,
-          name: s.name?.displayName || `${s.name?.firstName} ${s.name?.lastName}`,
-          class: s.class,
-          section: s.section
+          name: s.name?.displayName || `${s.name?.firstName} ${s.name?.lastName}` || s.name,
+          class: s.class || s.studentDetails?.academic?.currentClass || s.studentDetails?.currentClass,
+          section: s.section || s.studentDetails?.academic?.currentSection || s.studentDetails?.currentSection
         }))
       }
     });
@@ -139,15 +205,23 @@ exports.previewMessage = async (req, res) => {
   try {
     console.log('🔍 Previewing message recipients:', req.body);
     
-    const { class: targetClass, section: targetSection, schoolId } = req.body;
+    const { class: targetClass, section: targetSection } = req.body;
     
-    // Verify school ownership
+    // Get user's school ID from the authentication context (source of truth)
     const userSchoolId = req.user.schoolId;
-    if (req.user.role === 'admin' && userSchoolId.toString() !== schoolId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Cannot preview messages for other schools'
-      });
+
+    if (!userSchoolId) {
+        return res.status(400).json({
+            success: false,
+            message: 'User school ID not found in authentication context'
+        });
+    }
+    
+    console.log(`🔍 previewMessage: Using authenticated school ID: ${userSchoolId}`);
+    
+    // For admin users, they can only preview messages for their own school (already enforced by userSchoolId)
+    if (req.user.role === 'admin') {
+        console.log(`✅ Admin user previewing recipients for their school: ${userSchoolId}`);
     }
     
     // Get school connection for student queries
@@ -162,19 +236,48 @@ exports.previewMessage = async (req, res) => {
     const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
     const db = connection.db;
     
-    // Build student query using canonical class/section fields
+    // Build student query to handle all possible data structures (case-insensitive)
     const studentQuery = { 
       role: 'student',
       _placeholder: { $ne: true } // Exclude placeholder documents
     };
     
+    // Build $or query to check all possible locations with case-insensitive matching
+    const classConditions = [];
     if (targetClass && targetClass !== 'ALL') {
-      studentQuery.class = targetClass;
+      // Use regex for case-insensitive matching
+      const classRegex = new RegExp(`^${targetClass}$`, 'i');
+      classConditions.push(
+        { class: classRegex },
+        { 'studentDetails.academic.currentClass': classRegex },
+        { 'studentDetails.currentClass': classRegex }
+      );
     }
     
+    const sectionConditions = [];
     if (targetSection && targetSection !== 'ALL') {
-      studentQuery.section = targetSection;
+      // Use regex for case-insensitive matching
+      const sectionRegex = new RegExp(`^${targetSection}$`, 'i');
+      sectionConditions.push(
+        { section: sectionRegex },
+        { 'studentDetails.academic.currentSection': sectionRegex },
+        { 'studentDetails.currentSection': sectionRegex }
+      );
     }
+    
+    // Combine conditions
+    if (classConditions.length > 0 && sectionConditions.length > 0) {
+      studentQuery.$and = [
+        { $or: classConditions },
+        { $or: sectionConditions }
+      ];
+    } else if (classConditions.length > 0) {
+      studentQuery.$or = classConditions;
+    } else if (sectionConditions.length > 0) {
+      studentQuery.$or = sectionConditions;
+    }
+    
+    console.log('🔍 Preview query:', JSON.stringify(studentQuery, null, 2));
     
     // Count matching students
     const studentsCollection = db.collection('students');
@@ -203,9 +306,9 @@ exports.previewMessage = async (req, res) => {
         targetSection: targetSection || 'ALL',
         sampleRecipients: sampleStudents.map(s => ({
           id: s._id,
-          name: s.name?.displayName || `${s.name?.firstName} ${s.name?.lastName}`,
-          class: s.class,
-          section: s.section
+          name: s.name?.displayName || `${s.name?.firstName} ${s.name?.lastName}` || s.name,
+          class: s.class || s.studentDetails?.academic?.currentClass || s.studentDetails?.currentClass,
+          section: s.section || s.studentDetails?.academic?.currentSection || s.studentDetails?.currentSection
         }))
       }
     });
@@ -219,6 +322,10 @@ exports.previewMessage = async (req, res) => {
     });
   }
 };
+// ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
+// ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
+// ... (rest of the file remains unchanged)
+// ... (rest of the file remains unchanged)
 
 // Get messages with filtering
 exports.getMessages = async (req, res) => {

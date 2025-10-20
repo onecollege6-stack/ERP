@@ -16,5 +16,7 @@ router.post('/preview', messagesController.previewMessage);
 router.get('/', messagesController.getMessages);
 router.get('/stats', messagesController.getMessageStats);
 router.get('/:messageId', messagesController.getMessageDetails);
+// router.route('/')
+    // .post(messagesController.sendMessage);
 
 module.exports = router;

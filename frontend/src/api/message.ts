@@ -1,3 +1,4 @@
+// frontend/src/api/message.ts
 import api from '../api/axios';
 
 export async function getMessages(params?: any) {
@@ -5,8 +6,14 @@ export async function getMessages(params?: any) {
   return res.data;
 }
 
+// FIX: Changed endpoint to include '/send' to match your Express router setup
 export async function sendMessage(data: any) {
-  const res = await api.post('/messages', data);
+  const res = await api.post('/messages/send', data);
+  return res.data;
+}
+
+export async function previewMessageRecipients(data: any) {
+  const res = await api.post('/messages/preview', data);
   return res.data;
 }
 

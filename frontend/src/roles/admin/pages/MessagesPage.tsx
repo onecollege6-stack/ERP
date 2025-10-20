@@ -1,8 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Send, MessageSquare, Eye, AlertCircle, Users } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Send, MessageSquare, Eye, AlertCircle, Users, Clock, Mail, BookOpen } from 'lucide-react';
 import { useAuth } from '../../../auth/AuthContext';
 import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
 import { toast } from 'react-hot-toast';
+import { getMessages, sendMessage as sendMessageAPI, previewMessageRecipients } from '../../../api/message';
+
+// Define Message type based on the backend controller format
+interface Message {
+  id: string;
+  title: string;
+  body: string;
+  target: string; // e.g., "10 - A"
+  sentAt: string;
+  recipientsCount: number;
+  readCount: number;
+  status: string;
+  sender: string;
+  messageType: string;
+  priority: string;
+}
 
 const MessagesPage: React.FC = () => {
   const { user } = useAuth();
@@ -12,20 +28,28 @@ const MessagesPage: React.FC = () => {
     classesData,
     loading: classesLoading,
     error: classesError,
-    getClassOptions,
-    getSectionsByClass,
     hasClasses
   } = useSchoolClasses();
 
-  // Form state
+  // Form state (for sending a new message) - defaults to empty string to enforce selection
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [selectedClass, setSelectedClass] = useState('');
-  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedClass, setSelectedClass] = useState(''); // Changed from 'ALL'
+  const [selectedSection, setSelectedSection] = useState(''); // Changed from 'ALL'
   const [availableSections, setAvailableSections] = useState<any[]>([]);
   const [recipientCount, setRecipientCount] = useState<number>(0);
 
-  // UI state
+  // Sent Messages List filter state
+  const [messagesFilterClass, setMessagesFilterClass] = useState('ALL'); // 'ALL' for filtering
+  const [messagesFilterSection, setMessagesFilterSection] = useState('ALL'); // 'ALL' for filtering
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const LIMIT = 10;
+
+  // UI state for sending
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -34,75 +58,122 @@ const MessagesPage: React.FC = () => {
   // Get class list from superadmin configuration
   const classList = classesData?.classes?.map(c => c.className) || [];
 
-  console.log('MessagesPage render:', {
-    user: user?.schoolCode,
-    classesData,
-    classList,
-    hasClasses: hasClasses()
-  });
+  // Helper function to format date
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
-  // Update available sections when class changes - same logic as Results
+  // Fetch messages from the backend
+  const fetchMessages = useCallback(async (page: number, currentClass: string, currentSection: string) => {
+    if (!user?.schoolId) return;
+
+    setMessagesLoading(true);
+    setMessagesError(null);
+
+    try {
+      const params = {
+        schoolId: user.schoolId.toString(), // Ensure schoolId is stringified for API params
+        page,
+        limit: LIMIT,
+        status: 'sent', // Fetch only sent messages
+        class: currentClass === 'ALL' ? undefined : currentClass, // Pass undefined if ALL is selected
+        section: currentSection === 'ALL' ? undefined : currentSection, // Pass undefined if ALL is selected
+      };
+
+      const result = await getMessages(params);
+
+      setMessages(result.data.messages);
+      setCurrentPage(result.data.pagination.page);
+      setTotalPages(result.data.pagination.pages);
+
+    } catch (err: any) {
+      console.error('Error fetching messages:', err);
+      setMessagesError('Failed to load sent messages.');
+      toast.error('Failed to load sent messages.');
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [user?.schoolId]);
+
+  // Initial fetch of messages and refetch on filter change
   useEffect(() => {
-    if (selectedClass && classesData) {
-      const sections = getSectionsByClass(selectedClass);
-      setAvailableSections(sections);
-      // Auto-select first section if available
-      if (sections.length > 0) {
-        setSelectedSection(sections[0].value);
+    if (user?.schoolId) {
+      // Use the filter states for the message list
+      fetchMessages(1, messagesFilterClass, messagesFilterSection);
+    }
+  }, [user?.schoolId, fetchMessages, messagesFilterClass, messagesFilterSection]);
+
+  // Update available sections when class changes (for the SEND NEW MESSAGE form)
+  useEffect(() => {
+    // If no class is selected (empty string)
+    if (!selectedClass || selectedClass === 'ALL') {
+      setAvailableSections([]); // No sections to choose from
+      setSelectedSection(''); // Clear section
+      return;
+    }
+
+    // Logic for a specific class
+    if (classesData) {
+      const selectedClassData = classesData.classes.find(c => c.className === selectedClass);
+
+      if (selectedClassData) {
+        // Map sections to the expected format.
+        const rawSections = selectedClassData.sections || [];
+
+        // FIX: Robust mapping to extract section name correctly and ensure section options appear
+        const sections = rawSections.map((s: any) => {
+          // Handle data structure that is an object { sectionName: 'A' } or potentially just the string 'A'
+          const sectionName = s.sectionName || s;
+          return {
+            value: sectionName, // The actual value to be sent to the API (e.g., 'A')
+            section: sectionName // The display value (e.g., 'A')
+          };
+        });
+
+        setAvailableSections(sections);
+
+        // If current section is invalid, reset it. Otherwise keep the old value.
+        const currentValidSections = sections.map(s => s.value);
+        if (selectedSection && !currentValidSections.includes(selectedSection)) {
+          setSelectedSection(''); // Reset to empty if no valid selection exists
+        }
+
       } else {
+        // Class exists but no sections defined
+        setAvailableSections([]);
         setSelectedSection('');
       }
-    } else {
-      setAvailableSections([]);
-      setSelectedSection('');
     }
-  }, [selectedClass, classesData, getSectionsByClass]);
+  }, [selectedClass, classesData]);
 
   // Preview recipients when class/section changes
   useEffect(() => {
-    if (selectedClass && selectedSection) {
-      previewRecipients();
+    // Only preview when a specific class and section is selected (not empty or 'ALL')
+    if (selectedClass && selectedSection && selectedClass !== 'ALL' && selectedSection !== 'ALL') {
+      previewRecipients(selectedClass, selectedSection);
     } else {
+      // FIX: Ensure recipient count is cleared if selection is incomplete
       setRecipientCount(0);
     }
   }, [selectedClass, selectedSection]);
 
-  const previewRecipients = async () => {
-    if (!selectedClass || !selectedSection) return;
 
+  const previewRecipients = async (targetClass: string, targetSection: string) => {
     try {
-      const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
-
-      if (!schoolCode) {
-        console.error('School code not available');
-        return;
-      }
-
-      // Simulate API call to get recipient count
-      // Replace this with your actual API endpoint
-      const response = await fetch('/api/students/count', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          schoolCode,
-          class: selectedClass,
-          section: selectedSection
-        })
+      // Backend gets schoolId from req.user.schoolId, no need to send it
+      const result = await previewMessageRecipients({
+        class: targetClass,
+        section: targetSection
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        setRecipientCount(result.data?.count || 25); // Fallback to 25 for demo
-      } else {
-        // Fallback for demo purposes
-        setRecipientCount(25);
-      }
-    } catch (err) {
+      // The backend `previewMessage` returns `estimatedRecipients`
+      setRecipientCount(result.data?.estimatedRecipients || 0);
+    } catch (err: any) {
       console.error('Error previewing recipients:', err);
       // Fallback for demo purposes
-      setRecipientCount(25);
+      setRecipientCount(0);
     }
   };
 
@@ -112,14 +183,17 @@ const MessagesPage: React.FC = () => {
       setError('Please fill in both title and message body');
       return;
     }
-    if (!selectedClass) {
-      setError('Please select a class');
+    // Validation: Require specific class/section for sending (non-empty, non-'ALL')
+    if (!selectedClass || selectedClass === 'ALL') {
+      setError('Please select a specific Class to send a message');
       return;
     }
-    if (!selectedSection) {
-      setError('Please select a section');
+    if (!selectedSection || selectedSection === 'ALL') {
+      setError('Please select a specific Section to send a message');
       return;
     }
+
+    setError(null);
     setShowPreviewModal(true);
   };
 
@@ -129,50 +203,37 @@ const MessagesPage: React.FC = () => {
       setLoading(true);
       setError(null);
       setSuccess(null);
+      setShowPreviewModal(false); // Close modal on send attempt
 
-      if (!selectedClass || !selectedSection) {
-        throw new Error('Please select class and section');
+      // Re-validate just in case
+      if (!selectedClass || selectedClass === 'ALL' || !selectedSection || selectedSection === 'ALL') {
+        throw new Error('Please select a specific Class and Section to send a message.');
       }
 
-      const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
+      // Backend gets schoolId from req.user.schoolId, no need to send it
+      const payload = {
+        title,
+        body,
+        class: selectedClass, // Correct class value (e.g., '7') is sent
+        section: selectedSection // Correct section value (e.g., 'A') is sent
+      };
 
-      if (!schoolCode) {
-        throw new Error('School code not available');
+      // Message is saved here (backend `messagesController.js` handles saving to message collection with class/section attributes)
+      const response = await sendMessageAPI(payload);
+
+      if (response.success) {
+        const sentCount = response.data.sentCount;
+        setSuccess(`Message sent successfully to ${sentCount} students!`);
+        setTitle('');
+        setBody('');
+
+        // Re-fetch the message list to show the new message
+        fetchMessages(1, messagesFilterClass, messagesFilterSection);
+
+      } else {
+        // Check for specific error message from the response body
+        throw new Error(response.message || 'Failed to send message');
       }
-
-      // Simulate API call - replace with your actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Here you would make the actual API call:
-      /*
-      const response = await fetch('/api/messages/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          schoolCode,
-          class: selectedClass,
-          section: selectedSection,
-          title,
-          body,
-          target: `${selectedClass}-${selectedSection}`
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-      */
-
-      setSuccess(`Message sent successfully to ${recipientCount} students!`);
-      setTitle('');
-      setBody('');
-      setSelectedClass('');
-      setSelectedSection('');
-      setRecipientCount(0);
-      setShowPreviewModal(false);
 
     } catch (error: any) {
       setError(error.message || 'Failed to send message');
@@ -182,7 +243,17 @@ const MessagesPage: React.FC = () => {
     }
   };
 
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      fetchMessages(newPage, messagesFilterClass, messagesFilterSection);
+    }
+  };
+
+
   const renderClassSectionSelector = () => {
+    // ... (omitted unchanged loading/error/no-classes logic)
+
     if (classesLoading) {
       return (
         <div className="bg-gray-50 p-4 rounded-lg border">
@@ -220,6 +291,13 @@ const MessagesPage: React.FC = () => {
       );
     }
 
+    // Helper for section select text
+    const getSectionSelectText = () => {
+      if (!selectedClass) return 'Select Class First';
+      if (availableSections.length === 0) return 'No Sections Available';
+      return 'Select Section';
+    };
+
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -234,7 +312,8 @@ const MessagesPage: React.FC = () => {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Select Class</option>
+              {/* Added key prop for the default 'Select Class' option */}
+              <option key="select-class-default" value="">Select Class</option>
               {classList.map((cls) => (
                 <option key={cls} value={cls}>Class {cls}</option>
               ))}
@@ -251,17 +330,14 @@ const MessagesPage: React.FC = () => {
               value={selectedSection}
               onChange={(e) => setSelectedSection(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={!selectedClass || availableSections.length === 0}
+              disabled={!selectedClass}
             >
-              <option value="">
-                {!selectedClass
-                  ? 'Select Class First'
-                  : availableSections.length === 0
-                    ? 'No Sections Available'
-                    : 'Select Section'
-                }
+              {/* Added key prop for the default 'Select Section' option */}
+              <option key="select-section-default" value="">
+                {getSectionSelectText()}
               </option>
-              {availableSections.map((section) => (
+              {/* Only map sections if a class is selected AND sections are available */}
+              {selectedClass && availableSections.map((section) => (
                 <option key={section.value} value={section.value}>
                   Section {section.section}
                 </option>
@@ -271,17 +347,92 @@ const MessagesPage: React.FC = () => {
         </div>
 
         {/* Recipient Count Display */}
-        {recipientCount > 0 && (
+        {/* Only show count if a specific Class AND Section is selected */}
+        {recipientCount > 0 && selectedClass && selectedSection && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
             <Users className="h-5 w-5 text-blue-600 mr-2" />
             <span className="text-sm text-blue-800">
-              This message will be sent to <strong>{recipientCount}</strong> student{recipientCount !== 1 ? 's' : ''} in Class {selectedClass} - Section {selectedSection}
+              This message will be sent to **{recipientCount}** student{recipientCount !== 1 ? 's' : ''} in Class {selectedClass} - Section {selectedSection}
+            </span>
+          </div>
+        )}
+        {recipientCount === 0 && selectedClass && selectedSection && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center">
+            <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
+            {/* FIX: Use correct variables for display, which are the values sent to the API */}
+            <span className="text-sm text-yellow-800">
+              No students found matching Class **{selectedClass}** - Section **{selectedSection}**.
             </span>
           </div>
         )}
       </div>
     );
   };
+
+  // New section for message history filter options
+  const renderMessageFilter = () => {
+
+    // Add 'ALL' to the class list for filtering purposes
+    const filterClassOptions = [{ name: 'ALL Classes', value: 'ALL' }, ...classList.map(cls => ({ name: `Class ${cls}`, value: cls }))];
+
+    // Determine available sections for filtering
+    let filterSectionOptions = [{ name: 'ALL Sections', value: 'ALL' }];
+    if (messagesFilterClass !== 'ALL' && classesData) {
+      const selectedClassData = classesData.classes.find(c => c.className === messagesFilterClass);
+      if (selectedClassData) {
+        // FIX: Robust mapping for filter options as well
+        const rawSections = selectedClassData.sections || [];
+        const sections = rawSections.map((s: any) => {
+          const sectionName = s.sectionName || s;
+          return { name: `Section ${sectionName}`, value: sectionName };
+        });
+        filterSectionOptions = [...filterSectionOptions, ...sections];
+      }
+    }
+
+    return (
+      <div className="flex space-x-4 mb-4">
+        {/* Class Filter */}
+        <div className="w-1/3">
+          <label htmlFor="filter-class" className="block text-xs font-medium text-gray-500 mb-1">
+            Filter by Class
+          </label>
+          <select
+            id="filter-class"
+            value={messagesFilterClass}
+            onChange={(e) => {
+              setMessagesFilterClass(e.target.value);
+              setMessagesFilterSection('ALL'); // Reset section filter when class changes
+            }}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            {filterClassOptions.map((option) => (
+              <option key={`filter-class-${option.value}`} value={option.value}>{option.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Section Filter */}
+        <div className="w-1/3">
+          <label htmlFor="filter-section" className="block text-xs font-medium text-gray-500 mb-1">
+            Filter by Section
+          </label>
+          <select
+            id="filter-section"
+            value={messagesFilterSection}
+            onChange={(e) => setMessagesFilterSection(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            disabled={messagesFilterClass === 'ALL' && filterSectionOptions.length === 1}
+          >
+            {filterSectionOptions.map((option) => (
+              <option key={`filter-section-${option.value}`} value={option.value}>{option.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-6 p-6 bg-white rounded-lg shadow">
@@ -345,6 +496,7 @@ const MessagesPage: React.FC = () => {
 
         <div className="flex justify-end space-x-3">
           <button
+            // Disabled if class/section is not selected (empty string)
             onClick={handlePreview}
             disabled={!hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -353,10 +505,11 @@ const MessagesPage: React.FC = () => {
           </button>
           <button
             onClick={handleSendMessage}
+            // Disabled if class/section is not selected (empty string)
             disabled={loading || !hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${loading || !hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection
-                ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
+              ? 'bg-blue-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700'
               } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
           >
             {loading ? 'Sending...' : <><Send className="h-5 w-5 mr-2" />Send Message</>}
@@ -406,12 +559,134 @@ const MessagesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Sent Messages List */}
+      <hr className="my-6" />
+
+      {/* Sent Messages List (NEW SECTION) */}
       <div>
-        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Sent Messages</h2>
-        <div className="text-center py-8 text-gray-500">
-          No messages sent yet. Send your first message above.
-        </div>
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
+          <Mail className="h-6 w-6 mr-2 text-blue-600" /> Sent Messages
+        </h2>
+
+        {/* Message Filtering UI */}
+        {renderMessageFilter()}
+
+        {messagesError && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <strong className="font-bold">Error!</strong>
+            <span className="block sm:inline"> {messagesError}</span>
+            <button onClick={() => fetchMessages(currentPage, messagesFilterClass, messagesFilterSection)} className="ml-4 text-sm font-semibold underline">Retry</button>
+          </div>
+        )}
+
+        {messagesLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading messages...</span>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            No sent messages found matching the selected filters.
+          </div>
+        ) : (
+          <>
+            {/* Messages Table */}
+            <div className="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Title
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Target
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Sent
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Recipients
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Read/Total
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {messages.map((message) => (
+                    <tr key={message.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{message.title}</div>
+                        <div className="text-xs text-gray-500 truncate max-w-xs">{message.body}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="font-semibold text-gray-700">{message.target}</div>
+                        <div className="text-xs text-gray-500 flex items-center">
+                          <BookOpen className="h-3 w-3 mr-1" /> {message.messageType}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center text-xs text-gray-600">
+                          <Clock className="h-3 w-3 mr-1" /> {formatDateTime(message.sentAt)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center">
+                          <Users className="h-4 w-4 mr-1 text-blue-500" />
+                          <span className="font-medium text-blue-600">{message.recipientsCount}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {message.recipientsCount > 0 ? (
+                          <div className="text-sm">
+                            <span className="font-semibold text-green-600">{message.readCount}</span> / {message.recipientsCount}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${message.status === 'read' ? 'bg-green-100 text-green-800' :
+                            message.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}
+                        >
+                          {message.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center mt-4">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-gray-700">
+                  Page **{currentPage}** of **{totalPages}**
+                </span>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
