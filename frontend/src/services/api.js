@@ -176,7 +176,8 @@ export const exportImportAPI = {
   },
 
   // Generate template for import
-  generateTemplate: (schoolCode, role) => api.get(`/export-import/${schoolCode}/template/${role}`, { // <-- Corrected path
+  generateTemplate: (schoolCode, role) => api.get(`/export-import/${schoolCode}/template`, { // <-- Fixed: role as query param
+    params: { role },
     responseType: 'blob'
   })
 };

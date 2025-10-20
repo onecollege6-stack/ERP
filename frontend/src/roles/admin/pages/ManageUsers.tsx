@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Search, Plus, Edit, Trash2, Download, Upload, Filter,
-  UserCheck, UserX, Eye, EyeOff, Lock, Unlock, Building, // Added Eye, EyeOff
+  Search, Plus, Edit, Trash2, Download, Upload, Filter, X,
+  UserCheck, UserX, Eye, EyeOff, Lock, Unlock, Building, // Added Eye, EyeOff, X
   RotateCcw, FileText, AlertTriangle, Check, Users, GraduationCap, Shield, KeyRound // Added KeyRound if needed for reset
 } from 'lucide-react';
 // Use ApiUser alias here
@@ -1226,32 +1226,162 @@ const ManageUsers: React.FC = () => {
   });
 
   const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordModalType, setPasswordModalType] = useState<'single' | 'bulk'>('single');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
+  const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [passwordModalLoading, setPasswordModalLoading] = useState(false);
+  const [allTeacherPasswords, setAllTeacherPasswords] = useState<Array<{userId: string, email: string, name: string, temporaryPassword: string | null}>>([]);
+  const [allPasswordsVisible, setAllPasswordsVisible] = useState(false); // Track if all passwords are shown
+  
+  // Change Password Modal State
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [selectedUserForPasswordChange, setSelectedUserForPasswordChange] = useState<{userId: string, name: string, email: string} | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   // -----------------------------------------
 
   // --- ADD TOGGLE FUNCTION ---
   const togglePasswordVisibility = (userId: string, userName: string) => {
-    console.log(`Toggling visibility for user: ${userId}, Current state: ${!!passwordVisibility[userId]}`); // Log entry
-    const isCurrentlyVisible = passwordVisibility[userId];
+    try {
+      console.log(`Toggling visibility for user: ${userId}, Current state: ${!!passwordVisibility[userId]}`);
+      const isCurrentlyVisible = passwordVisibility[userId];
 
-    if (isCurrentlyVisible) {
-      console.log(`Hiding password for ${userId}`);
-      setPasswordVisibility(prev => {
-        const newState = { ...prev, [userId]: false };
-        console.log("New visibility state (hiding):", newState); // Log state change
-        return newState;
-      });
-    } else {
-      console.log(`Asking confirmation to show password for ${userId} (${userName})`);
-      if (window.confirm(`Are you sure you want to show the password for ${userName}?`)) {
-        console.log(`Admin confirmed, showing password for ${userId}`);
+      if (isCurrentlyVisible) {
+        console.log(`Hiding password for ${userId}`);
         setPasswordVisibility(prev => {
-          const newState = { ...prev, [userId]: true };
-          console.log("New visibility state (showing):", newState); // Log state change
+          const newState = { ...prev, [userId]: false };
+          console.log("New visibility state (hiding):", newState);
           return newState;
         });
       } else {
-        console.log(`Admin cancelled showing password for ${userId}`);
+        console.log(`Requesting admin password to show password for ${userId} (${userName})`);
+        setSelectedTeacherId(userId);
+        setSelectedTeacherName(userName);
+        setPasswordModalType('single');
+        setShowPasswordModal(true);
       }
+    } catch (error) {
+      console.error('Error in togglePasswordVisibility:', error);
+      toast.error('Failed to toggle password visibility');
+    }
+  };
+
+  // Handle showing/hiding all teacher passwords
+  const handleShowAllPasswords = () => {
+    try {
+      if (allPasswordsVisible) {
+        // Hide all passwords
+        console.log('Hiding all passwords');
+        setPasswordVisibility({});
+        setAllPasswordsVisible(false);
+        setAllTeacherPasswords([]);
+        toast.success('All passwords hidden');
+      } else {
+        // Show all passwords - open modal for admin verification
+        console.log('Opening bulk password modal');
+        setPasswordModalType('bulk');
+        setShowPasswordModal(true);
+      }
+    } catch (error) {
+      console.error('Error in handleShowAllPasswords:', error);
+      toast.error('Failed to toggle passwords');
+    }
+  };
+
+  // Handle password modal submission
+  const handlePasswordModalSubmit = async () => {
+    if (!adminPasswordInput.trim()) {
+      toast.error('Please enter your admin password');
+      return;
+    }
+
+    setPasswordModalLoading(true);
+    try {
+      // Get token from localStorage
+      const authData = localStorage.getItem('erp.auth');
+      const token = authData ? JSON.parse(authData).token : null;
+      
+      if (!token) {
+        toast.error('Authentication token not found');
+        setPasswordModalLoading(false);
+        return;
+      }
+
+      const schoolCode = user?.schoolCode || school?.code || 'SB';
+      console.log('Verifying admin password with school code:', schoolCode);
+      console.log('Token available:', !!token);
+      
+      const response = await schoolUserAPI.verifyAdminAndGetPasswords(
+        schoolCode,
+        adminPasswordInput,
+        passwordModalType === 'single' ? selectedTeacherId : null,
+        token
+      );
+
+      if (passwordModalType === 'single') {
+        // Check if password exists
+        const teacherData = response.data;
+        if (!teacherData || !teacherData.temporaryPassword) {
+          toast.error('Password not available. This user may have been created without storing the temporary password.');
+          setShowPasswordModal(false);
+          setAdminPasswordInput('');
+          setSelectedTeacherId(null);
+          setSelectedTeacherName('');
+          return;
+        }
+        
+        // Show single password
+        setPasswordVisibility(prev => ({
+          ...prev,
+          [selectedTeacherId!]: true
+        }));
+        toast.success('Password revealed');
+      } else {
+        // Show all passwords
+        const teachersWithPasswords = Array.isArray(response.data) 
+          ? response.data.filter((t: any) => t.temporaryPassword) 
+          : [];
+        
+        if (teachersWithPasswords.length === 0) {
+          toast.error('No passwords available. Teachers may have been created without storing temporary passwords.');
+          setShowPasswordModal(false);
+          setAdminPasswordInput('');
+          return;
+        }
+        
+        setAllTeacherPasswords(response.data || []);
+        const visibilityState: Record<string, boolean> = {};
+        (response.data || []).forEach((teacher: any) => {
+          if (teacher.temporaryPassword) {
+            visibilityState[teacher.userId] = true;
+          }
+        });
+        setPasswordVisibility(visibilityState);
+        setAllPasswordsVisible(true); // Mark that all passwords are now visible
+        
+        const availableCount = teachersWithPasswords.length;
+        const totalCount = response.count || (Array.isArray(response.data) ? response.data.length : 0);
+        
+        if (availableCount < totalCount) {
+          toast.success(`Revealed ${availableCount} of ${totalCount} teacher passwords. Some passwords are not available.`, { duration: 5000 });
+        } else {
+          toast.success(`Revealed ${availableCount} teacher passwords`);
+        }
+      }
+
+      // Close modal and reset
+      setShowPasswordModal(false);
+      setAdminPasswordInput('');
+      setSelectedTeacherId(null);
+      setSelectedTeacherName('');
+    } catch (error: any) {
+      console.error('Error verifying admin password:', error);
+      toast.error(error.message || 'Invalid admin password');
+    } finally {
+      setPasswordModalLoading(false);
     }
   };
   const resetForm = () => {
@@ -1780,7 +1910,7 @@ const ManageUsers: React.FC = () => {
               email: userData.email || 'No email',
               role: userData.role,
               phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
-              temporaryPassword: userData.tempPassword || null,
+              temporaryPassword: userData.temporaryPassword || userData.tempPassword || null,
               address: userData.address?.permanent?.street || userData.address?.street || userData.address,
               isActive: userData.isActive !== false,
               createdAt: userData.createdAt || new Date().toISOString(),
@@ -1804,7 +1934,7 @@ const ManageUsers: React.FC = () => {
               // Ensure teacherDetails is properly structured if needed later
               processedUser.teacherDetails = {
                 employeeId: userData.teacherDetails?.employeeId || userData.employeeId || 'Not assigned',
-                temporaryPassword: userData.tempPassword || null,
+                temporaryPassword: userData.temporaryPassword || userData.tempPassword || null,
                 // Make sure subjects is handled correctly as an array
                 subjects: Array.isArray(userData.teacherDetails?.subjects)
                   ? userData.teacherDetails.subjects
@@ -1834,7 +1964,7 @@ const ManageUsers: React.FC = () => {
                   email: userData.email || 'No email',
                   role: role,
                   phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
-                  temporaryPassword: userData.tempPassword || null,
+                  temporaryPassword: userData.temporaryPassword || userData.tempPassword || null,
                   address: userData.address?.permanent?.street || userData.address?.street || userData.address,
                   isActive: userData.isActive !== false,
                   createdAt: userData.createdAt || new Date().toISOString()
@@ -1863,7 +1993,17 @@ const ManageUsers: React.FC = () => {
         }
 
         console.log('Processed users:', allUsers);
-        console.log('Processed Users with Passwords:', allUsers.filter(u => u.role === 'teacher').map(t => ({ id: t.userId, pass: t.temporaryPassword }))); // Log teacher IDs and passwords
+        console.log('Processed Users with Passwords:', allUsers.filter(u => u.role === 'teacher').map(t => ({ 
+          id: t.userId, 
+          name: t.name,
+          pass: t.temporaryPassword,
+          hasPassword: !!t.temporaryPassword 
+        }))); // Log teacher IDs and passwords
+        console.log('Raw teacher data from API:', response.data?.filter((u: any) => u.role === 'teacher').map((t: any) => ({
+          userId: t.userId,
+          temporaryPassword: t.temporaryPassword,
+          tempPassword: t.tempPassword
+        })));
         setUsers(allUsers);
 
       } catch (apiError) {
@@ -2866,43 +3006,104 @@ const ManageUsers: React.FC = () => {
     try {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
-      const schoolCode = user?.schoolCode || 'P';
-
+      
       if (!token) {
-        toast.error('Authentication required');
+        toast.error('Authentication token not found');
         return;
       }
 
-      // Make API call to reset password
+      const schoolCode = user?.schoolCode || school?.code || 'SB';
+      
       const response = await schoolUserAPI.resetPassword(schoolCode, userId, token);
-
-      // Find the user to get email and role (try both userId and _id)
-      const resetUser = users.find(u => u.userId === userId || u._id === userId);
-
-      console.log('Reset password - userId passed:', userId);
-      console.log('Reset password - found user:', resetUser);
-
-      // Show credentials modal with new password from response
-      if (response.data && resetUser) {
-        // Always prioritize the actual userId from the user object
-        const displayUserId = resetUser.userId || resetUser._id;
-
+      
+      if (response.data) {
         setShowResetCredentials({
-          userId: displayUserId,
+          userId: response.data.userId,
           password: response.data.password,
-          email: response.data.email || resetUser.email || 'No email provided',
-          role: resetUser.role || 'Unknown'
+          email: response.data.email,
+          role: response.data.role
         });
-
-        console.log('Reset password - showing credentials for userId:', displayUserId);
-      } else {
-        toast.success('Password reset successfully. New password sent to user email.');
+        
+        toast.success('Password reset successfully');
+        fetchUsers(); // Refresh the list
       }
-
-      console.log('Password reset for user:', userId);
     } catch (error: any) {
       console.error('Error resetting password:', error);
       toast.error(error.response?.data?.message || 'Failed to reset password');
+    }
+  };
+
+  // Handle opening change password modal
+  const handleOpenChangePassword = (userId: string, name: string, email: string) => {
+    console.log('Opening change password modal for:', { userId, name, email });
+    setSelectedUserForPasswordChange({ userId, name, email });
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setShowChangePasswordModal(true);
+  };
+
+  // Handle changing password
+  const handleChangePassword = async () => {
+    if (!selectedUserForPasswordChange) {
+      console.error('No user selected for password change');
+      return;
+    }
+
+    console.log('Starting password change for:', selectedUserForPasswordChange.userId);
+
+    // Validation
+    if (!newPassword || !confirmNewPassword) {
+      toast.error('Please enter both password fields');
+      return;
+    }
+
+    if (newPassword.trim() === '') {
+      toast.error('Password cannot be empty');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    try {
+      const authData = localStorage.getItem('erp.auth');
+      const token = authData ? JSON.parse(authData).token : null;
+      
+      if (!token) {
+        toast.error('Authentication token not found');
+        return;
+      }
+
+      const schoolCode = user?.schoolCode || school?.code || 'SB';
+      
+      console.log('Calling changePassword API with:', { schoolCode, userId: selectedUserForPasswordChange.userId });
+      
+      // Call API to change password
+      const response = await schoolUserAPI.changePassword(
+        schoolCode, 
+        selectedUserForPasswordChange.userId, 
+        newPassword,
+        token
+      );
+      
+      console.log('Change password response:', response);
+      
+      if (response.data || response.success) {
+        toast.success('Password changed successfully');
+        setShowChangePasswordModal(false);
+        setSelectedUserForPasswordChange(null);
+        setNewPassword('');
+        setConfirmNewPassword('');
+        fetchUsers(); // Refresh the list
+      }
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast.error(error.response?.data?.message || error.message || 'Failed to change password');
+    } finally {
+      setChangePasswordLoading(false);
     }
   };
 
@@ -3057,9 +3258,16 @@ const ManageUsers: React.FC = () => {
       window.URL.revokeObjectURL(url);
 
       toast.success(`${role} template downloaded successfully!`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Template generation error:', error);
-      toast.error('Failed to generate template. Please try again.');
+      toast.error('API template failed. Using fallback template.');
+      // Fallback to old template generation if API fails
+      try {
+        generateTemplateOld(role);
+      } catch (fallbackError) {
+        console.error('Fallback template error:', fallbackError);
+        toast.error('Failed to generate template. Please try again.');
+      }
     }
   };
 
@@ -3070,6 +3278,7 @@ const ManageUsers: React.FC = () => {
 
     let headers: string[] = [];
     let sampleRow: string[] = [];
+    let csvRows: string[] = [];
 
     if (role === 'student') {
       // Comprehensive student export headers - matching template fields
@@ -4152,25 +4361,51 @@ const ManageUsers: React.FC = () => {
     setImportProgress(0);
 
     try {
-      const schoolCode = user?.schoolCode || 'P';
+      const schoolCode = user?.schoolCode || 'SB';
+      console.log('Starting import for school:', schoolCode);
+      
       const response = await exportImportAPI.importUsers(schoolCode, importFile);
+      console.log('Import response:', response);
 
       setImportProgress(100);
-      setImportResults(response.data.results);
+      
+      // Handle different response structures
+      const results = response.data?.results || response.data || { successData: [], errors: [] };
+      
+      // Backend returns 'successData' not 'success'
+      const successArray = Array.isArray(results.successData) ? results.successData : 
+                          Array.isArray(results.success) ? results.success : [];
+      const errorsArray = Array.isArray(results.errors) ? results.errors : [];
+      
+      // Use insertedCount if available (actual DB inserts)
+      const actualInserted = results.insertedCount || successArray.length;
+      
+      // Ensure results has the expected structure
+      const importResults = {
+        success: successArray,
+        errors: errorsArray
+      };
+      
+      setImportResults(importResults);
 
-      if (response.data.results.success.length > 0) {
-        toast.success(`Successfully imported ${response.data.results.success.length} users`);
-        // Refresh the user list
-        fetchUsers();
+      if (actualInserted > 0) {
+        toast.success(`Successfully imported ${actualInserted} users`);
+        // Don't refresh yet - wait for user to click "Done"
+        // fetchUsers will be called when modal closes
       }
 
-      if (response.data.results.errors.length > 0) {
-        toast.error(`${response.data.results.errors.length} users failed to import`);
+      if (errorsArray.length > 0) {
+        toast.error(`${errorsArray.length} rows had errors`);
+      }
+      
+      if (actualInserted === 0 && errorsArray.length === 0) {
+        toast.error('No users were imported. Please check your CSV file.');
       }
 
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.response?.data?.message || 'Failed to import users. Please try again.');
+      setImportResults({ success: [], errors: [{ row: 0, error: error.message, data: {} }] });
     } finally {
       setIsImporting(false);
     }
@@ -4883,8 +5118,33 @@ const ManageUsers: React.FC = () => {
     setSelectedSection('all'); // Reset section when grade changes
   };
   const userData = user as DisplayUser;
-  return (
-    <div className="space-y-6">
+  
+  // Add error boundary state
+  const [hasRenderError, setHasRenderError] = React.useState(false);
+  
+  if (hasRenderError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
+          <p className="text-gray-600 mb-4">There was an error rendering the page.</p>
+          <button
+            onClick={() => {
+              setHasRenderError(false);
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  try {
+    return (
+      <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
@@ -5052,7 +5312,15 @@ const ManageUsers: React.FC = () => {
               <span>Export</span>
             </button>
             <button
-              onClick={() => setShowImportModal(true)}
+              onClick={() => {
+                try {
+                  console.log('Opening import modal for:', activeTab);
+                  setShowImportModal(true);
+                } catch (error) {
+                  console.error('Error opening import modal:', error);
+                  toast.error('Failed to open import dialog');
+                }
+              }}
               className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               <Upload className="h-4 w-4" />
@@ -5066,6 +5334,29 @@ const ManageUsers: React.FC = () => {
               <FileText className="h-4 w-4" />
               <span>Template</span>
             </button>
+            {activeTab === 'teacher' && (
+              <button
+                onClick={handleShowAllPasswords}
+                className={`flex items-center space-x-2 px-4 py-2 border rounded-lg ${
+                  allPasswordsVisible 
+                    ? 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100' 
+                    : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                }`}
+                title={allPasswordsVisible ? "Hide all teacher passwords" : "Show all teacher passwords (requires admin password)"}
+              >
+                {allPasswordsVisible ? (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    <span>Hide All Passwords</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    <span>Show All Passwords</span>
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={async () => {
                 setShowAddModal(true);
@@ -5179,13 +5470,7 @@ const ManageUsers: React.FC = () => {
                                       >
                                         <Edit className="h-4 w-4" />
                                       </button>
-                                      <button
-                                        onClick={() => handleResetPassword(student.userId || student._id)}
-                                        className="text-purple-600 hover:text-purple-900 p-1 rounded hover:bg-purple-50"
-                                        title="Reset Password"
-                                      >
-                                        <RotateCcw className="h-4 w-4" />
-                                      </button>
+                                      {/* Reset Password removed for students */}
                                       <button
                                         onClick={() => handleDeleteUser(student._id, student.name || `User ${student._id}`)}
                                         className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
@@ -5295,32 +5580,30 @@ const ManageUsers: React.FC = () => {
                           {/* Password Column - Access user.temporaryPassword directly */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             <div className="flex items-center space-x-1">
-                              {/* Display Password with Show/Hide */}
-                              <span className={`flex-grow font-mono text-xs ${!user.temporaryPassword ? 'text-gray-400 italic' : 'text-gray-700'}`}>
-                                {/* Use user.userId for the visibility state key */}
-                                {passwordVisibility[user.userId]
-                                  ? (user.temporaryPassword || '-')
-                                  : (user.temporaryPassword ? '********' : '-')
-                                }
-                              </span>
-                              {/* Show/Hide Button */}
-                              {user.temporaryPassword && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Pass user.userId and user.name.displayName
-                                    togglePasswordVisibility(user.userId, user.name?.displayName || 'this user');
-                                  }}
-                                  className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
-                                  title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires confirmation)"}
-                                  type="button"
-                                >
-                                  {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
-                                </button>
-                              )}
-                              {/* Show '-' explicitly if no password exists */}
-                              {!user.temporaryPassword && (
-                                <span className="font-mono text-xs text-gray-400 italic">-</span>
+                              {(user as any).temporaryPassword ? (
+                                <>
+                                  {/* Display Password with Show/Hide */}
+                                  <span className="flex-grow font-mono text-xs text-gray-700">
+                                    {passwordVisibility[user.userId] 
+                                      ? (user as any).temporaryPassword 
+                                      : '********'
+                                    }
+                                  </span>
+                                  {/* Show/Hide Button */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      togglePasswordVisibility(user.userId, (user as any).name?.displayName || 'this user');
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
+                                    title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires admin password)"}
+                                    type="button"
+                                  >
+                                    {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">Not Available</span>
                               )}
                             </div>
                           </td>
@@ -5371,13 +5654,23 @@ const ManageUsers: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => handleResetPassword(user.userId || user._id)}
-                            className="text-purple-600 hover:text-purple-900 p-1 rounded hover:bg-purple-50"
-                            title="Reset Password"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </button>
+                          {/* Change Password only for teachers */}
+                          {activeTab === 'teacher' && (
+                            <button
+                              onClick={() => {
+                                console.log('Change password clicked for:', user.userId, user.email);
+                                handleOpenChangePassword(
+                                  user.userId || user._id, 
+                                  (user as any).name?.displayName || (user as any).name || 'User',
+                                  user.email
+                                );
+                              }}
+                              className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                              title="Change Password (Set New Password)"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </button>
+                          )}
                           {/* Delete button - prevent self-deletion */}
                           <button
                             onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
@@ -5400,8 +5693,8 @@ const ManageUsers: React.FC = () => {
 
       {/* Add User Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto relative z-[61]">
             <h3 className="text-xl font-bold text-gray-900 mb-6">
               Add New {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - Enrollment Form
             </h3>
@@ -7001,8 +7294,8 @@ const ManageUsers: React.FC = () => {
 
       {/* Edit User Modal */}
       {showEditModal && editingUser && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto relative z-[61]">
             <h3 className="text-xl font-bold text-gray-900 mb-6">Edit User - {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}</h3>
             <form onSubmit={handleUpdateUser} className="space-y-6">
 
@@ -7900,8 +8193,8 @@ const ManageUsers: React.FC = () => {
 
       {/* Credentials Modal */}
       {showCredentials && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
             <div className="p-6">
               <div className="text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
@@ -7981,8 +8274,8 @@ const ManageUsers: React.FC = () => {
 
       {/* Reset Password Credentials Modal */}
       {showResetCredentials && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
             <div className="p-6">
               <div className="text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100">
@@ -8062,12 +8355,12 @@ const ManageUsers: React.FC = () => {
 
       {/* Import Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative z-[61]">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900">
-                  Import {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}s
+                  Import {activeTab ? activeTab.charAt(0).toUpperCase() + activeTab.slice(1) : 'User'}s
                 </h3>
                 <button
                   onClick={() => {
@@ -8281,6 +8574,9 @@ const ManageUsers: React.FC = () => {
                       )}
                       <button
                         onClick={() => {
+                          // Refresh the user list to show newly imported users
+                          fetchUsers();
+                          // Close the modal and reset state
                           setShowImportModal(false);
                           setImportFile(null);
                           setImportPreview([]);
@@ -8300,8 +8596,220 @@ const ManageUsers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Password Verification Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md relative z-[71]">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800">
+                {passwordModalType === 'single' 
+                  ? `Verify Admin Password${selectedTeacherName ? ` - ${selectedTeacherName}` : ''}` 
+                  : 'Show All Teacher Passwords'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setAdminPasswordInput('');
+                  setSelectedTeacherId(null);
+                  setSelectedTeacherName('');
+                }}
+                className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800">
+                      Admin Authentication Required
+                    </p>
+                    <p className="text-xs text-yellow-700 mt-1">
+                      {passwordModalType === 'single'
+                        ? `Enter your admin password to view the password${selectedTeacherName ? ` for ${selectedTeacherName}` : ''}`
+                        : 'Enter your admin password to reveal all teacher passwords'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-700">
+                  <strong>Note:</strong> Only passwords stored during user creation are available. 
+                  Users created before this feature may not have viewable passwords.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Admin Password
+                </label>
+                <input
+                  type="password"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handlePasswordModalSubmit();
+                    }
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 p-6 bg-gray-50 border-t rounded-b-xl">
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setAdminPasswordInput('');
+                  setSelectedTeacherId(null);
+                  setSelectedTeacherName('');
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePasswordModalSubmit}
+                disabled={passwordModalLoading || !adminPasswordInput.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {passwordModalLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    <span>Show Password</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && selectedUserForPasswordChange && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Change Password</h3>
+                <button
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setSelectedUserForPasswordChange(null);
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Set a new password for <strong>{selectedUserForPasswordChange.name}</strong>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Email: {selectedUserForPasswordChange.email}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter new password"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm New Password *
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Re-enter new password"
+                  />
+                </div>
+
+                {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
+                  <div className="p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-xs text-red-600">Passwords do not match</p>
+                  </div>
+                )}
+
+                {newPassword && newPassword.trim() !== '' && (
+                  <div className="p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-xs text-green-600">Password length: {newPassword.length} characters</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setSelectedUserForPasswordChange(null);
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+                  disabled={changePasswordLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleChangePassword}
+                  disabled={changePasswordLoading || !newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.trim() === ''}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {changePasswordLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Changing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="h-4 w-4" />
+                      <span>Change Password</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+  } catch (error) {
+    console.error('Render error in ManageUsers:', error);
+    setHasRenderError(true);
+    return null;
+  }
 };
 
 export default ManageUsers;

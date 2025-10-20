@@ -131,6 +131,25 @@ export const schoolUserAPI = {
     }
   },
 
+  // Change user password (admin sets new password)
+  changePassword: async (schoolCode: string, userId: string, newPassword: string, token: string) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/school-users/${schoolCode}/users/${userId}/change-password`,
+        { newPassword },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to change password');
+    }
+  },
+
   // Toggle user status
   toggleStatus: async (schoolCode: string, userId: string, isActive: boolean, token: string) => {
     try {
@@ -214,37 +233,54 @@ export const schoolUserAPI = {
     }
   },
 
-  // --- ADD THIS NEW FUNCTION FOR FILE IMPORT ---
+  // Import users from CSV
   importUsers: async (schoolCode: string, file: File, role: 'student' | 'teacher', token: string) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('role', role); // Send the selected role to the backend
+      formData.append('role', role);
 
-      // This path now matches the route we added in schoolUsers.js
       const response = await axios.post(
         `${API_BASE_URL}/school-users/${schoolCode}/import/users`,
         formData,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data' // Required for file uploads
+            'Content-Type': 'multipart/form-data'
           }
         }
       );
-      return response; // Return the whole response so .data can be accessed in the component
+      return response;
     } catch (error: any) {
-      // Throw the structure the component expects
       if (error.response) {
-        // Use the error structure from the backend if available
         throw error.response.data;
       } else {
-        // Generic fallback error
         throw new Error('Import failed: An unknown error occurred');
       }
     }
+  },
+
+  // Verify admin password and get teacher passwords
+  verifyAdminAndGetPasswords: async (schoolCode: string, adminPassword: string, teacherUserId: string | null, token: string) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/school-users/${schoolCode}/verify-admin-password`,
+        {
+          adminPassword,
+          teacherUserId
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to verify password');
+    }
   }
-  // ---------------------------------------------
 };
 
 // School login API
