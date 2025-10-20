@@ -33,7 +33,8 @@ const MessagesPage: React.FC = () => {
 
   // Form state (for sending a new message) - defaults to empty string to enforce selection
   const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
   const [selectedClass, setSelectedClass] = useState(''); // Changed from 'ALL'
   const [selectedSection, setSelectedSection] = useState(''); // Changed from 'ALL'
   const [availableSections, setAvailableSections] = useState<any[]>([]);
@@ -179,8 +180,8 @@ const MessagesPage: React.FC = () => {
 
   // Preview message
   const handlePreview = () => {
-    if (!title.trim() || !body.trim()) {
-      setError('Please fill in both title and message body');
+    if (!title.trim() || !subject.trim() || !message.trim()) {
+      setError('Please fill in all fields');
       return;
     }
     // Validation: Require specific class/section for sending (non-empty, non-'ALL')
@@ -210,23 +211,22 @@ const MessagesPage: React.FC = () => {
         throw new Error('Please select a specific Class and Section to send a message.');
       }
 
-      // Backend gets schoolId from req.user.schoolId, no need to send it
+      // Only send required fields as per new backend schema
       const payload = {
+        class: selectedClass,
+        section: selectedSection,
         title,
-        body,
-        class: selectedClass, // Correct class value (e.g., '7') is sent
-        section: selectedSection // Correct section value (e.g., 'A') is sent
+        subject,
+        message
       };
 
-      // Message is saved here (backend `messagesController.js` handles saving to message collection with class/section attributes)
       const response = await sendMessageAPI(payload);
 
       if (response.success) {
-        const sentCount = response.data.sentCount;
-        setSuccess(`Message sent successfully to ${sentCount} students!`);
+        setSuccess('Message sent successfully!');
         setTitle('');
-        setBody('');
-
+        setSubject('');
+        setMessage('');
         // Re-fetch the message list to show the new message
         fetchMessages(1, messagesFilterClass, messagesFilterSection);
 
@@ -479,15 +479,29 @@ const MessagesPage: React.FC = () => {
             />
           </div>
           <div>
-            <label htmlFor="body" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
+              Subject <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              id="subject"
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Enter message subject"
+              disabled={!hasClasses() || classList.length === 0}
+            />
+          </div>
+          <div>
+            <label htmlFor="message" className="block text-sm font-medium text-gray-700">
               Message Body <span className="text-red-500">*</span>
             </label>
             <textarea
-              id="body"
+              id="message"
               rows={5}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
               placeholder="Type your message here..."
               disabled={!hasClasses() || classList.length === 0}
             ></textarea>
@@ -498,7 +512,7 @@ const MessagesPage: React.FC = () => {
           <button
             // Disabled if class/section is not selected (empty string)
             onClick={handlePreview}
-            disabled={!hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection}
+            disabled={!hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Eye className="h-5 w-5 mr-2" /> Preview
@@ -506,8 +520,8 @@ const MessagesPage: React.FC = () => {
           <button
             onClick={handleSendMessage}
             // Disabled if class/section is not selected (empty string)
-            disabled={loading || !hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection}
-            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${loading || !hasClasses() || classList.length === 0 || !title || !body || !selectedClass || !selectedSection
+            disabled={loading || !hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection}
+            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${loading || !hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection
               ? 'bg-blue-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700'
               } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}

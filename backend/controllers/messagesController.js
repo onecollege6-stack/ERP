@@ -325,66 +325,36 @@ exports.previewMessage = async (req, res) => {
 // ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
 // ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
 // ... (rest of the file remains unchanged)
-// ... (rest of the file remains unchanged)
 
 // Get messages with filtering
 exports.getMessages = async (req, res) => {
   try {
-    console.log('📋 Fetching messages with filters:', req.query);
-    
-    const { 
-      schoolId, 
-      class: targetClass, 
-      section: targetSection, 
-      page = 1, 
-      limit = 20,
-      status = 'sent'
-    } = req.query;
-    
-    // Build query
-    const query = {
-      schoolId: req.user.schoolId,
-      status: status
-    };
-    
-    // Filter by target class/section if specified
-    if (targetClass && targetClass !== 'ALL') {
-      query['target.class'] = targetClass;
-    }
-    
-    if (targetSection && targetSection !== 'ALL') {
-      query['target.section'] = targetSection;
-    }
-    
-    // Pagination
+    console.log('Fetching messages with filters:', req.query);
+    const { class: filterClass, section: filterSection, page = 1, limit = 20 } = req.query;
+
+    // Build query for new schema
+    const query = {};
+    if (filterClass && filterClass !== 'ALL') query.class = filterClass;
+    if (filterSection && filterSection !== 'ALL') query.section = filterSection;
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    // Execute query with pagination
     const messages = await Message.find(query)
-      .populate('sender', 'name email')
-      .populate('createdBy', 'name email')
-      .sort({ sentAt: -1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
-    
-    // Get total count for pagination
     const totalMessages = await Message.countDocuments(query);
-    
-    // Format response
-    const formattedMessages = messages.map(message => ({
-      id: message._id,
-      title: message.subject,
-      body: message.content,
-      target: `${message.target?.class || 'ALL'} - ${message.target?.section || 'ALL'}`,
-      sentAt: message.sentAt,
-      recipientsCount: message.totalRecipients,
-      readCount: message.readCount,
-      status: message.status,
-      sender: message.createdBy?.name?.displayName || 'Unknown',
-      messageType: message.messageType,
-      priority: message.priority
+
+    const formattedMessages = messages.map(msg => ({
+      id: msg._id,
+      class: msg.class,
+      section: msg.section,
+      adminId: msg.adminId,
+      title: msg.title,
+      subject: msg.subject,
+      message: msg.message,
+      createdAt: msg.createdAt
     }));
-    
+
     res.json({
       success: true,
       data: {
@@ -397,9 +367,8 @@ exports.getMessages = async (req, res) => {
         }
       }
     });
-    
   } catch (error) {
-    console.error('❌ Error fetching messages:', error);
+    console.error('Error fetching messages:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch messages',
