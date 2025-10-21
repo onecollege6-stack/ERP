@@ -76,6 +76,7 @@ class UserGenerator {
         userId,
         email: userData.email,
         password: hashedPassword,
+        temporaryPassword: plainPassword, // Store plain password for admin access
         role: userData.role.toLowerCase(),
         name: {
           firstName: userData.firstName || userData.name?.firstName || 'User',
@@ -425,7 +426,7 @@ class UserGenerator {
   /**
    * Get user by ID or email from school database
    */
-  static async getUserByIdOrEmail(schoolCode, identifier) {
+  static async getUserByIdOrEmail(schoolCode, identifier, includePassword = false) {
     try {
       const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
       const collections = ['admins', 'teachers', 'students', 'parents'];
@@ -441,12 +442,19 @@ class UserGenerator {
         });
         
         if (user) {
-          // Remove password from return object
-          const { password, ...userWithoutPassword } = user;
-          return {
-            ...userWithoutPassword,
-            collection: collectionName
-          };
+          // Optionally remove password from return object
+          if (includePassword) {
+            return {
+              ...user,
+              collection: collectionName
+            };
+          } else {
+            const { password, ...userWithoutPassword } = user;
+            return {
+              ...userWithoutPassword,
+              collection: collectionName
+            };
+          }
         }
       }
       
@@ -482,10 +490,11 @@ class UserGenerator {
       const collection = connection.collection(collectionName);
       const users = await collection.find(
         { _placeholder: { $ne: true } },
-        { projection: { password: 0 } } // Exclude passwords
+        { projection: { password: 0 } } // Exclude hashed password only, keep temporaryPassword
       ).toArray();
       
       console.log(`✅ Found ${users.length} ${role}s in ${collectionName} collection`);
+      console.log(`🔑 Sample user fields:`, users.length > 0 ? Object.keys(users[0]) : 'No users');
       
       return users;
     } catch (error) {

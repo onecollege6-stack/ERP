@@ -2130,20 +2130,21 @@ exports.syncAllSchoolsToDatabase = async (req, res) => {
 // Get classes and sections for a school (canonical endpoint)
 exports.getClassesForSchool = async (req, res) => {
   try {
-    const { schoolId } = req.params;
+    const { schoolId: schoolIdOrCode } = req.params;
     const userSchoolId = req.user.schoolId;
     const userRole = req.user.role;
 
-    // Validate school ownership
-    if (userRole === 'admin' && userSchoolId.toString() !== schoolId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied: Cannot access other schools\' data'
-      });
+    // Resolve school by ID or by code (case-insensitive)
+    let school = null;
+    try {
+      school = await School.findById(schoolIdOrCode);
+    } catch (e) {
+      school = null;
+    }
+    if (!school) {
+      school = await School.findOne({ code: new RegExp(`^${schoolIdOrCode}$`, 'i') });
     }
 
-    // Get school information
-    const school = await School.findById(schoolId);
     if (!school) {
       return res.status(404).json({
         success: false,
@@ -2151,13 +2152,21 @@ exports.getClassesForSchool = async (req, res) => {
       });
     }
 
+    // Validate school ownership for admin users
+    if (userRole === 'admin' && userSchoolId.toString() !== school._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Cannot access other schools\' data'
+      });
+    }
+
     // Get school database connection
     const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(school.code);
     const classesCollection = schoolConnection.collection('classes');
 
-    // Fetch all active classes
+    // Fetch all active classes by resolved school _id
     const classes = await classesCollection.find({
-      schoolId: schoolId,
+      schoolId: school._id.toString(),
       isActive: true
     }).sort({ className: 1 }).toArray();
 
@@ -2165,8 +2174,8 @@ exports.getClassesForSchool = async (req, res) => {
     const transformedClasses = classes.map(cls => ({
       classId: cls.classId || cls._id.toString(),
       className: cls.className,
-      sections: cls.sections ? cls.sections.map((section, index) => ({
-        sectionId: `${cls.classId}_${section}`,
+      sections: cls.sections ? cls.sections.map((section) => ({
+        sectionId: `${cls.classId || cls._id.toString()}_${section}`,
         sectionName: section
       })) : []
     }));

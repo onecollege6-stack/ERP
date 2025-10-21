@@ -16,9 +16,11 @@ router.get('/structures', feesController.getFeeStructures);
 
 // Student Fee Records routes
 router.get('/records', feesController.getStudentFeeRecords);
+router.get('/records/:studentId', feesController.getStudentFeeRecord);
 router.get('/stats', feesController.getFeeStats);
 
 // Payment routes
 router.post('/records/:studentId/offline-payment', feesController.recordOfflinePayment);
+router.get('/receipts/:receiptNumber', feesController.downloadReceiptPdf);
 
 module.exports = router;

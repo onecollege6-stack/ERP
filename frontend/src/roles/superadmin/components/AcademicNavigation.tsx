@@ -18,8 +18,6 @@ interface TestData {
   name: string;
   className: string;
   description: string;
-  maxMarks: number;
-  weightage: number;
   isActive: boolean;
 }
 
@@ -41,6 +39,8 @@ const AcademicNavigation: React.FC = () => {
   const [newSection, setNewSection] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [newTestName, setNewTestName] = useState('');
+  const [allSections, setAllSections] = useState(false);
+  const [allClasses, setAllClasses] = useState(false);
 
   const school = schools.find(s => s.id === selectedSchoolId);
 
@@ -83,7 +83,33 @@ const AcademicNavigation: React.FC = () => {
       console.log('Classes response:', response);
       if (response.success) {
         console.log('Classes data:', response.data.classes);
-        setClasses(response.data.classes || []);
+        // Sort classes in order: LKG, UKG, then 1-12
+        const sortedClasses = (response.data.classes || []).sort((a: ClassData, b: ClassData) => {
+          const classOrder = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+          
+          const aIndex = classOrder.indexOf(a.className);
+          const bIndex = classOrder.indexOf(b.className);
+          
+          // If both are in the predefined order, sort by index
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex;
+          }
+          // If only a is in the order, it comes first
+          if (aIndex !== -1) return -1;
+          // If only b is in the order, it comes first
+          if (bIndex !== -1) return 1;
+          // If neither is in the order, sort alphabetically
+          return a.className.localeCompare(b.className);
+        });
+        
+        // Sort sections within each class
+        sortedClasses.forEach((cls: ClassData) => {
+          if (cls.sections && cls.sections.length > 0) {
+            cls.sections.sort((a, b) => a.localeCompare(b));
+          }
+        });
+        
+        setClasses(sortedClasses);
       }
     } catch (error: any) {
       console.error('Error fetching classes:', error);
@@ -109,7 +135,24 @@ const AcademicNavigation: React.FC = () => {
           schoolCode: response.data.schoolCode,
           schoolName: response.data.schoolName
         });
-        setTests(response.data.tests || []);
+        
+        // Sort tests by class order: LKG, UKG, 1-12
+        const sortedTests = (response.data.tests || []).sort((a: TestData, b: TestData) => {
+          const classOrder = ['LKG', 'UKG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+          
+          const aIndex = classOrder.indexOf(a.className);
+          const bIndex = classOrder.indexOf(b.className);
+          
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex;
+          }
+          if (aIndex !== -1) return -1;
+          if (bIndex !== -1) return 1;
+          return a.className.localeCompare(b.className);
+        });
+        
+        setTests(sortedTests);
+        console.log('✅ Tests sorted by class order:', sortedTests);
       }
     } catch (error: any) {
       console.error('Error fetching tests:', error);
@@ -208,29 +251,40 @@ const AcademicNavigation: React.FC = () => {
 
   // Add new test
   const addTest = async () => {
-    if (!selectedClass || !newTestName.trim()) {
-      toast.error('Please select class and enter test name');
+    if (!allClasses && !selectedClass) {
+      toast.error('Please select a class or choose "All Classes"');
+      return;
+    }
+    
+    if (!newTestName.trim()) {
+      toast.error('Please enter test name');
       return;
     }
 
     try {
-      const selectedClassData = classes.find(c => c._id === selectedClass);
-      if (!selectedClassData) {
-        toast.error('Selected class not found');
-        return;
-      }
-
-      // Create test for all sections of the class
-      const testData = {
+      let testData: any = {
         name: newTestName.trim(),
-        className: selectedClassData.className,
-        description: `Test for Class ${selectedClassData.className}`,
-        maxMarks: 100,
-        weightage: 25,
+        description: allClasses ? `Test for all classes` : `Test for Class ${classes.find(c => c._id === selectedClass)?.className}`,
         isActive: true,
-        sections: selectedClassData.sections || ['A'], // Apply to all sections
-        academicYear: '2024-25'
+        academicYear: '2024-25',
+        allSections: allSections,
+        allClasses: allClasses
       };
+
+      if (!allClasses) {
+        const selectedClassData = classes.find(c => c._id === selectedClass);
+        if (!selectedClassData) {
+          toast.error('Selected class not found');
+          return;
+        }
+        testData.className = selectedClassData.className;
+        
+        if (allSections) {
+          testData.sections = selectedClassData.sections || [];
+        } else {
+          testData.sections = selectedClassData.sections || [];
+        }
+      }
 
       // Call API to create test
       const response = await testAPI.addTest(selectedSchoolId, testData);
@@ -238,11 +292,18 @@ const AcademicNavigation: React.FC = () => {
       console.log('Add test response:', response);
 
       if (response.success) {
-        toast.success(`Test "${newTestName}" created for all sections of Class ${selectedClassData.className}`);
+        const message = allClasses 
+          ? `Test "${newTestName}" created for all classes`
+          : allSections
+            ? `Test "${newTestName}" created for all sections of Class ${testData.className}`
+            : `Test "${newTestName}" created for Class ${testData.className}`;
+        toast.success(message);
 
         // Reset form
         setNewTestName('');
         setSelectedClass('');
+        setAllSections(false);
+        setAllClasses(false);
 
         // Refresh tests list
         await fetchTests();
@@ -252,7 +313,7 @@ const AcademicNavigation: React.FC = () => {
 
     } catch (error: any) {
       console.error('Error adding test:', error);
-      toast.error('Failed to add test');
+      toast.error(error.response?.data?.message || 'Failed to add test');
     }
   };
 
@@ -599,7 +660,8 @@ const AcademicNavigation: React.FC = () => {
                   <select
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    disabled={allClasses}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
                   >
                     <option value="">Select a class...</option>
                     {classes.map(cls => (
@@ -608,28 +670,66 @@ const AcademicNavigation: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newTestName}
-                      onChange={(e) => setNewTestName(e.target.value)}
-                      placeholder="Enter test name (e.g., Midterm, Unit Test 1)"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <button
-                      onClick={addTest}
-                      disabled={!selectedClass || !newTestName.trim() || loading}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      {loading ? 'Adding...' : 'Add Test'}
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={newTestName}
+                    onChange={(e) => setNewTestName(e.target.value)}
+                    placeholder="Enter test name (e.g., Midterm, Unit Test 1)"
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
                 </div>
-                {selectedClass && (
-                  <div className="mt-2 text-sm text-gray-600">
-                    This test will be created for <strong>all sections</strong> of Class {classes.find(c => c._id === selectedClass)?.className}
-                  </div>
-                )}
+                
+                {/* Checkboxes for All Sections and All Classes */}
+                <div className="mt-4 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allSections}
+                      onChange={(e) => setAllSections(e.target.checked)}
+                      disabled={allClasses}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <span>Create for all sections of selected class</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allClasses}
+                      onChange={(e) => {
+                        setAllClasses(e.target.checked);
+                        if (e.target.checked) {
+                          setSelectedClass('');
+                          setAllSections(true);
+                        }
+                      }}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <span className="font-medium">Create for ALL classes (all sections)</span>
+                  </label>
+                </div>
+
+                {/* Info message */}
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-800">
+                    {allClasses ? (
+                      <><strong>Note:</strong> This test will be created for all classes and all their sections. Admin will configure max marks and weightage later.</>
+                    ) : selectedClass && allSections ? (
+                      <><strong>Note:</strong> This test will be created for all sections of Class {classes.find(c => c._id === selectedClass)?.className}. Admin will configure max marks and weightage later.</>
+                    ) : selectedClass ? (
+                      <><strong>Note:</strong> This test will be created for Class {classes.find(c => c._id === selectedClass)?.className}. Admin will configure max marks and weightage later.</>
+                    ) : (
+                      <><strong>Note:</strong> Tests are created without max marks and weightage. Admin will configure these in the Scoring System.</>
+                    )}
+                  </p>
+                </div>
+
+                <button
+                  onClick={addTest}
+                  disabled={(!allClasses && !selectedClass) || !newTestName.trim() || loading}
+                  className="mt-4 w-full px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Creating Test...' : 'Create Test'}
+                </button>
               </div>
 
               {/* Tests List */}
@@ -647,9 +747,9 @@ const AcademicNavigation: React.FC = () => {
                         <div>
                           <h4 className="text-lg font-medium text-gray-900">{test.name}</h4>
                           <p className="text-sm text-gray-600">
-                            Class: {test.className} | Max Marks: {test.maxMarks} | Weightage: {test.weightage}%
+                            Test for Class {test.className}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">{test.description}</p>
+                          <p className="text-xs text-gray-500 mt-1">Scoring configured by school admin</p>
                         </div>
                         <button
                           onClick={() => deleteTest(test._id, test.name)}

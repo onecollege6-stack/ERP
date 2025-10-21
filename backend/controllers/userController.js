@@ -89,7 +89,14 @@ const generateSequentialUserId = async (schoolCode, role) => {
   try {
     const result = await sequencesCollection.findOneAndUpdate(
       { _id: sequenceId },
-      { $inc: { sequence_value: 1 } },
+      { 
+        $inc: { sequence_value: 1 },
+        $setOnInsert: { 
+          schoolCode: upperSchoolCode,
+          role: lowerRole,
+          createdAt: new Date()
+        }
+      },
       {
         returnDocument: 'after',
         upsert: true,
@@ -97,14 +104,10 @@ const generateSequentialUserId = async (schoolCode, role) => {
       }
     );
 
-    // --- Handle First-Time Upsert (Initialize to 1001) ---
+    // --- Handle First-Time Upsert (Initialize to 1) ---
     if (result && result.value && result.value.sequence_value === 1) {
-      const initResult = await sequencesCollection.findOneAndUpdate(
-        { _id: sequenceId, sequence_value: 1 },
-        { $set: { sequence_value: 1001 } },
-        { returnDocument: 'after', projection: { sequence_value: 1 } }
-      );
-      nextSequenceValue = (initResult && initResult.value) ? initResult.value.sequence_value : 1001;
+      // First user gets ID ending in 0001, so we keep sequence at 1
+      nextSequenceValue = 1;
     } else if (result && result.value && typeof result.value.sequence_value === 'number') {
       nextSequenceValue = result.value.sequence_value;
     } else {
@@ -113,11 +116,6 @@ const generateSequentialUserId = async (schoolCode, role) => {
       const current = await sequencesCollection.findOne({ _id: sequenceId });
       if (current && typeof current.sequence_value === 'number') {
         nextSequenceValue = current.sequence_value;
-        // If it's still 1, maybe the $set failed, try setting again (less likely needed)
-        if (nextSequenceValue === 1) {
-          await sequencesCollection.updateOne({ _id: sequenceId }, { $set: { sequence_value: 1001 } });
-          nextSequenceValue = 1001;
-        }
       } else {
         throw new Error(`Failed to retrieve or initialize sequence value for ${sequenceId} after upsert attempt.`);
       }
@@ -141,8 +139,53 @@ const generateSequentialUserId = async (schoolCode, role) => {
 
 // --- END: REPLACED SEQUENTIAL USER ID GENERATION ---
 
+/**
+ * Preview the next user ID WITHOUT incrementing the sequence
+ * This is used for UI preview only
+ */
+const previewNextUserId = async (schoolCode, role) => {
+  if (!schoolCode || !role) {
+    throw new Error('School code and role are required to preview user ID');
+  }
+  const upperSchoolCode = schoolCode.toUpperCase();
+  const lowerRole = role.toLowerCase();
+
+  let connection;
+  try {
+    connection = await SchoolDatabaseManager.getSchoolConnection(upperSchoolCode);
+  } catch (connError) {
+    console.error(`DB Connect Error for ${upperSchoolCode}: ${connError.message}`);
+    throw new Error(`Could not connect to database for school ${upperSchoolCode}`);
+  }
+
+  if (!connection) {
+    throw new Error(`Database connection object invalid for school ${upperSchoolCode}`);
+  }
+
+  const db = connection.db;
+  const sequencesCollection = db.collection('id_sequences');
+  const sequenceId = `${lowerRole}_sequence`;
+
+  // Just read the current value, don't increment
+  const currentSequence = await sequencesCollection.findOne({ _id: sequenceId });
+  
+  // If no sequence exists yet, the next one will be 1
+  const nextSequenceValue = currentSequence ? (currentSequence.sequence_value + 1) : 1;
+
+  // Format the ID
+  const rolePrefixes = { student: 'S', teacher: 'T', admin: 'A', parent: 'P' };
+  const prefix = rolePrefixes[lowerRole] || 'U';
+  const padding = 4;
+
+  const previewUserId = `${upperSchoolCode}-${prefix}-${String(nextSequenceValue).padStart(padding, '0')}`;
+
+  console.log(`Preview User ID: ${previewUserId} (Next Sequence: ${nextSequenceValue}) for role: ${role}, school: ${upperSchoolCode} [NOT INCREMENTED]`);
+  return previewUserId;
+};
+
 // --- Export the Corrected Function (and keep original export if needed elsewhere) ---
 exports.generateSequentialUserId = generateSequentialUserId;
+exports.previewNextUserId = previewNextUserId;
 
 // --- Original getNextUserId (Now uses the corrected generator) ---
 exports.getNextUserId = async (req, res) => {
@@ -188,10 +231,10 @@ exports.getNextUserId = async (req, res) => {
       return res.status(400).json({ message: 'School code not provided or could not be determined.' });
     }
 
-    // Generate the next sequential user ID using the corrected function
-    const nextUserId = await generateSequentialUserId(schoolCode, role);
+    // Preview the next user ID WITHOUT incrementing the sequence
+    const nextUserId = await previewNextUserId(schoolCode, role);
 
-    console.log(`✅ Generated next user ID: ${nextUserId}`);
+    console.log(`✅ Previewed next user ID: ${nextUserId} (sequence not incremented)`);
 
     res.json({
       success: true,

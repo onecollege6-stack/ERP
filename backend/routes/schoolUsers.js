@@ -28,7 +28,6 @@ router.get('/:schoolCode/users', schoolUserController.getAllSchoolUsers);
 // Get users by role
 router.get('/:schoolCode/users/role/:role', schoolUserController.getUsersByRole);
 
-// Get specific user
 router.get('/:schoolCode/users/:userId', schoolUserController.getUserById);
 
 // Update user
@@ -37,13 +36,17 @@ router.put('/:schoolCode/users/:userId', schoolUserController.updateUser);
 // Reset user password
 router.post('/:schoolCode/users/:userId/reset-password', schoolUserController.resetUserPassword);
 
+// Change user password (admin sets new password)
+router.post('/:schoolCode/users/:userId/change-password', schoolUserController.changeUserPassword);
+
+// Verify admin password and get teacher passwords
+router.post('/:schoolCode/verify-admin-password', schoolUserController.verifyAdminAndGetPasswords);
+
 // Toggle user status
 router.patch('/:schoolCode/users/:userId/status', schoolUserController.toggleUserStatus);
 
 // Delete user
 router.delete('/:schoolCode/users/:userId', schoolUserController.deleteUser);
-
-// Access matrix management
 router.get('/:schoolCode/access-matrix', schoolUserController.getAccessMatrix);
 router.put('/:schoolCode/access-matrix', schoolUserController.updateAccessMatrix);
 
