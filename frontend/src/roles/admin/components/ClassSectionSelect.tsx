@@ -4,7 +4,7 @@ import { classesAPI } from '../../../services/api';
 import { useAuth } from '../../../auth/AuthContext';
 
 interface ClassSectionSelectProps {
-  schoolId?: string; // Optional - if omitted use auth.user.schoolId
+  schoolCode?: string; // Optional - if omitted use auth.user.schoolCode
   valueClass: string;
   valueSection: string;
   onClassChange: (classValue: string) => void;
@@ -15,16 +15,14 @@ interface ClassSectionSelectProps {
 }
 
 interface ClassData {
-  classId: string;
+  _id: string;
   className: string;
-  sections: Array<{
-    sectionId: string;
-    sectionName: string;
-  }>;
+  sections: string[];
+  displayName: string;
 }
 
 const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
-  schoolId,
+  schoolCode,
   valueClass,
   valueSection,
   onClassChange,
@@ -37,19 +35,19 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
   const { user } = useAuth();
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
-  
+
   // Data state
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get the school ID to use
-  const targetSchoolId = schoolId || user?.schoolId;
+  // Get the school code to use
+  const targetSchoolCode = schoolCode || user?.schoolCode;
 
   // Fetch classes and sections from API
   const fetchClasses = async () => {
-    if (!targetSchoolId) {
-      setError('No school ID available');
+    if (!targetSchoolCode) {
+      setError('No school code available');
       return;
     }
 
@@ -72,7 +70,7 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       } else {
         setClasses([]);
       }
-      
+
     } catch (error: any) {
       console.error('Error fetching classes:', error);
       setError('Failed to load classes and sections');
@@ -82,15 +80,15 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
     }
   };
 
-  // Fetch classes on mount and when schoolId changes
+  // Fetch classes on mount and when schoolCode changes
   useEffect(() => {
     fetchClasses();
-  }, [targetSchoolId]);
+  }, [targetSchoolCode]);
 
   // Handle class change
   const handleClassChange = (className: string) => {
     onClassChange(className);
-    
+
     // Reset section when class changes
     if (className === 'ALL') {
       onSectionChange('ALL');
@@ -118,9 +116,9 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
   // Get available sections for the selected class
   const getAvailableSections = () => {
     if (valueClass === 'ALL') {
-      return [{ sectionId: 'ALL', sectionName: 'ALL' }];
+      return ['ALL'];
     }
-    
+
     const selectedClass = classes.find(c => c.className === valueClass);
     return selectedClass ? selectedClass.sections : [];
   };
@@ -209,7 +207,7 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
               )}
               {classes.map((classData) => (
                 <div
-                  key={classData.classId}
+                  key={classData._id}
                   className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
                   onClick={() => handleClassChange(classData.className)}
                 >
