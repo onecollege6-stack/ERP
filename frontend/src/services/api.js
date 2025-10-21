@@ -348,6 +348,8 @@ export const feesAPI = {
   createFeeStructure: (feeStructureData) => api.post('/fees/structures', feeStructureData),
   getFeeStructures: (params) => api.get('/fees/structures', { params }),
   getStudentFeeRecords: (params) => api.get('/fees/records', { params }),
+  getStudentFeeRecord: (studentId) => api.get(`/fees/records/${studentId}`),
+  downloadReceipt: (receiptNumber) => api.get(`/fees/receipts/${receiptNumber}`, { responseType: 'blob' }),
   recordOfflinePayment: (studentId, paymentData) => api.post(`/fees/records/${studentId}/offline-payment`, paymentData),
   getFeeStats: (params) => api.get('/fees/stats', { params }),
 };

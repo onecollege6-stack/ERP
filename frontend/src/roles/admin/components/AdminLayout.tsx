@@ -44,14 +44,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       ]
     },
     { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
-    {
-      name: 'Fees',
-      icon: CreditCard,
-      children: [
-        { name: 'Fee Structure', href: '/admin/fees/structure' },
-        { name: 'Fee Payments', href: '/admin/fees/payments' }
-      ]
-    },
+    { name: 'Fees', href: '/admin/fees/structure', icon: CreditCard },
     { name: 'Reports', href: '/admin/reports', icon: FileText },
   ];
 

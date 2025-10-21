@@ -29,6 +29,8 @@ const FeeStructureTab: React.FC = () => {
       description: ''
     }
   ]);
+  const [installmentCount, setInstallmentCount] = useState<number>(1);
+  const [cleanHundredsMode, setCleanHundredsMode] = useState<boolean>(true);
   const [applyToStudents, setApplyToStudents] = useState(false);
   const [existingStructures, setExistingStructures] = useState<any[]>([]);
   
@@ -89,6 +91,42 @@ const FeeStructureTab: React.FC = () => {
   // Calculate total
   const calculatedTotal = installments.reduce((sum, inst) => sum + (inst.amount || 0), 0);
 
+  const generateInstallments = () => {
+    const total = Number(totalAmount || 0);
+    const n = Math.max(1, Math.min(12, Number(installmentCount) || 1));
+    if (!total || total <= 0) return;
+
+    if (cleanHundredsMode && n > 1) {
+      const unit = 100;
+      if (total < unit * (n - 1)) {
+        setError(`Total amount must be at least ${unit * (n - 1)} to split ${n} installments with first ${n - 1} multiples of ${unit}.`);
+        return;
+      }
+      const base = Math.floor((total / n) / unit) * unit;
+      const first = Array.from({ length: n - 1 }).map(() => ({
+        name: '', amount: base, dueDate: '', description: ''
+      } as Installment));
+      const used = base * (n - 1);
+      const lastAmount = total - used;
+      const arr: Installment[] = [...first, { name: '', amount: lastAmount, dueDate: '', description: '' }]
+        .map((inst, i) => ({ ...inst, name: `Installment ${i + 1}` }));
+      setInstallments(arr);
+      return;
+    }
+
+    const base = Math.floor(total / n);
+    const remainder = total - base * n;
+    const arr: Installment[] = Array.from({ length: n }).map((_, i) => ({
+      name: `Installment ${i + 1}`,
+      amount: i < remainder ? base + 1 : base,
+      dueDate: '',
+      description: ''
+    }));
+    setInstallments(arr);
+  };
+
+  // (auto-fill dates feature removed per revert)
+
   // Save fee structure
   const handleSaveStructure = async () => {
     setError(null);
@@ -118,7 +156,6 @@ const FeeStructureTab: React.FC = () => {
           dueDate: i.dueDate,
           description: i.description,
         })),
-        academicYear,
         applyToStudents,
       };
       const res = await feesAPI.createFeeStructure(payload);
@@ -209,6 +246,7 @@ const FeeStructureTab: React.FC = () => {
               valueSection={selectedSection}
               onClassChange={setSelectedClass}
               onSectionChange={setSelectedSection}
+              showSection={false}
             />
 
             <div>
@@ -218,7 +256,8 @@ const FeeStructureTab: React.FC = () => {
               <input
                 type="text"
                 value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
+                readOnly
+                disabled
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -234,6 +273,28 @@ const FeeStructureTab: React.FC = () => {
                 type="number"
                 value={totalAmount}
                 onChange={(e) => setTotalAmount(e.target.value)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onKeyDown={(e) => {
+                  const allowedKeys = [
+                    'Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Home','End'
+                  ];
+                  if (allowedKeys.includes(e.key)) return;
+                  if ((e.ctrlKey || e.metaKey) && ['a','c','v','x'].includes(e.key.toLowerCase())) return;
+                  if (!/^[0-9]$/.test(e.key)) {
+                    e.preventDefault();
+                  }
+                }}
+                onPaste={(e) => {
+                  const text = (e.clipboardData || (window as any).clipboardData).getData('text');
+                  const digits = text.replace(/\D+/g, '');
+                  e.preventDefault();
+                  setTotalAmount(prev => {
+                    const selection = window.getSelection?.();
+                    // Fallback: just replace entirely
+                    return digits;
+                  });
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Enter total amount"
               />
@@ -242,14 +303,23 @@ const FeeStructureTab: React.FC = () => {
             <div className="bg-gray-50 p-4 rounded-md">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-medium text-gray-900">Installments</h3>
-                <button
-                  type="button"
-                  onClick={handleAddInstallment}
-                  className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add
-                </button>
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={installmentCount}
+                    onChange={(e) => setInstallmentCount(Number(e.target.value))}
+                    className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={generateInstallments}
+                    className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Generate
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -322,7 +392,7 @@ const FeeStructureTab: React.FC = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="applyToStudents" className="ml-2 block text-sm text-gray-900">
-                Apply this fee structure to all students in the selected class/section
+                Apply this fee structure to all students in the selected class
               </label>
             </div>
 
@@ -358,7 +428,7 @@ const FeeStructureTab: React.FC = () => {
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                  
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Installments</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied</th>
@@ -370,7 +440,7 @@ const FeeStructureTab: React.FC = () => {
                   <tr key={s.id}>
                     <td className="px-4 py-2 text-sm text-gray-900">{s.name}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{s.class}</td>
-                    <td className="px-4 py-2 text-sm text-gray-900">{s.section}</td>
+                    
                     <td className="px-4 py-2 text-sm text-gray-900">₹{(s.totalAmount || 0).toLocaleString()}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{s.installmentsCount}</td>
                     <td className="px-4 py-2 text-sm text-gray-900">{s.appliedToStudents || 0}</td>

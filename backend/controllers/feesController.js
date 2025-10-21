@@ -1,7 +1,9 @@
 const FeeStructure = require('../models/FeeStructure');
 const StudentFeeRecord = require('../models/StudentFeeRecord');
+const School = require('../models/School');
 const SchoolDatabaseManager = require('../utils/schoolDatabaseManager');
 const { ObjectId } = require('mongodb');
+const PDFDocument = require('pdfkit');
 
 // Create fee structure (per-school DB)
 exports.createFeeStructure = async (req, res) => {
@@ -15,15 +17,19 @@ exports.createFeeStructure = async (req, res) => {
       section = 'ALL',
       totalAmount,
       installments,
-      academicYear,
+      academicYear: _clientAcademicYear,
       applyToStudents = false
     } = req.body;
     
+    // Centralized academic year from School settings; ignore client-provided value
+    const schoolDoc = await School.findById(req.user.schoolId).select('settings.academicYear.currentYear').lean();
+    const resolvedAcademicYear = schoolDoc?.settings?.academicYear?.currentYear || _clientAcademicYear || null;
+    
     // Validate required fields
-    if (!name || !targetClass || !totalAmount || !installments || !academicYear) {
+    if (!name || !targetClass || !totalAmount || !installments || !resolvedAcademicYear) {
       return res.status(400).json({
         success: false,
-        message: 'Name, class, total amount, installments, and academic year are required'
+        message: 'Name, class, total amount, installments, and academic year are required (school current academic year is missing)'
       });
     }
     
@@ -68,7 +74,7 @@ exports.createFeeStructure = async (req, res) => {
         lateFeeAmount: inst.lateFeeAmount || 0,
         lateFeeAfter: inst.lateFeeAfter ? new Date(inst.lateFeeAfter) : null
       })),
-      academicYear,
+      academicYear: resolvedAcademicYear,
       isActive: true,
       status: 'active',
       appliedToStudents: 0,
@@ -104,6 +110,195 @@ exports.createFeeStructure = async (req, res) => {
   }
 };
 
+// Download receipt as PDF by receiptNumber (per-school DB)
+exports.downloadReceiptPdf = async (req, res) => {
+  try {
+    const { receiptNumber } = req.params;
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const studentFeeCol = db.collection('studentfeerecords');
+
+    // Find record containing this receipt
+    const feeRecord = await studentFeeCol.findOne({
+      schoolId: new ObjectId(req.user.schoolId),
+      'payments.receiptNumber': receiptNumber
+    });
+    if (!feeRecord) {
+      return res.status(404).json({ success: false, message: 'Receipt not found' });
+    }
+
+    // Identify payment and installment
+    const payment = (feeRecord.payments || []).find(p => p.receiptNumber === receiptNumber);
+    const installmentName = payment?.installmentName || '';
+    const installment = (feeRecord.installments || []).find(i => i.name === installmentName);
+
+    // Aggregate installment payments
+    const instPayments = (feeRecord.payments || []).filter(p => p.installmentName === installmentName);
+    const instPaid = instPayments.reduce((s, p) => s + (p.amount || 0), 0);
+    const instAmount = installment?.amount || 0;
+    const instPending = Math.max(0, instAmount - instPaid);
+
+    // Overall
+    const totalAmount = feeRecord.totalAmount || 0;
+    const totalPaid = feeRecord.totalPaid || 0;
+    const totalPending = Math.max(0, totalAmount - totalPaid);
+
+    // Prepare PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${receiptNumber}.pdf"`);
+
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    // Helpers
+    const formatINR = (val) => `INR ${new Intl.NumberFormat('en-IN').format(Number(val || 0))}`;
+
+    // Header
+    const schoolTitle = feeRecord.schoolName || (req.user && req.user.schoolCode) || 'School';
+    doc.fontSize(18).text(schoolTitle, { align: 'left' });
+    doc.moveDown(0.3);
+    doc.fontSize(14).text(`Receipt: ${receiptNumber}`, { align: 'left' });
+    doc.moveDown();
+
+    // Student details
+    doc.fontSize(11).text(`Student: ${feeRecord.studentName || '-'}`);
+    doc.text(`Class/Section: ${(feeRecord.studentClass || '-')}/${(feeRecord.studentSection || '-')}`);
+    doc.text(`Academic Year: ${feeRecord.academicYear || '-'}`);
+    if (feeRecord.rollNumber) doc.text(`Roll No: ${feeRecord.rollNumber}`);
+    doc.moveDown();
+
+    // Payment details
+    const payDate = payment?.paymentDate ? new Date(payment.paymentDate) : null;
+    const dateStr = payDate ? payDate.toLocaleDateString() : '-';
+    const dayStr = payDate ? payDate.toLocaleDateString('en-IN', { weekday: 'long' }) : '-';
+    doc.fontSize(12).text('Payment', { underline: true });
+    doc.fontSize(11).text(`Installment: ${installmentName || '-'}`);
+    doc.text(`Paid on: ${dateStr} (${dayStr})`);
+    doc.text(`Amount: ${formatINR(payment?.amount)}`);
+    doc.text(`Method: ${payment?.paymentMethod || '-'}`);
+    doc.text(`Reference: ${payment?.paymentReference || '-'}`);
+    doc.moveDown(0.8);
+
+    // Installment summary with history
+    doc.fontSize(12).text('Installment Summary', { underline: true });
+    doc.fontSize(11).text(`Installment: ${installmentName || '-'}`);
+    doc.text(`Installment Total: ${formatINR(instAmount)}`);
+    doc.text(`Paid So Far: ${formatINR(instPaid)}`);
+    doc.text(`Pending in Installment: ${formatINR(instPending)}`);
+    doc.moveDown(0.5);
+    doc.fontSize(12).text('Payments in this Installment', { underline: true });
+    doc.moveDown(0.3);
+    (instPayments || []).forEach(p => {
+      const d = p.paymentDate ? new Date(p.paymentDate) : null;
+      const dStr = d ? d.toLocaleDateString() : '-';
+      const dyStr = d ? d.toLocaleDateString('en-IN', { weekday: 'long' }) : '-';
+      doc.fontSize(10).text(`- ${dStr} (${dyStr}) | ${formatINR(p.amount)} | ${p.paymentMethod || '-'} | ref: ${p.paymentReference || '-'} | receipt: ${p.receiptNumber || '-'}`);
+    });
+    if (!instPayments || instPayments.length === 0) {
+      doc.fontSize(10).text('- No payments recorded for this installment');
+    }
+    doc.moveDown();
+
+    // Overall summary
+    doc.fontSize(12).text('Overall Fees', { underline: true });
+    doc.fontSize(11).text(`Total Fees: ${formatINR(totalAmount)}`);
+    doc.text(`Total Paid: ${formatINR(totalPaid)}`);
+    doc.text(`Remaining Fees: ${formatINR(totalPending)}`);
+    doc.moveDown();
+
+    // Signature and stamp section
+    doc.moveDown(2);
+    const startY = doc.y + 20;
+    // Principal signature line (left)
+    const leftX = doc.page.margins.left;
+    doc.moveTo(leftX, startY).lineTo(leftX + 200, startY).stroke();
+    doc.fontSize(10).text('Principal Signature', leftX, startY + 6);
+    // School stamp box (right)
+    const pageWidth = doc.page.width;
+    const rightX = pageWidth - doc.page.margins.right - 160;
+    doc.rect(rightX, startY - 30, 160, 90).stroke();
+    doc.fontSize(10).text('School Stamp', rightX + 40, startY + 40);
+
+    // Footer
+    doc.moveDown(2);
+    doc.fontSize(9).text(`Generated on ${new Date().toLocaleString()}`);
+
+    doc.end();
+  } catch (error) {
+    console.error('❌ Error generating receipt PDF:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to generate receipt PDF', error: error.message });
+    }
+  }
+};
+
+// Get a single student fee record (including payments) (per-school DB)
+exports.getStudentFeeRecord = async (req, res) => {
+  try {
+    const { studentId } = req.params; // can be fee record _id or studentId
+    const schoolCode = req.user.schoolCode;
+    const conn = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = conn.db || conn;
+    const studentFeeCol = db.collection('studentfeerecords');
+
+    let feeRecord = null;
+    try {
+      const objId = new ObjectId(studentId);
+      feeRecord = await studentFeeCol.findOne({
+        $or: [{ _id: objId }, { studentId: objId }],
+        schoolId: new ObjectId(req.user.schoolId)
+      });
+    } catch (e) {
+      feeRecord = await studentFeeCol.findOne({
+        schoolId: new ObjectId(req.user.schoolId),
+        rollNumber: studentId
+      });
+    }
+
+    if (!feeRecord) {
+      return res.status(404).json({ success: false, message: 'Student fee record not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        id: feeRecord._id,
+        studentId: feeRecord.studentId,
+        studentName: feeRecord.studentName,
+        studentClass: feeRecord.studentClass,
+        studentSection: feeRecord.studentSection,
+        rollNumber: feeRecord.rollNumber,
+        feeStructureName: feeRecord.feeStructureName,
+        totalAmount: feeRecord.totalAmount,
+        totalPaid: feeRecord.totalPaid,
+        totalPending: feeRecord.totalPending,
+        status: feeRecord.status,
+        installments: (feeRecord.installments || []).map(inst => ({
+          name: inst.name,
+          amount: inst.amount,
+          paidAmount: inst.paidAmount || 0,
+          dueDate: inst.dueDate || null,
+          status: inst.status || 'pending'
+        })),
+        payments: (feeRecord.payments || []).map(p => ({
+          paymentId: p.paymentId,
+          installmentName: p.installmentName,
+          amount: p.amount,
+          paymentDate: p.paymentDate,
+          paymentMethod: p.paymentMethod,
+          paymentReference: p.paymentReference,
+          receiptNumber: p.receiptNumber,
+          isVerified: p.isVerified
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching student fee record:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch student fee record', error: error.message });
+  }
+};
+
 // Apply fee structure to students (per-school DB)
 async function applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode) {
   try {
@@ -111,9 +306,27 @@ async function applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode)
     const db = connection.db || connection;
     
     // Build student query (robust across possible schemas)
-    const studentQueryBase = { 
+    // Prepare matching for either schoolId or schoolCode (case-insensitive)
+    const schoolIdObj = new ObjectId(feeStructure.schoolId);
+    const codeRaw = String(schoolCode || '').trim();
+    const codeUpper = codeRaw.toUpperCase();
+    const codeLower = codeRaw.toLowerCase();
+    const schoolMatchOr = [
+      { schoolId: schoolIdObj },
+      { schoolId: String(schoolIdObj) },
+      { schoolCode: codeRaw },
+      { schoolCode: codeUpper },
+      { schoolCode: codeLower }
+    ];
+    // We'll prepare two bases: one for 'students' collection (no role field), one for 'users' (role: 'student')
+    const baseForStudentsCol = {
+      _placeholder: { $ne: true },
+      $or: schoolMatchOr
+    };
+    const baseForUsersCol = {
       role: 'student',
-      _placeholder: { $ne: true }
+      _placeholder: { $ne: true },
+      $or: schoolMatchOr
     };
     const andFilters = [];
 
@@ -124,12 +337,14 @@ async function applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode)
           { class: cls },
           { studentClass: cls },
           { currentClass: cls },
+          { grade: cls },
           { 'studentDetails.currentClass': cls },
           // Also try numeric if possible
           ...(isNaN(Number(cls)) ? [] : [
             { class: Number(cls) },
             { studentClass: Number(cls) },
             { currentClass: Number(cls) },
+            { grade: Number(cls) },
           ])
         ]
       });
@@ -148,53 +363,76 @@ async function applyFeeStructureToStudents_PerschoolDB(feeStructure, schoolCode)
           { studentSection: secUpper },
           { studentSection: secLower },
           { currentSection: sec },
+          { sectionName: sec },
+          { sectionName: secUpper },
+          { sectionName: secLower },
           { 'studentDetails.currentSection': sec }
         ]
       });
     }
 
-    const studentQuery = andFilters.length > 0 
-      ? { ...studentQueryBase, $and: andFilters }
-      : studentQueryBase;
+    // Try 'students' collection first (most schools store student docs here)
+    const studentsCol = db.collection('students');
+    const usersCol = db.collection('users');
+    const studentQueryForStudentsCol = andFilters.length > 0
+      ? { ...baseForStudentsCol, $and: andFilters }
+      : baseForStudentsCol;
+    const countStudentsCol = await studentsCol.countDocuments(studentQueryForStudentsCol).catch(() => 0);
 
-    console.log('[Fees] Applying to students with query:', JSON.stringify(studentQuery));
-    
-    // Find matching students
-    const studentsCollection = db.collection('students');
-    const students = await studentsCollection.find(studentQuery).toArray();
-    
-    console.log(`👥 Found ${students.length} students for fee structure application`);
-    
+    let students = [];
+    let usedCollection = 'students';
+
+    if (countStudentsCol > 0) {
+      console.log('[Fees] Using students collection for application');
+      students = await studentsCol.find(studentQueryForStudentsCol).toArray();
+    } else {
+      // Fallback to users collection with role: 'student'
+      const studentQueryForUsersCol = andFilters.length > 0
+        ? { ...baseForUsersCol, $and: andFilters }
+        : baseForUsersCol;
+      console.log('[Fees] Using users collection (role: student) for application');
+      students = await usersCol.find(studentQueryForUsersCol).toArray();
+      usedCollection = 'users';
+    }
+
+    console.log(`👥 Found ${students.length} students for fee structure application (source: ${usedCollection})`);
+  
     // Create student fee records
-    const studentFeeRecords = students.map(student => ({
-      schoolId: new ObjectId(feeStructure.schoolId),
-      studentId: new ObjectId(student._id),
-      feeStructureId: new ObjectId(feeStructure._id),
-      studentName: student.name?.displayName || `${student.name?.firstName} ${student.name?.lastName}`,
-      studentClass: student.class,
-      studentSection: student.section,
-      rollNumber: student.rollNumber,
-      feeStructureName: feeStructure.name,
-      academicYear: feeStructure.academicYear,
-      totalAmount: feeStructure.totalAmount,
-      installments: feeStructure.installments.map(inst => ({
-        installmentId: new ObjectId(),
-        name: inst.name,
-        amount: inst.amount,
-        dueDate: inst.dueDate,
-        paidAmount: 0,
-        status: 'pending',
-        lateFeeAmount: inst.lateFeeAmount,
-        remarks: ''
-      })),
-      payments: [],
+    const studentFeeRecords = students.map(student => {
+    const resolvedClass = student.class ?? student.studentClass ?? student.currentClass ?? student?.studentDetails?.currentClass ?? null;
+    const resolvedSection = student.section ?? student.studentSection ?? student.currentSection ?? student?.studentDetails?.currentSection ?? null;
+    const resolvedRoll = student.rollNumber ?? student.rollno ?? student.admNo ?? null;
+    const resolvedName = student.name?.displayName || [student.name?.firstName, student.name?.lastName].filter(Boolean).join(' ') || student.fullName || student.username || 'Student';
+      return ({
+    schoolId: new ObjectId(feeStructure.schoolId),
+    studentId: new ObjectId(student._id),
+    feeStructureId: new ObjectId(feeStructure._id),
+    studentName: resolvedName,
+    studentClass: resolvedClass,
+    studentSection: resolvedSection,
+    rollNumber: resolvedRoll,
+    feeStructureName: feeStructure.name,
+    academicYear: feeStructure.academicYear,
+    totalAmount: feeStructure.totalAmount,
+    installments: feeStructure.installments.map(inst => ({
+      installmentId: new ObjectId(),
+      name: inst.name,
+      amount: inst.amount,
+      dueDate: inst.dueDate,
+      paidAmount: 0,
       status: 'pending',
-      totalPaid: 0,
-      totalPending: feeStructure.totalAmount,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }));
-    
+      lateFeeAmount: inst.lateFeeAmount,
+      remarks: ''
+    })),
+    payments: [],
+    status: 'pending',
+    totalPaid: 0,
+    totalPending: feeStructure.totalAmount,
+    createdAt: new Date(),
+    updatedAt: new Date()
+    });
+    });
+  
     // Bulk insert student fee records
     if (studentFeeRecords.length > 0) {
       const studentFeeCol = db.collection('studentfeerecords');
@@ -290,24 +528,14 @@ exports.getStudentFeeRecords = async (req, res) => {
 
     if (targetClass && targetClass !== 'ALL') {
       const clsRaw = String(targetClass).trim();
-      const clsNumber = Number(clsRaw.replace(/[^0-9]/g, '')); // extract 7 from 'Class 7'
-      const clsCandidate = (clsRaw.replace(/^class\s*/i, '').trim() || clsRaw);
-      const clsRegex = new RegExp(`(^|\\b)(class\\s*)?${clsCandidate}(\\b|$)`, 'i');
+      const clsNumber = Number(clsRaw.replace(/[^0-9]/g, ''));
+      const clsCandidate = clsRaw.replace(/^class\s*/i, '').trim() || clsRaw;
       andFilters.push({
         $or: [
-          // direct matches on primary field
           { studentClass: clsCandidate },
-          // alternate field name that might exist in legacy docs
-          { class: clsCandidate },
-          // regex contains for both fields (handles 'Class 7', '7', 'Std 7')
-          { studentClass: { $regex: clsRegex } },
-          { class: { $regex: clsRegex } },
-          // numeric coercion matches
           ...(isNaN(clsNumber) ? [] : [
             { studentClass: String(clsNumber) },
             { studentClass: clsNumber },
-            { class: String(clsNumber) },
-            { class: clsNumber },
           ])
         ]
       });
@@ -317,8 +545,7 @@ exports.getStudentFeeRecords = async (req, res) => {
       const sec = String(targetSection).trim();
       andFilters.push({
         $or: [
-          { studentSection: { $regex: `^${sec}$`, $options: 'i' } },
-          { section: { $regex: `^${sec}$`, $options: 'i' } }
+          { studentSection: { $regex: `^${sec}$`, $options: 'i' } }
         ]
       });
     }
@@ -353,7 +580,7 @@ exports.getStudentFeeRecords = async (req, res) => {
     // Get total count for pagination
     const totalRecords = await studentFeeCol.countDocuments(query);
     
-    // Format response
+    // Format response (now includes installments[])
     const formattedRecords = records.map(record => ({
       id: record._id,
       studentId: record.studentId,
@@ -368,7 +595,14 @@ exports.getStudentFeeRecords = async (req, res) => {
       status: record.status,
       paymentPercentage: record.paymentPercentage,
       nextDueDate: record.nextDueDate,
-      overdueDays: record.overdueDays
+      overdueDays: record.overdueDays,
+      installments: (record.installments || []).map(inst => ({
+        name: inst.name,
+        amount: inst.amount,
+        paidAmount: inst.paidAmount || 0,
+        dueDate: inst.dueDate || null,
+        status: inst.status || 'pending'
+      }))
     }));
     
     res.json({
@@ -399,7 +633,7 @@ exports.recordOfflinePayment = async (req, res) => {
   try {
     console.log('💳 Recording offline payment:', req.body);
     
-    const { studentId } = req.params;
+    const { studentId } = req.params; // can be fee record _id or studentId
     const {
       installmentName,
       amount,
@@ -422,13 +656,32 @@ exports.recordOfflinePayment = async (req, res) => {
     const db = conn.db || conn;
     const studentFeeCol = db.collection('studentfeerecords');
 
-    // Find student fee record
-    const feeRecord = await studentFeeCol.findOne({
-      studentId: new ObjectId(studentId),
-      schoolId: new ObjectId(req.user.schoolId)
-    });
+    // Find student fee record: accept either fee record _id or studentId
+    console.log('[Fees] recordOfflinePayment param studentId:', studentId, 'schoolId:', req.user.schoolId);
+    let feeRecord = null;
+    try {
+      const objId = new ObjectId(studentId);
+      const query = {
+        $or: [
+          { _id: objId },
+          { studentId: objId }
+        ],
+        schoolId: new ObjectId(req.user.schoolId)
+      };
+      console.log('[Fees] Lookup with ObjectId using query:', JSON.stringify(query));
+      feeRecord = await studentFeeCol.findOne(query);
+    } catch (e) {
+      // Not a valid ObjectId, fallback to string match on rollNumber (unlikely)
+      const altQuery = {
+        schoolId: new ObjectId(req.user.schoolId),
+        rollNumber: studentId
+      };
+      console.log('[Fees] Non-ObjectId param, fallback query:', JSON.stringify(altQuery));
+      feeRecord = await studentFeeCol.findOne(altQuery);
+    }
     
     if (!feeRecord) {
+      console.warn('[Fees] Student fee record not found for param:', studentId);
       return res.status(404).json({
         success: false,
         message: 'Student fee record not found'
@@ -444,8 +697,34 @@ exports.recordOfflinePayment = async (req, res) => {
       });
     }
     
-    // Generate receipt number
-    const receiptNumber = `RCP-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    // Generate sequential receipt number per-school and per-academicYear
+    // Use atomic counter in per-school DB to avoid collisions under concurrency
+    const countersCol = db.collection('counters');
+    const counterKey = `receipt:${String(req.user.schoolId)}:${String(feeRecord.academicYear || '')}`;
+    const seqDoc = await countersCol.findOneAndUpdate(
+      { _id: counterKey },
+      {
+        $setOnInsert: {
+          schoolId: new ObjectId(req.user.schoolId),
+          academicYear: feeRecord.academicYear || null,
+          createdAt: new Date(),
+        },
+        $inc: { seq: 1 },
+        $set: { updatedAt: new Date() }
+      },
+      { upsert: true, returnDocument: 'after', returnOriginal: false }
+    );
+    // Fallback in case driver option didn't return the updated doc
+    let seqVal = (seqDoc && seqDoc.value && typeof seqDoc.value.seq === 'number') ? seqDoc.value.seq : undefined;
+    if (typeof seqVal !== 'number') {
+      const doc = await countersCol.findOne({ _id: counterKey });
+      seqVal = (doc && typeof doc.seq === 'number') ? doc.seq : 1;
+    }
+    const seq = seqVal;
+    const seqPadded = String(seq).padStart(5, '0');
+    const schoolCodeStr = (typeof schoolCode === 'string' && schoolCode) ? schoolCode : (req.user.schoolCode || 'SCH');
+    const academicYear = feeRecord.academicYear || 'AY';
+    const receiptNumber = `RCP-${schoolCodeStr}-${academicYear}-${seqPadded}`;
     
     // Create payment record
     const payment = {

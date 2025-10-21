@@ -11,6 +11,7 @@ interface ClassSectionSelectProps {
   onSectionChange: (sectionValue: string) => void;
   includeAllOptions?: boolean; // Default true
   disabled?: boolean;
+  showSection?: boolean; // Default true. When false, hide section UI and force 'ALL'
 }
 
 interface ClassData {
@@ -29,8 +30,10 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
   onClassChange,
   onSectionChange,
   includeAllOptions = true,
-  disabled = false
+  disabled = false,
+  showSection = true
 }) => {
+
   const { user } = useAuth();
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
   const [isSectionDropdownOpen, setIsSectionDropdownOpen] = useState(false);
@@ -57,10 +60,11 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       const response = await classesAPI.getSchoolClasses(targetSchoolId);
       
       if (response.data?.success && response.data?.data) {
-        setClasses(response.data.data);
+        const payload = response.data.data as ClassData[];
+        setClasses(payload);
         
         // If current selections are invalid, reset them
-        const validClasses = response.data.data.map(c => c.className);
+        const validClasses = payload.map((c: ClassData) => c.className);
         if (valueClass !== 'ALL' && !validClasses.includes(valueClass)) {
           onClassChange('ALL');
           onSectionChange('ALL');
@@ -172,7 +176,7 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className={`grid grid-cols-1 ${showSection ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-4`}>
       {/* Class Selection */}
       <div className="relative">
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -220,49 +224,51 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
         </div>
       </div>
 
-      {/* Section Selection */}
-      <div className="relative">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Section
-        </label>
+      {/* Section Selection (optional) */}
+      {showSection ? (
         <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsSectionDropdownOpen(!isSectionDropdownOpen)}
-            disabled={disabled || valueClass === 'ALL'}
-            className="relative w-full bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <span className="block truncate">
-              {valueSection === 'ALL' ? 'All Sections' : `Section ${valueSection}`}
-            </span>
-            <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <ChevronDown className="h-5 w-5 text-gray-400" />
-            </span>
-          </button>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Section
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsSectionDropdownOpen(!isSectionDropdownOpen)}
+              disabled={disabled || valueClass === 'ALL'}
+              className="relative w-full bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <span className="block truncate">
+                {valueSection === 'ALL' ? 'All Sections' : `Section ${valueSection}`}
+              </span>
+              <span className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                <ChevronDown className="h-5 w-5 text-gray-400" />
+              </span>
+            </button>
 
-          {isSectionDropdownOpen && (
-            <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none">
-              {includeAllOptions && (
-                <div
-                  className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
-                  onClick={() => handleSectionChange('ALL')}
-                >
-                  <span className="font-normal block truncate">All Sections</span>
-                </div>
-              )}
-              {getAvailableSections().map((section) => (
-                <div
-                  key={section.sectionId}
-                  className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
-                  onClick={() => handleSectionChange(section.sectionName)}
-                >
-                  <span className="font-normal block truncate">Section {section.sectionName}</span>
-                </div>
-              ))}
-            </div>
-          )}
+            {isSectionDropdownOpen && (
+              <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none">
+                {includeAllOptions && (
+                  <div
+                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
+                    onClick={() => handleSectionChange('ALL')}
+                  >
+                    <span className="font-normal block truncate">All Sections</span>
+                  </div>
+                )}
+                {getAvailableSections().map((section) => (
+                  <div
+                    key={section.sectionId}
+                    className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
+                    onClick={() => handleSectionChange(section.sectionName)}
+                  >
+                    <span className="font-normal block truncate">Section {section.sectionName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };
