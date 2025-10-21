@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Calendar, GraduationCap, Clock, Bell, Users, Award, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, Calendar, GraduationCap, Clock, Bell, Users, Award, BookOpen, ChevronDown, ChevronRight, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
 import PromotionTab from '../components/PromotionTab';
+import UniversalTemplate from '../components/UniversalTemplate';
 
 interface TestData {
   _id: string;
@@ -500,6 +501,7 @@ const SchoolSettings: React.FC = () => {
     { id: 'promotion', name: 'Promotion', icon: GraduationCap },
     { id: 'scoring', name: 'Scoring System', icon: GraduationCap },
     { id: 'classes', name: 'Class Structure', icon: Users },
+    { id: 'templates', name: 'Document Templates', icon: FileText },
     { id: 'schedule', name: 'Schedule Settings', icon: Clock },
     { id: 'notifications', name: 'Notifications', icon: Bell },
   ];
@@ -817,6 +819,10 @@ const SchoolSettings: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {activeTab === 'templates' && (
+            <UniversalTemplate />
           )}
 
           {activeTab === 'schedule' && (
