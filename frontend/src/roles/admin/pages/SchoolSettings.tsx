@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Calendar, GraduationCap, Clock, Bell, Users, Award, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import api from '../../../services/api';
+import PromotionTab from '../components/PromotionTab';
 
 interface TestData {
   _id: string;
@@ -22,6 +23,7 @@ interface ClassData {
   academicYear: string;
   createdAt: string;
   studentCount?: number;
+  sectionCounts?: Record<string, number>;
 }
 
 const SchoolSettings: React.FC = () => {
@@ -31,6 +33,20 @@ const SchoolSettings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [testScoring, setTestScoring] = useState<Record<string, { maxMarks: number; weightage: number }>>({});
   const [expandedTests, setExpandedTests] = useState<Set<string>>(new Set());
+
+  // Academic Year state
+  const [currentAcademicYear, setCurrentAcademicYear] = useState('2024-2025');
+  const [academicYearStart, setAcademicYearStart] = useState('2024-04-01');
+  const [academicYearEnd, setAcademicYearEnd] = useState('2025-03-31');
+
+  // Promotion state
+  const [promotionMode, setPromotionMode] = useState<'bulk' | 'manual'>('bulk');
+  const [fromYear, setFromYear] = useState('2024-25');
+  const [toYear, setToYear] = useState('');
+  const [finalYearAction, setFinalYearAction] = useState<'graduate' | 'request' | ''>('');
+  const [selectedPromotionClass, setSelectedPromotionClass] = useState('');
+  const [selectedPromotionSection, setSelectedPromotionSection] = useState('');
+  const [holdBackSeqIds, setHoldBackSeqIds] = useState('');
 
   // Get school code and token from localStorage
   const getAuthData = () => {
@@ -128,13 +144,28 @@ const SchoolSettings: React.FC = () => {
           console.error('Error fetching students:', error);
         }
         
-        // Count students for each class
+        // Count students for each class and section
         const classesWithCounts = classes.map((cls: ClassData) => {
-          const studentCount = allStudents.filter((s: any) => 
+          const classStudents = allStudents.filter((s: any) => 
             s.studentDetails?.currentClass === cls.className || s.class === cls.className
-          ).length;
+          );
           
-          return { ...cls, studentCount };
+          // Count students per section
+          const sectionCounts: Record<string, number> = {};
+          cls.sections.forEach(section => {
+            sectionCounts[section] = classStudents.filter((s: any) => 
+              s.studentDetails?.currentSection === section || s.section === section
+            ).length;
+          });
+          
+          // Total students in class (sum of all sections)
+          const totalStudentCount = Object.values(sectionCounts).reduce((sum, count) => sum + count, 0);
+          
+          return { 
+            ...cls, 
+            studentCount: totalStudentCount,
+            sectionCounts 
+          };
         });
         
         // Sort classes in order: LKG, UKG, then 1-12
@@ -256,14 +287,188 @@ const SchoolSettings: React.FC = () => {
     }
   };
 
+  // Handle bulk promotion
+  const handleBulkPromotion = async () => {
+    const { schoolCode, token } = getAuthData();
+    if (!schoolCode || !token) {
+      toast.error('Authentication error. Please login again.');
+      return;
+    }
+
+    if (!finalYearAction) {
+      toast.error('Please select an option for final-year students.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to promote all students from ${fromYear} to ${toYear}?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const endpoint = `/admin/promotion/${schoolCode}/bulk`;
+      const response = await api.post(endpoint, {
+        fromYear,
+        toYear,
+        finalYearAction
+      });
+
+      if (response.data.success) {
+        toast.success(response.data.message || 'Students promoted successfully!');
+        console.log('✅ Bulk promotion result:', response.data);
+        // Reset state
+        setFinalYearAction('');
+        await fetchClasses();
+      } else {
+        toast.error(response.data.message || 'Failed to promote students');
+      }
+    } catch (error: any) {
+      console.error('❌ Error promoting students:', error);
+      toast.error(error.response?.data?.message || 'Failed to promote students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch academic year settings
+  const fetchAcademicYear = async () => {
+    const { schoolCode, token } = getAuthData();
+    if (!schoolCode || !token) return;
+
+    try {
+      const response = await api.get(`/admin/academic-year/${schoolCode}`);
+      if (response.data.success) {
+        const { currentYear, startDate, endDate } = response.data.data;
+        setCurrentAcademicYear(currentYear || '2024-2025');
+        setAcademicYearStart(startDate ? startDate.split('T')[0] : '2024-04-01');
+        setAcademicYearEnd(endDate ? endDate.split('T')[0] : '2025-03-31');
+        setFromYear(currentYear || '2024-2025');
+      }
+    } catch (error: any) {
+      console.error('Error fetching academic year:', error);
+    }
+  };
+
+  // Save academic year settings
+  const handleSaveAcademicYear = async () => {
+    const { schoolCode, token } = getAuthData();
+    if (!schoolCode || !token) {
+      toast.error('Authentication error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Save academic year
+      const response = await api.put(`/admin/academic-year/${schoolCode}`, {
+        currentYear: currentAcademicYear,
+        startDate: academicYearStart,
+        endDate: academicYearEnd
+      });
+
+      if (response.data.success) {
+        // Migrate existing students to add academic year
+        const migrationResponse = await api.post(`/admin/migration/${schoolCode}/students/academic-year`, {
+          academicYear: currentAcademicYear
+        });
+
+        if (migrationResponse.data.success) {
+          const updatedCount = migrationResponse.data.data?.updated || 0;
+          toast.success(`Academic year updated! ${updatedCount} student(s) updated.`);
+          setFromYear(currentAcademicYear);
+        } else {
+          toast.success('Academic year updated successfully!');
+          setFromYear(currentAcademicYear);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving academic year:', error);
+      toast.error('Failed to save academic year');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle manual section promotion
+  const handleManualPromotion = async () => {
+    const { schoolCode, token } = getAuthData();
+    if (!schoolCode || !token) {
+      toast.error('Authentication error. Please login again.');
+      return;
+    }
+
+    if (!selectedPromotionClass || !selectedPromotionSection) {
+      toast.error('Please select both class and section.');
+      return;
+    }
+
+    const holdBackIds = holdBackSeqIds.split(',').map(id => id.trim()).filter(id => id);
+
+    if (!confirm(`Promote Class ${selectedPromotionClass}-${selectedPromotionSection} (except ${holdBackIds.length} student(s))?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const endpoint = `/admin/promotion/${schoolCode}/section`;
+      const response = await api.post(endpoint, {
+        fromYear,
+        toYear,
+        className: selectedPromotionClass,
+        section: selectedPromotionSection,
+        holdBackSequenceIds: holdBackIds
+      });
+
+      if (response.data.success) {
+        toast.success(response.data.message || 'Section promoted successfully!');
+        console.log('✅ Manual promotion result:', response.data);
+        // Reset state
+        setSelectedPromotionClass('');
+        setSelectedPromotionSection('');
+        setHoldBackSeqIds('');
+        await fetchClasses();
+      } else {
+        toast.error(response.data.message || 'Failed to promote section');
+      }
+    } catch (error: any) {
+      console.error('❌ Error promoting section:', error);
+      toast.error(error.response?.data?.message || 'Failed to promote section');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load data when component mounts or tab changes
   useEffect(() => {
-    if (activeTab === 'scoring') {
+    if (activeTab === 'academic') {
+      fetchAcademicYear();
+    } else if (activeTab === 'scoring') {
       fetchTests();
     } else if (activeTab === 'classes') {
       fetchClasses();
+    } else if (activeTab === 'promotion') {
+      fetchClasses();
+      fetchAcademicYear();
     }
   }, [activeTab]);
+
+  // Auto-calculate toYear when fromYear changes
+  useEffect(() => {
+    if (fromYear) {
+      const [startYear, endYear] = fromYear.split('-').map(Number);
+      const nextStartYear = startYear + 1;
+      const nextEndYear = endYear + 1;
+      // Handle both 2024-25 and 2024-2025 formats
+      if (endYear < 100) {
+        // Short format like 2024-25
+        setToYear(`${nextStartYear}-${nextEndYear.toString().slice(-2)}`);
+      } else {
+        // Full format like 2024-2025
+        setToYear(`${nextStartYear}-${nextEndYear}`);
+      }
+    }
+  }, [fromYear]);
 
   // Initialize testScoring state when tests are loaded
   useEffect(() => {
@@ -292,6 +497,7 @@ const SchoolSettings: React.FC = () => {
 
   const tabs = [
     { id: 'academic', name: 'Academic Year', icon: Calendar },
+    { id: 'promotion', name: 'Promotion', icon: GraduationCap },
     { id: 'scoring', name: 'Scoring System', icon: GraduationCap },
     { id: 'classes', name: 'Class Structure', icon: Users },
     { id: 'schedule', name: 'Schedule Settings', icon: Clock },
@@ -344,7 +550,9 @@ const SchoolSettings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Current Academic Year</label>
                   <input
                     type="text"
-                    defaultValue="2024-2025"
+                    value={currentAcademicYear}
+                    onChange={(e) => setCurrentAcademicYear(e.target.value)}
+                    placeholder="2024-2025"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -352,7 +560,8 @@ const SchoolSettings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Academic Year Start</label>
                   <input
                     type="date"
-                    defaultValue="2024-04-01"
+                    value={academicYearStart}
+                    onChange={(e) => setAcademicYearStart(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -360,20 +569,41 @@ const SchoolSettings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Academic Year End</label>
                   <input
                     type="date"
-                    defaultValue="2025-03-31"
+                    value={academicYearEnd}
+                    onChange={(e) => setAcademicYearEnd(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Number of Terms</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="2">2 Terms</option>
-                    <option value="3">3 Terms</option>
-                    <option value="4">4 Terms</option>
-                  </select>
-                </div>
               </div>
+              <button
+                onClick={handleSaveAcademicYear}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                Save Academic Year
+              </button>
             </div>
+          )}
+
+          {activeTab === 'promotion' && (
+            <PromotionTab
+              promotionMode={promotionMode}
+              setPromotionMode={setPromotionMode}
+              fromYear={fromYear}
+              setFromYear={setFromYear}
+              toYear={toYear}
+              finalYearAction={finalYearAction}
+              setFinalYearAction={setFinalYearAction}
+              classes={classes}
+              selectedPromotionClass={selectedPromotionClass}
+              setSelectedPromotionClass={setSelectedPromotionClass}
+              selectedPromotionSection={selectedPromotionSection}
+              setSelectedPromotionSection={setSelectedPromotionSection}
+              holdBackSeqIds={holdBackSeqIds}
+              setHoldBackSeqIds={setHoldBackSeqIds}
+              onBulkPromote={handleBulkPromotion}
+              onManualPromote={handleManualPromotion}
+              loading={loading}
+            />
           )}
 
           {activeTab === 'scoring' && (
@@ -555,16 +785,27 @@ const SchoolSettings: React.FC = () => {
                           {cls.sections.length} sections
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3 flex items-center">
-                        <Users className="h-4 w-4 mr-1" />
-                        {cls.studentCount !== undefined ? cls.studentCount : '...'} student{cls.studentCount !== 1 ? 's' : ''}
-                      </p>
+                      
+                      {/* Total student count below class name */}
+                      <div className="mb-3 p-2 bg-gray-50 rounded-md">
+                        <p className="text-sm font-medium text-gray-700 flex items-center">
+                          <Users className="h-4 w-4 mr-1" />
+                          Total Students: {cls.studentCount !== undefined ? cls.studentCount : '...'}
+                        </p>
+                      </div>
+
                       {cls.sections.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Sections</p>
                           {cls.sections.map((section, index) => (
-                            <div key={index} className="flex items-center text-sm text-gray-600">
-                              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                              Section {section}
+                            <div key={index} className="flex items-center justify-between text-sm bg-white border border-gray-100 rounded-md p-2">
+                              <div className="flex items-center">
+                                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                <span className="text-gray-700">Section {section}</span>
+                              </div>
+                              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium">
+                                {cls.sectionCounts?.[section] !== undefined ? cls.sectionCounts[section] : '...'} students
+                              </span>
                             </div>
                           ))}
                         </div>

@@ -73,6 +73,9 @@ const classesRoutes = require('./routes/classes');
 const messagesRoutes = require('./routes/messages');
 const feesRoutes = require('./routes/fees');
 const reportsRoutes = require('./routes/reports');
+const promotionRoutes = require('./routes/promotion');
+const academicYearRoutes = require('./routes/academicYear');
+const migrationRoutes = require('./routes/migration');
 
 // Serve uploads statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -169,6 +172,9 @@ app.use('/api/superadmin/classes', superadminClassRoutes);
 app.use('/api/superadmin/tests', superadminTestRoutes);
 app.use('/api/user-management', userManagementRoutes);
 app.use('/api/admin/classes', adminClassRoutes);
+app.use('/api/admin/promotion', promotionRoutes);
+app.use('/api/admin/academic-year', academicYearRoutes);
+app.use('/api/admin/migration', migrationRoutes);
 app.use('/api/classes', classesRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/fees', feesRoutes);
