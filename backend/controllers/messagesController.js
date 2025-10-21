@@ -9,13 +9,19 @@ exports.sendMessage = async (req, res) => {
   try {
     console.log('📨 Sending message:', req.body);
     
-    // Validate required fields
-    const { title, body, class: targetClass, section: targetSection } = req.body;
+    // DEFENSIVE CHECK: Ensure user object exists after auth middleware
+    if (!req.user || !req.user._id) {
+        console.error('[MESSAGE CONTROLLER ERROR] Authentication context missing, should have been blocked by middleware.');
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
     
-    if (!title || !body) {
+    // Validate required fields according to new schema
+    const { title, subject, message, class: targetClass, section: targetSection } = req.body;
+    
+    if (!title || !subject || !message || !targetClass || !targetSection) {
       return res.status(400).json({
         success: false,
-        message: 'Title and body are required'
+        message: 'Title, subject, message, class, and section are required'
       });
     }
 
@@ -30,12 +36,7 @@ exports.sendMessage = async (req, res) => {
 
     console.log(`🔍 sendMessage: Using authenticated school ID: ${userSchoolId}`);
     
-    // For admin users, they can only send messages to their own school (already enforced by userSchoolId)
-    if (req.user.role === 'admin') {
-        console.log(`✅ Admin user sending message to their school: ${userSchoolId}`);
-    }
-    
-    // Get school connection for student queries
+    // Get school connection for student queries and message storage
     const schoolCode = req.user.schoolCode;
     if (!schoolCode) {
       return res.status(400).json({
@@ -136,41 +137,25 @@ exports.sendMessage = async (req, res) => {
       });
     }
     
-    // Create message document
+    // Create message document according to new simplified schema
     const messageData = {
-      schoolId: userSchoolId,
-      createdBy: req.user._id,
-      subject: title,
-      content: body,
-      messageType: 'general',
-      priority: 'normal',
-      status: 'sent',
-      sentAt: new Date(),
-      totalRecipients: students.length,
-      // CONFIRMATION: The data is saved here under target.class and target.section
-      target: {
-        class: targetClass || 'ALL', 
-        section: targetSection || 'ALL' 
-      },
-      sentTo: students.map(student => student._id),
-      recipients: students.map(student => ({
-        user: student._id,
-        readAt: null
-      })),
-      readBy: new Map() // Initialize empty readBy map
+      class: targetClass,
+      section: targetSection,
+      adminId: req.user._id,
+      title: title,
+      subject: subject,
+      message: message,
+      createdAt: new Date(),
+      schoolId: userSchoolId // Store schoolId for reference
     };
     
-    console.log('✅ Message Data to be Saved:', {
-        subject: messageData.subject,
-        target: messageData.target, 
-        totalRecipients: messageData.totalRecipients
-    }); 
+    console.log('✅ Message Data to be Saved:', messageData);
     
-    // Save message to main database
-    const message = new Message(messageData);
-    await message.save();
+    // Save message to school database instead of main database
+    const messagesCollection = db.collection('messages');
+    const result = await messagesCollection.insertOne(messageData);
     
-    console.log(`✅ Message sent successfully to ${students.length} students`);
+    console.log(`✅ Message sent successfully to ${students.length} students, stored in school database`);
     
     // Dispatch background job for notifications (FCM, email, etc.)
     console.log('📱 Dispatching background notification job...');
@@ -179,7 +164,7 @@ exports.sendMessage = async (req, res) => {
       success: true,
       message: 'Message sent successfully',
       data: {
-        messageId: message._id,
+        messageId: result.insertedId,
         sentCount: students.length,
         recipients: students.map(s => ({
           id: s._id,
@@ -218,11 +203,6 @@ exports.previewMessage = async (req, res) => {
     }
     
     console.log(`🔍 previewMessage: Using authenticated school ID: ${userSchoolId}`);
-    
-    // For admin users, they can only preview messages for their own school (already enforced by userSchoolId)
-    if (req.user.role === 'admin') {
-        console.log(`✅ Admin user previewing recipients for their school: ${userSchoolId}`);
-    }
     
     // Get school connection for student queries
     const schoolCode = req.user.schoolCode;
@@ -322,9 +302,6 @@ exports.previewMessage = async (req, res) => {
     });
   }
 };
-// ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
-// ... (rest of messagesController.js - getMessages, getMessageDetails, getMessageStats)
-// ... (rest of the file remains unchanged)
 
 // Get messages with filtering
 exports.getMessages = async (req, res) => {
@@ -332,18 +309,36 @@ exports.getMessages = async (req, res) => {
     console.log('Fetching messages with filters:', req.query);
     const { class: filterClass, section: filterSection, page = 1, limit = 20 } = req.query;
 
+    // Get school connection for message queries
+    const schoolCode = req.user.schoolCode;
+    if (!schoolCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'School code not found in user profile'
+      });
+    }
+    
+    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = connection.db;
+
     // Build query for new schema
     const query = {};
     if (filterClass && filterClass !== 'ALL') query.class = filterClass;
     if (filterSection && filterSection !== 'ALL') query.section = filterSection;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const messages = await Message.find(query)
+    const messagesCollection = db.collection('messages');
+    
+    // Get messages from school database with pagination
+    const messages = await messagesCollection.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
-    const totalMessages = await Message.countDocuments(query);
+      .limit(parseInt(limit))
+      .toArray();
+    
+    const totalMessages = await messagesCollection.countDocuments(query);
 
+    // Since we're using native MongoDB driver, we need to manually create virtual fields
     const formattedMessages = messages.map(msg => ({
       id: msg._id,
       class: msg.class,
@@ -352,7 +347,10 @@ exports.getMessages = async (req, res) => {
       title: msg.title,
       subject: msg.subject,
       message: msg.message,
-      createdAt: msg.createdAt
+      createdAt: msg.createdAt,
+      // Manual virtual fields calculation
+      messageAge: calculateMessageAge(msg.createdAt),
+      urgencyIndicator: 'normal' // Default since we don't have priority in simplified schema
     }));
 
     res.json({
@@ -382,10 +380,22 @@ exports.getMessageDetails = async (req, res) => {
   try {
     const { messageId } = req.params;
     
-    const message = await Message.findById(messageId)
-      .populate('sender', 'name email')
-      .populate('createdBy', 'name email')
-      .populate('recipients.user', 'name class section rollNumber');
+    // Get school connection for message queries
+    const schoolCode = req.user.schoolCode;
+    if (!schoolCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'School code not found in user profile'
+      });
+    }
+    
+    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = connection.db;
+    const messagesCollection = db.collection('messages');
+    
+    // Convert string ID to ObjectId if needed
+    const { ObjectId } = require('mongodb');
+    const message = await messagesCollection.findOne({ _id: new ObjectId(messageId) });
     
     if (!message) {
       return res.status(404).json({
@@ -394,36 +404,20 @@ exports.getMessageDetails = async (req, res) => {
       });
     }
     
-    // Check if user has access to this message
-    if (message.schoolId.toString() !== req.user.schoolId.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-    
     res.json({
       success: true,
       data: {
         id: message._id,
-        title: message.subject,
-        body: message.content,
-        target: `${message.recipientGroups[0]?.value || 'ALL'} - ${message.recipientGroups[1]?.value || 'ALL'}`,
-        sentAt: message.sentAt,
-        recipientsCount: message.totalRecipients,
-        readCount: message.readCount,
-        status: message.status,
-        sender: message.sender?.name?.displayName || 'Unknown',
-        messageType: message.messageType,
-        priority: message.priority,
-        recipients: message.recipients.map(recipient => ({
-          id: recipient.user._id,
-          name: recipient.user.name?.displayName || `${recipient.user.name?.firstName} ${recipient.user.name?.lastName}`,
-          class: recipient.user.class,
-          section: recipient.user.section,
-          rollNumber: recipient.user.rollNumber,
-          readAt: recipient.readAt
-        }))
+        class: message.class,
+        section: message.section,
+        adminId: message.adminId,
+        title: message.title,
+        subject: message.subject,
+        message: message.message,
+        createdAt: message.createdAt,
+        // Manual virtual fields calculation
+        messageAge: calculateMessageAge(message.createdAt),
+        urgencyIndicator: 'normal'
       }
     });
     
@@ -440,43 +434,54 @@ exports.getMessageDetails = async (req, res) => {
 // Get message statistics
 exports.getMessageStats = async (req, res) => {
   try {
-    const { schoolId } = req.query;
+    // Get school connection for message queries
+    const schoolCode = req.user.schoolCode;
+    if (!schoolCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'School code not found in user profile'
+      });
+    }
     
-    const stats = await Message.aggregate([
-      { $match: { schoolId: req.user.schoolId } },
+    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = connection.db;
+    const messagesCollection = db.collection('messages');
+    
+    const totalMessages = await messagesCollection.countDocuments();
+    
+    const messagesByClass = await messagesCollection.aggregate([
       {
         $group: {
-          _id: null,
-          totalMessages: { $sum: 1 },
-          totalRecipients: { $sum: '$totalRecipients' },
-          totalRead: { $sum: '$readCount' },
-          avgReadRate: {
-            $avg: {
-              $cond: [
-                { $gt: ['$totalRecipients', 0] },
-                { $divide: ['$readCount', '$totalRecipients'] },
-                0
-              ]
-            }
-          }
+          _id: '$class',
+          count: { $sum: 1 }
         }
       }
-    ]);
+    ]).toArray();
     
-    const result = stats[0] || {
-      totalMessages: 0,
-      totalRecipients: 0,
-      totalRead: 0,
-      avgReadRate: 0
-    };
+    const messagesBySection = await messagesCollection.aggregate([
+      {
+        $group: {
+          _id: '$section',
+          count: { $sum: 1 }
+        }
+      }
+    ]).toArray();
+
+    // Recent activity (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
+    const recentMessages = await messagesCollection.countDocuments({
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
     res.json({
       success: true,
       data: {
-        totalMessages: result.totalMessages,
-        totalRecipients: result.totalRecipients,
-        totalRead: result.totalRead,
-        avgReadRate: Math.round(result.avgReadRate * 100) / 100
+        totalMessages,
+        messagesByClass,
+        messagesBySection,
+        recentMessages
       }
     });
     
@@ -485,6 +490,112 @@ exports.getMessageStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch message statistics',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to calculate message age (replaces Mongoose virtual)
+function calculateMessageAge(createdAt) {
+  const now = new Date();
+  const created = new Date(createdAt);
+  const diffTime = now.getTime() - created.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  return `${Math.floor(diffDays / 30)} months ago`;
+}
+
+// backend/controllers/messagesController.js - Add this function
+
+// Delete message
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    console.log('🗑️ Deleting message:', messageId);
+    
+    // DEFENSIVE CHECK: Ensure user object exists after auth middleware
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    // Get school connection for message deletion
+    const schoolCode = req.user.schoolCode;
+    if (!schoolCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'School code not found in user profile'
+      });
+    }
+    
+    const connection = await SchoolDatabaseManager.getSchoolConnection(schoolCode);
+    const db = connection.db;
+    const messagesCollection = db.collection('messages');
+    
+    // Convert string ID to ObjectId
+    const { ObjectId } = require('mongodb');
+    
+    // Find the message first to verify ownership
+    const message = await messagesCollection.findOne({ 
+      _id: new ObjectId(messageId) 
+    });
+    
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found'
+      });
+    }
+    
+    // Optional: Check if user has permission to delete this message
+    // For example, only allow admin who created the message to delete it
+    if (message.adminId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only delete messages that you created'
+      });
+    }
+    
+    // Delete the message
+    const result = await messagesCollection.deleteOne({ 
+      _id: new ObjectId(messageId) 
+    });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Message not found or already deleted'
+      });
+    }
+    
+    console.log('✅ Message deleted successfully');
+    
+    res.json({
+      success: true,
+      message: 'Message deleted successfully',
+      data: {
+        deletedId: messageId
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error deleting message:', error);
+    
+    // Handle invalid ObjectId format
+    if (error.name === 'BSONTypeError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid message ID format'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete message',
       error: error.message
     });
   }

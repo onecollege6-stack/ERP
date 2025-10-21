@@ -6,7 +6,6 @@ export async function getMessages(params?: any) {
   return res.data;
 }
 
-// FIX: Changed endpoint to include '/send' to match your Express router setup
 export async function sendMessage(data: any) {
   const res = await api.post('/messages/send', data);
   return res.data;
@@ -19,5 +18,11 @@ export async function previewMessageRecipients(data: any) {
 
 export async function deleteMessage(id: string) {
   const res = await api.delete(`/messages/${id}`);
+  return res.data;
+}
+
+// Optional: Get message details if needed
+export async function getMessageDetails(id: string) {
+  const res = await api.get(`/messages/${id}`);
   return res.data;
 }

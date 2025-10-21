@@ -8,7 +8,7 @@ const roleCheck = require('../middleware/roleCheck');
 router.use(authMiddleware.auth);
 
 // Apply role check - only ADMIN and SUPER_ADMIN can access
-router.use(roleCheck(['admin', 'superadmin']));
+router.use(roleCheck(['admin']));
 
 // Routes
 router.post('/send', messagesController.sendMessage);
@@ -16,6 +16,7 @@ router.post('/preview', messagesController.previewMessage);
 router.get('/', messagesController.getMessages);
 router.get('/stats', messagesController.getMessageStats);
 router.get('/:messageId', messagesController.getMessageDetails);
+router.delete('/:messageId', messagesController.deleteMessage);
 // router.route('/')
     // .post(messagesController.sendMessage);
 

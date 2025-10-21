@@ -1,23 +1,42 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Send, MessageSquare, Eye, AlertCircle, Users, Clock, Mail, BookOpen } from 'lucide-react';
+import {
+  Send,
+  MessageSquare,
+  Eye,
+  AlertCircle,
+  Users,
+  Clock,
+  Mail,
+  BookOpen,
+  Trash2,
+  Maximize2
+} from 'lucide-react';
 import { useAuth } from '../../../auth/AuthContext';
 import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
 import { toast } from 'react-hot-toast';
-import { getMessages, sendMessage as sendMessageAPI, previewMessageRecipients } from '../../../api/message';
+import {
+  getMessages,
+  sendMessage as sendMessageAPI,
+  previewMessageRecipients,
+  deleteMessage as deleteMessageAPI
+} from '../../../api/message';
 
-// Define Message type based on the backend controller format
+// Define Message type based on the NEW backend controller format
 interface Message {
   id: string;
+  class: string;
+  section: string;
+  adminId: string;
+  adminName?: string;
   title: string;
-  body: string;
-  target: string; // e.g., "10 - A"
-  sentAt: string;
-  recipientsCount: number;
-  readCount: number;
-  status: string;
-  sender: string;
-  messageType: string;
-  priority: string;
+  subject: string;
+  message: string;
+  createdAt: string;
+  messageAge: string;
+  urgencyIndicator: string;
+  // Add these for delete functionality
+  _id?: string; // MongoDB _id field
+  schoolId?: string;
 }
 
 const MessagesPage: React.FC = () => {
@@ -48,7 +67,7 @@ const MessagesPage: React.FC = () => {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const LIMIT = 10;
+  const LIMIT = 5;
 
   // UI state for sending
   const [loading, setLoading] = useState(false);
@@ -56,38 +75,45 @@ const MessagesPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+
+  // Preview state
+  const [messageToPreview, setMessageToPreview] = useState<Message | null>(null);
+
   // Get class list from superadmin configuration
   const classList = classesData?.classes?.map(c => c.className) || [];
 
   // Helper function to format date
   const formatDateTime = (dateString: string) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
   // Fetch messages from the backend
   const fetchMessages = useCallback(async (page: number, currentClass: string, currentSection: string) => {
-    if (!user?.schoolId) return;
-
     setMessagesLoading(true);
     setMessagesError(null);
 
     try {
       const params = {
-        schoolId: user.schoolId.toString(), // Ensure schoolId is stringified for API params
         page,
         limit: LIMIT,
-        status: 'sent', // Fetch only sent messages
-        class: currentClass === 'ALL' ? undefined : currentClass, // Pass undefined if ALL is selected
-        section: currentSection === 'ALL' ? undefined : currentSection, // Pass undefined if ALL is selected
+        class: currentClass === 'ALL' ? undefined : currentClass,
+        section: currentSection === 'ALL' ? undefined : currentSection,
       };
 
       const result = await getMessages(params);
 
-      setMessages(result.data.messages);
-      setCurrentPage(result.data.pagination.page);
-      setTotalPages(result.data.pagination.pages);
+      setMessages(result.data.messages || []);
+      setCurrentPage(result.data.pagination?.page || 1);
+      setTotalPages(result.data.pagination?.pages || 1);
 
     } catch (err: any) {
       console.error('Error fetching messages:', err);
@@ -96,15 +122,12 @@ const MessagesPage: React.FC = () => {
     } finally {
       setMessagesLoading(false);
     }
-  }, [user?.schoolId]);
+  }, []);
 
   // Initial fetch of messages and refetch on filter change
   useEffect(() => {
-    if (user?.schoolId) {
-      // Use the filter states for the message list
-      fetchMessages(1, messagesFilterClass, messagesFilterSection);
-    }
-  }, [user?.schoolId, fetchMessages, messagesFilterClass, messagesFilterSection]);
+    fetchMessages(1, messagesFilterClass, messagesFilterSection);
+  }, [fetchMessages, messagesFilterClass, messagesFilterSection]);
 
   // Update available sections when class changes (for the SEND NEW MESSAGE form)
   useEffect(() => {
@@ -123,7 +146,7 @@ const MessagesPage: React.FC = () => {
         // Map sections to the expected format.
         const rawSections = selectedClassData.sections || [];
 
-        // FIX: Robust mapping to extract section name correctly and ensure section options appear
+        // Robust mapping to extract section name correctly and ensure section options appear
         const sections = rawSections.map((s: any) => {
           // Handle data structure that is an object { sectionName: 'A' } or potentially just the string 'A'
           const sectionName = s.sectionName || s;
@@ -155,7 +178,7 @@ const MessagesPage: React.FC = () => {
     if (selectedClass && selectedSection && selectedClass !== 'ALL' && selectedSection !== 'ALL') {
       previewRecipients(selectedClass, selectedSection);
     } else {
-      // FIX: Ensure recipient count is cleared if selection is incomplete
+      // Ensure recipient count is cleared if selection is incomplete
       setRecipientCount(0);
     }
   }, [selectedClass, selectedSection]);
@@ -227,8 +250,12 @@ const MessagesPage: React.FC = () => {
         setTitle('');
         setSubject('');
         setMessage('');
+        setSelectedClass('');
+        setSelectedSection('');
+        setRecipientCount(0);
         // Re-fetch the message list to show the new message
         fetchMessages(1, messagesFilterClass, messagesFilterSection);
+        toast.success('Message sent successfully!');
 
       } else {
         // Check for specific error message from the response body
@@ -243,6 +270,61 @@ const MessagesPage: React.FC = () => {
     }
   };
 
+  // Delete message function
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      setDeleteLoading(messageId);
+
+      const response = await deleteMessageAPI(messageId);
+
+      if (response.success) {
+        toast.success('Message deleted successfully!');
+        // Refresh the messages list
+        fetchMessages(currentPage, messagesFilterClass, messagesFilterSection);
+      } else {
+        throw new Error(response.message || 'Failed to delete message');
+      }
+    } catch (error: any) {
+      console.error('Error deleting message:', error);
+      toast.error(error.message || 'Failed to delete message');
+    } finally {
+      setDeleteLoading(null);
+      setMessageToDelete(null);
+    }
+  };
+
+  // Confirm delete modal
+  const confirmDelete = (message: Message) => {
+    setMessageToDelete(message);
+  };
+
+  const cancelDelete = () => {
+    setMessageToDelete(null);
+    setDeleteLoading(null);
+  };
+
+  // Preview message details
+  // Preview message details
+  const previewMessageDetails = (message: Message) => {
+    // Create a safe message object with fallbacks
+    const safeMessage = {
+      ...message,
+      title: message.title || 'No Title',
+      subject: message.subject || 'No Subject',
+      message: message.message || 'No Message Content',
+      class: message.class || 'N/A',
+      section: message.section || 'N/A',
+      createdAt: message.createdAt || '',
+      messageAge: message.messageAge || 'Unknown',
+      urgencyIndicator: message.urgencyIndicator || 'normal'
+    };
+    setMessageToPreview(safeMessage);
+  };
+
+  const closePreview = () => {
+    setMessageToPreview(null);
+  };
+
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages) {
       setCurrentPage(newPage);
@@ -250,10 +332,15 @@ const MessagesPage: React.FC = () => {
     }
   };
 
+  // Helper function to truncate text
+  // Helper function to truncate text
+  const truncateText = (text: string, maxLength: number) => {
+    if (!text || typeof text !== 'string') return '';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
 
   const renderClassSectionSelector = () => {
-    // ... (omitted unchanged loading/error/no-classes logic)
-
     if (classesLoading) {
       return (
         <div className="bg-gray-50 p-4 rounded-lg border">
@@ -312,8 +399,7 @@ const MessagesPage: React.FC = () => {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {/* Added key prop for the default 'Select Class' option */}
-              <option key="select-class-default" value="">Select Class</option>
+              <option value="">Select Class</option>
               {classList.map((cls) => (
                 <option key={cls} value={cls}>Class {cls}</option>
               ))}
@@ -332,11 +418,9 @@ const MessagesPage: React.FC = () => {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               disabled={!selectedClass}
             >
-              {/* Added key prop for the default 'Select Section' option */}
-              <option key="select-section-default" value="">
+              <option value="">
                 {getSectionSelectText()}
               </option>
-              {/* Only map sections if a class is selected AND sections are available */}
               {selectedClass && availableSections.map((section) => (
                 <option key={section.value} value={section.value}>
                   Section {section.section}
@@ -347,21 +431,19 @@ const MessagesPage: React.FC = () => {
         </div>
 
         {/* Recipient Count Display */}
-        {/* Only show count if a specific Class AND Section is selected */}
         {recipientCount > 0 && selectedClass && selectedSection && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
             <Users className="h-5 w-5 text-blue-600 mr-2" />
             <span className="text-sm text-blue-800">
-              This message will be sent to **{recipientCount}** student{recipientCount !== 1 ? 's' : ''} in Class {selectedClass} - Section {selectedSection}
+              This message will be sent to <strong>{recipientCount}</strong> student{recipientCount !== 1 ? 's' : ''} in Class {selectedClass} - Section {selectedSection}
             </span>
           </div>
         )}
         {recipientCount === 0 && selectedClass && selectedSection && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center">
             <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
-            {/* FIX: Use correct variables for display, which are the values sent to the API */}
             <span className="text-sm text-yellow-800">
-              No students found matching Class **{selectedClass}** - Section **{selectedSection}**.
+              No students found matching Class <strong>{selectedClass}</strong> - Section <strong>{selectedSection}</strong>.
             </span>
           </div>
         )}
@@ -369,18 +451,13 @@ const MessagesPage: React.FC = () => {
     );
   };
 
-  // New section for message history filter options
   const renderMessageFilter = () => {
-
-    // Add 'ALL' to the class list for filtering purposes
     const filterClassOptions = [{ name: 'ALL Classes', value: 'ALL' }, ...classList.map(cls => ({ name: `Class ${cls}`, value: cls }))];
 
-    // Determine available sections for filtering
     let filterSectionOptions = [{ name: 'ALL Sections', value: 'ALL' }];
     if (messagesFilterClass !== 'ALL' && classesData) {
       const selectedClassData = classesData.classes.find(c => c.className === messagesFilterClass);
       if (selectedClassData) {
-        // FIX: Robust mapping for filter options as well
         const rawSections = selectedClassData.sections || [];
         const sections = rawSections.map((s: any) => {
           const sectionName = s.sectionName || s;
@@ -431,8 +508,7 @@ const MessagesPage: React.FC = () => {
         </div>
       </div>
     );
-  }
-
+  };
 
   return (
     <div className="space-y-6 p-6 bg-white rounded-lg shadow">
@@ -510,7 +586,6 @@ const MessagesPage: React.FC = () => {
 
         <div className="flex justify-end space-x-3">
           <button
-            // Disabled if class/section is not selected (empty string)
             onClick={handlePreview}
             disabled={!hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -519,7 +594,6 @@ const MessagesPage: React.FC = () => {
           </button>
           <button
             onClick={handleSendMessage}
-            // Disabled if class/section is not selected (empty string)
             disabled={loading || !hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection}
             className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${loading || !hasClasses() || classList.length === 0 || !title || !message || !selectedClass || !selectedSection
               ? 'bg-blue-400 cursor-not-allowed'
@@ -541,8 +615,12 @@ const MessagesPage: React.FC = () => {
               <p className="text-gray-900 font-semibold">{title}</p>
             </div>
             <div className="mb-4">
+              <p className="text-sm font-medium text-gray-700">Subject:</p>
+              <p className="text-gray-900 font-semibold">{subject}</p>
+            </div>
+            <div className="mb-4">
               <p className="text-sm font-medium text-gray-700">Message Body:</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{body}</p>
+              <p className="text-gray-800 whitespace-pre-wrap">{message}</p>
             </div>
             <div className="mb-4">
               <p className="text-sm font-medium text-gray-700">Target Audience:</p>
@@ -575,7 +653,7 @@ const MessagesPage: React.FC = () => {
 
       <hr className="my-6" />
 
-      {/* Sent Messages List (NEW SECTION) */}
+      {/* Sent Messages List */}
       <div>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
           <Mail className="h-6 w-6 mr-2 text-blue-600" /> Sent Messages
@@ -604,75 +682,126 @@ const MessagesPage: React.FC = () => {
         ) : (
           <>
             {/* Messages Table */}
+            {/* Messages Table */}
             <div className="overflow-x-auto shadow-sm border border-gray-200 rounded-lg">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Title
+                      Title & Subject
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Target
+                      Class & Section
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Sent
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Recipients
+                      Message
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Read/Total
+                      Age
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {messages.map((message) => (
-                    <tr key={message.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{message.title}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-xs">{message.body}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="font-semibold text-gray-700">{message.target}</div>
-                        <div className="text-xs text-gray-500 flex items-center">
-                          <BookOpen className="h-3 w-3 mr-1" /> {message.messageType}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center text-xs text-gray-600">
-                          <Clock className="h-3 w-3 mr-1" /> {formatDateTime(message.sentAt)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center">
-                          <Users className="h-4 w-4 mr-1 text-blue-500" />
-                          <span className="font-medium text-blue-600">{message.recipientsCount}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {message.recipientsCount > 0 ? (
-                          <div className="text-sm">
-                            <span className="font-semibold text-green-600">{message.readCount}</span> / {message.recipientsCount}
+                  {messages.map((message) => {
+                    const title = message.title || '';
+                    const subject = message.subject || '';
+                    const messageText = message.message || '';
+                    const messageClass = message.class || '';
+                    const messageSection = message.section || '';
+                    const createdAt = message.createdAt || '';
+                    const messageAge = message.messageAge || '';
+                    const urgencyIndicator = message.urgencyIndicator || 'normal';
+
+                    const titleLength = title.length;
+                    const subjectLength = subject.length;
+                    const messageLength = messageText.length;
+
+                    return (
+                      <tr key={message.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {truncateText(title, 20)}
                           </div>
-                        ) : (
-                          <span className="text-gray-400">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${message.status === 'read' ? 'bg-green-100 text-green-800' :
-                            message.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}
-                        >
-                          {message.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                          <div className="text-xs text-gray-500">
+                            {truncateText(subject, 20)}
+                          </div>
+                          {/* {(titleLength > 20 || subjectLength > 20) && (
+                            <button
+                              onClick={() => previewMessageDetails(message)}
+                              className="mt-1 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                              title="View full content"
+                            >
+                              <Maximize2 className="h-3 w-3" />
+                              View full
+                            </button>
+                          )} */}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="font-semibold text-gray-700">Class {messageClass}</div>
+                          <div className="text-xs text-gray-500">Section {messageSection}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div className="flex items-center text-xs text-gray-600">
+                            <Clock className="h-3 w-3 mr-1" /> {formatDateTime(createdAt)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-700 max-w-xs truncate">
+                            {truncateText(messageText, 20)}
+                          </div>
+                          {messageLength > 30 && (
+                            <button
+                              onClick={() => previewMessageDetails(message)}
+                              className="mt-1 text-blue-600 hover:text-blue-800 text-xs flex items-center gap-1"
+                              title="View full message"
+                            >
+                              <Maximize2 className="h-3 w-3" />
+                              View full
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${urgencyIndicator === 'urgent' ? 'bg-red-100 text-red-800' :
+                              urgencyIndicator === 'high' ? 'bg-orange-100 text-orange-800' :
+                                'bg-green-100 text-green-800'
+                              }`}
+                          >
+                            {messageAge}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => previewMessageDetails(message)}
+                              className="text-blue-600 hover:text-blue-900 transition-colors p-1 rounded hover:bg-blue-50"
+                              title="Preview message"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => confirmDelete(message)}
+                              disabled={deleteLoading === message.id}
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors p-1 rounded hover:bg-red-50"
+                              title="Delete message"
+                            >
+                              {deleteLoading === message.id ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -688,7 +817,7 @@ const MessagesPage: React.FC = () => {
                   Previous
                 </button>
                 <span className="text-sm text-gray-700">
-                  Page **{currentPage}** of **{totalPages}**
+                  Page {currentPage} of {totalPages}
                 </span>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
@@ -702,6 +831,99 @@ const MessagesPage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {messageToDelete && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
+          <div className="relative p-6 border w-full max-w-md shadow-lg rounded-md bg-white mx-4">
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-4 rounded">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+                <h3 className="text-lg font-bold text-red-800">Confirm Delete</h3>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-700">
+                Are you sure you want to delete this message?
+              </p>
+              <div className="mt-2 p-3 bg-red-50 rounded-md border border-red-200">
+                <p className="font-semibold text-gray-900 break-words">{messageToDelete.title}</p>
+                <p className="text-sm text-gray-600">Class {messageToDelete.class} - Section {messageToDelete.section}</p>
+                <p className="text-xs text-gray-500 mt-1 break-words">{messageToDelete.message}</p>
+              </div>
+              <p className="text-xs text-red-600 mt-2">
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelDelete}
+                disabled={deleteLoading === messageToDelete.id}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteMessage(messageToDelete.id)}
+                disabled={deleteLoading === messageToDelete.id}
+                className={`px-4 py-2 text-white rounded-md ${deleteLoading === messageToDelete.id
+                  ? 'bg-red-400 cursor-not-allowed'
+                  : 'bg-red-600 hover:bg-red-700'
+                  } transition-colors`}
+              >
+                {deleteLoading === messageToDelete.id ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Message Preview Modal */}
+      {/* Message Preview Modal */}
+      {messageToPreview && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex justify-center items-center">
+          <div className="relative p-8 border w-full max-w-2xl shadow-lg rounded-md bg-white mx-4">
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4 rounded">
+              <div className="flex items-center">
+                <Eye className="h-5 w-5 text-green-400 mr-2" />
+                <h3 className="text-xl font-bold text-green-800">Message Details</h3>
+              </div>
+            </div>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1">Title:</p>
+                <p className="text-gray-900 font-semibold break-words">{messageToPreview.title}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1">Subject:</p>
+                <p className="text-gray-900 font-semibold break-words">{messageToPreview.subject}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1">Class & Section:</p>
+                <p className="text-gray-800">Class {messageToPreview.class} - Section {messageToPreview.section}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1">Sent:</p>
+                <p className="text-gray-800">{formatDateTime(messageToPreview.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1">Message Body:</p>
+                <div className="mt-1 p-3 bg-green-50 rounded-md border border-green-200">
+                  <p className="text-gray-800 whitespace-pre-wrap break-words">{messageToPreview.message}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={closePreview}
+                className="px-4 py-2 bg-green-100 text-green-800 border border-green-300 rounded-md hover:bg-green-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
