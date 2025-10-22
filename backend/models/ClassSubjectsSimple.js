@@ -113,7 +113,7 @@ const classSubjectsSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
-classSubjectsSchema.index({ schoolCode: 1, className: 1, academicYear: 1 });
+classSubjectsSchema.index({ schoolCode: 1, className: 1, section: 1, academicYear: 1 });
 classSubjectsSchema.index({ schoolCode: 1, grade: 1, section: 1 });
 classSubjectsSchema.index({ 'subjects.name': 1 });
 classSubjectsSchema.index({ 'subjects.code': 1 });
@@ -184,6 +184,7 @@ classSubjectsSchema.statics.findOrCreateClass = async function(classData) {
   let classSubjects = await this.findOne({
     schoolCode,
     className,
+    section,
     academicYear,
     isActive: true
   });
