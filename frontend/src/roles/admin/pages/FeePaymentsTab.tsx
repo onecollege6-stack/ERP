@@ -204,7 +204,7 @@ const FeePaymentsTab: React.FC = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <ClassSectionSelect
-            schoolId={user?.schoolId}
+            schoolCode={user?.schoolCode}
             valueClass={selectedClass}
             valueSection={selectedSection}
             onClassChange={setSelectedClass}

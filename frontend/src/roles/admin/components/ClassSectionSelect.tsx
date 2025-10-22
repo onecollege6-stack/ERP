@@ -17,7 +17,7 @@ interface ClassSectionSelectProps {
 interface ClassData {
   _id: string;
   className: string;
-  sections: string[];
+  sections: { sectionId: string; sectionName: string }[];
   displayName: string;
 }
 
@@ -55,14 +55,31 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       setLoading(true);
       setError(null);
       
-      const response = await classesAPI.getSchoolClasses(targetSchoolId);
+      const response = await classesAPI.getSchoolClasses(targetSchoolCode);
       
       if (response.data?.success && response.data?.data) {
-        const payload = response.data.data as ClassData[];
-        setClasses(payload);
+        const apiData = response.data.data;
+        const rawClasses = (apiData?.classes || []) as any[];
+        // Normalize sections to objects with id+name for UI
+        const normalized: ClassData[] = rawClasses.map((c: any) => ({
+          _id: String(c._id),
+          className: String(c.className),
+          displayName: c.displayName || `Class ${c.className}`,
+          sections: (Array.isArray(c.sections) ? c.sections : []).map((sec: any, idx: number) => {
+            if (typeof sec === 'string') {
+              return { sectionId: `${c.className}-${sec}-${idx}` , sectionName: sec };
+            }
+            // If backend returns objects already
+            return {
+              sectionId: String(sec.sectionId || `${c.className}-${sec.sectionName || idx}`),
+              sectionName: String(sec.sectionName || sec.section || '')
+            };
+          })
+        }));
+        setClasses(normalized);
         
         // If current selections are invalid, reset them
-        const validClasses = payload.map((c: ClassData) => c.className);
+        const validClasses = normalized.map((c: ClassData) => c.className);
         if (valueClass !== 'ALL' && !validClasses.includes(valueClass)) {
           onClassChange('ALL');
           onSectionChange('ALL');
