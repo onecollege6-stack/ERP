@@ -48,6 +48,9 @@ router.post('/:schoolId/sync', setMainDbContext, requireSuperAdmin, schoolContro
 
 // School-specific routes (require school context)
 router.get('/:schoolId', setSchoolContext, validateSchoolAccess(['admin', 'superadmin']), schoolController.getSchoolById);
+
+// Direct school info route (bypasses school-specific database issues)
+router.get('/:schoolId/info', authMiddleware.auth, schoolController.getSchoolInfo);
 router.put('/:schoolId', schoolController.updateSchool);
 router.patch('/:schoolId/access-matrix', setMainDbContext, requireSuperAdmin, schoolController.updateAccessMatrix);
 router.delete('/:schoolId', setMainDbContext, requireSuperAdmin, schoolController.deleteSchool);

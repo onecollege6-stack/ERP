@@ -26,7 +26,7 @@ interface TemplateField {
 
 const UniversalTemplate: React.FC = () => {
   const { user } = useAuth();
-  
+
   const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({
     schoolName: user?.schoolName || 'School Name',
     schoolCode: user?.schoolCode || 'SCH001',
@@ -45,78 +45,165 @@ const UniversalTemplate: React.FC = () => {
 
   // Fetch school data from database
   const fetchSchoolData = async () => {
-    console.log('User data available:', { 
-      schoolCode: user?.schoolCode, 
-      schoolId: user?.schoolId, 
-      schoolName: user?.schoolName 
+    console.log('User data available:', {
+      schoolCode: user?.schoolCode,
+      schoolId: user?.schoolId,
+      schoolName: user?.schoolName
     });
-    
+
     if (!user?.schoolCode && !user?.schoolId) return;
-    
+
     try {
       setLoading(true);
-      
+
       let schoolData = null;
-      
+
       // Try to fetch school info using the proper school API
       try {
         console.log('Fetching school info using school API...');
+        console.log('User context:', { schoolId: user?.schoolId, schoolCode: user?.schoolCode });
         let response;
-        
-        // Try with schoolId first if available
-        if (user?.schoolId) {
-          response = await schoolAPI.getSchoolById(user.schoolId);
-        } else if (user?.schoolCode) {
-          // If no schoolId, try to get all schools and find by code
-          const allSchoolsResponse = await schoolAPI.getAllSchools();
-          if (allSchoolsResponse.data?.success && allSchoolsResponse.data?.data) {
-            const schools = allSchoolsResponse.data.data;
-            const school = schools.find((s: any) => s.schoolCode === user.schoolCode || s.code === user.schoolCode);
-            if (school) {
-              response = { data: { success: true, data: school } };
-            }
+
+        // Use the new reliable school info endpoint that only uses main database
+        const schoolIdentifier = user?.schoolId || user?.schoolCode;
+        if (schoolIdentifier) {
+          console.log('Trying with school info endpoint:', schoolIdentifier);
+          try {
+            // Use the new /info endpoint that bypasses school-specific database issues
+            response = await api.get(`/schools/${schoolIdentifier}/info`);
+            console.log('Success with school info endpoint:', response?.data);
+          } catch (infoError: any) {
+            console.log('School info endpoint failed:', infoError.response?.status, 'Trying original endpoint...');
+            // Fallback to original endpoint if new one fails
+            response = await schoolAPI.getSchoolById(schoolIdentifier);
+            console.log('Success with original endpoint:', response?.data);
           }
         }
-        
-        if (response?.data?.success && response.data?.data) {
-          const data = response.data.data;
+
+        // Handle both wrapped and direct response formats
+        const data = response?.data?.data || response?.data;
+        if (data && (data.name || data.schoolName)) {
           console.log('School data found:', data);
-          
+
+          // Format address from nested structure (concise version)
+          let formattedAddress = '123 School Street, City, State 12345';
+          if (data.address) {
+            const addr = data.address;
+            // Create a more concise address format
+            const addressParts = [
+              addr.area || addr.street?.substring(0, 30), // Limit street to 30 chars or use area
+              addr.city,
+              addr.state,
+              addr.pinCode || addr.zipCode
+            ].filter(Boolean);
+            
+            // Join with commas and limit total length
+            formattedAddress = addressParts.join(', ');
+            if (formattedAddress.length > 60) {
+              formattedAddress = formattedAddress.substring(0, 57) + '...';
+            }
+          }
+
+          // Format website URL to be more concise
+          let formattedWebsite = data.contact?.website || data.website || 'www.edulogix.com';
+          if (formattedWebsite.length > 25) {
+            // Remove protocol and www if present, then truncate
+            formattedWebsite = formattedWebsite
+              .replace(/^https?:\/\//, '')
+              .replace(/^www\./, '');
+            if (formattedWebsite.length > 25) {
+              formattedWebsite = formattedWebsite.substring(0, 22) + '...';
+            }
+          }
+
           schoolData = {
-            schoolName: data.schoolName || data.name || user?.schoolName,
-            schoolCode: data.schoolCode || data.code || user?.schoolCode,
-            address: data.address || data.location?.address || '123 School Street, City, State 12345',
-            phone: data.phone || data.contact?.phone || data.contactNumber || '+91-XXXXXXXXXX',
-            email: data.email || data.contact?.email || data.contactEmail || 'info@school.com',
-            website: data.website || data.contact?.website || 'www.edulogix.com',
+            schoolName: data.name || data.schoolName || user?.schoolName,
+            schoolCode: data.code || data.schoolCode || user?.schoolCode,
+            address: formattedAddress,
+            phone: data.contact?.phone || data.phone || data.contactNumber || '+91-XXXXXXXXXX',
+            email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || 'info@school.com',
+            website: formattedWebsite,
             logoUrl: data.logoUrl || data.logo || ''
           };
         }
       } catch (error: any) {
         console.log('Failed to fetch from school API:', error.response?.status || error.message);
-        
-        // Try classes endpoint as fallback
+
+        // Try alternative school endpoints as fallback
         try {
-          console.log('Trying classes endpoint as fallback...');
-          const response = await api.get(`/admin/classes/${user.schoolCode}/classes-sections`);
+          console.log('Trying alternative school endpoints...');
+          let fallbackResponse;
           
-          if (response.data?.success && response.data?.data) {
-            const data = response.data.data;
-            console.log('School data found from classes endpoint:', data);
-            
+          // Try different possible school endpoints
+          const possibleEndpoints = [
+            `/admin/schools/${user.schoolCode}`,
+            `/schools/${user.schoolCode}`,
+            `/api/schools/${user.schoolCode}`,
+            `/school/${user.schoolCode}`,
+            `/admin/school/${user.schoolCode}`
+          ];
+          
+          for (const endpoint of possibleEndpoints) {
+            try {
+              console.log(`Trying endpoint: ${endpoint}`);
+              fallbackResponse = await api.get(endpoint);
+              if (fallbackResponse?.data?.success || fallbackResponse?.data) {
+                console.log(`Success with endpoint: ${endpoint}`, fallbackResponse.data);
+                break;
+              }
+            } catch (endpointError: any) {
+              console.log(`Failed endpoint ${endpoint}:`, endpointError.response?.status);
+              continue;
+            }
+          }
+
+          if (fallbackResponse?.data) {
+            const data = fallbackResponse.data.data || fallbackResponse.data;
+            console.log('School data found from alternative endpoint:', data);
+
+            // Format address from nested structure (concise version)
+            let formattedAddress = '123 School Street, City, State 12345';
+            if (data.address && typeof data.address === 'object') {
+              const addr = data.address;
+              const addressParts = [
+                addr.area || addr.street?.substring(0, 30),
+                addr.city,
+                addr.state,
+                addr.pinCode || addr.zipCode
+              ].filter(Boolean);
+              
+              formattedAddress = addressParts.join(', ');
+              if (formattedAddress.length > 60) {
+                formattedAddress = formattedAddress.substring(0, 57) + '...';
+              }
+            } else if (typeof data.address === 'string') {
+              formattedAddress = data.address.length > 60 ? data.address.substring(0, 57) + '...' : data.address;
+            }
+
+            // Format website URL to be more concise
+            let formattedWebsite = data.contact?.website || data.website || 'www.edulogix.com';
+            if (formattedWebsite.length > 25) {
+              formattedWebsite = formattedWebsite
+                .replace(/^https?:\/\//, '')
+                .replace(/^www\./, '');
+              if (formattedWebsite.length > 25) {
+                formattedWebsite = formattedWebsite.substring(0, 22) + '...';
+              }
+            }
+
             schoolData = {
-              schoolName: data.schoolName || data.school?.name || user?.schoolName,
-              schoolCode: data.schoolCode || data.school?.code || user?.schoolCode,
-              address: data.school?.address || data.address || '123 School Street, City, State 12345',
-              phone: data.school?.phone || data.phone || '+91-XXXXXXXXXX',
-              email: data.school?.email || data.email || 'info@school.com',
-              website: data.school?.website || data.website || 'www.edulogix.com',
-              logoUrl: data.school?.logoUrl || data.logoUrl || ''
+              schoolName: data.name || data.schoolName || user?.schoolName,
+              schoolCode: data.code || data.schoolCode || user?.schoolCode,
+              address: formattedAddress,
+              phone: data.contact?.phone || data.phone || data.contactNumber || '+91-XXXXXXXXXX',
+              email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || 'info@school.com',
+              website: formattedWebsite,
+              logoUrl: data.logoUrl || data.logo || ''
             };
           }
         } catch (fallbackError: any) {
-          console.log('Classes endpoint also failed:', fallbackError.response?.status || fallbackError.message);
-          
+          console.log('Alternative endpoints also failed:', fallbackError.response?.status || fallbackError.message);
+
           // Try one more fallback - get all schools and find by code
           if (user?.schoolCode && !schoolData) {
             try {
@@ -124,20 +211,54 @@ const UniversalTemplate: React.FC = () => {
               const allSchoolsResponse = await schoolAPI.getAllSchools();
               if (allSchoolsResponse?.data?.success && allSchoolsResponse.data?.data) {
                 const schools = allSchoolsResponse.data.data;
-                const school = schools.find((s: any) => 
-                  s.schoolCode === user.schoolCode || 
+                const school = schools.find((s: any) =>
+                  s.schoolCode === user.schoolCode ||
                   s.code === user.schoolCode ||
                   s.name?.toLowerCase().includes(user.schoolName?.toLowerCase() || '')
                 );
                 if (school) {
                   console.log('School found in getAllSchools:', school);
+                  
+                  // Format address from nested structure (concise version)
+                  let formattedAddress = '123 School Street, City, State 12345';
+                  if (school.address && typeof school.address === 'object') {
+                    const addr = school.address;
+                    const addressParts = [
+                      addr.area || addr.street?.substring(0, 30),
+                      addr.city,
+                      addr.state,
+                      addr.pinCode || addr.zipCode
+                    ].filter(Boolean);
+                    
+                    formattedAddress = addressParts.join(', ');
+                    if (formattedAddress.length > 60) {
+                      formattedAddress = formattedAddress.substring(0, 57) + '...';
+                    }
+                  } else if (typeof school.address === 'string') {
+                    formattedAddress = school.address.length > 60 ? school.address.substring(0, 57) + '...' : school.address;
+                  } else if (school.location?.address) {
+                    const locAddr = school.location.address;
+                    formattedAddress = locAddr.length > 60 ? locAddr.substring(0, 57) + '...' : locAddr;
+                  }
+                  
+                  // Format website URL to be more concise
+                  let formattedWebsite = school.contact?.website || school.website || 'www.edulogix.com';
+                  if (formattedWebsite.length > 25) {
+                    formattedWebsite = formattedWebsite
+                      .replace(/^https?:\/\//, '')
+                      .replace(/^www\./, '');
+                    if (formattedWebsite.length > 25) {
+                      formattedWebsite = formattedWebsite.substring(0, 22) + '...';
+                    }
+                  }
+                  
                   schoolData = {
-                    schoolName: school.schoolName || school.name || user?.schoolName,
-                    schoolCode: school.schoolCode || school.code || user?.schoolCode,
-                    address: school.address || school.location?.address || '123 School Street, City, State 12345',
-                    phone: school.phone || school.contact?.phone || school.contactNumber || '+91-XXXXXXXXXX',
-                    email: school.email || school.contact?.email || school.contactEmail || 'info@school.com',
-                    website: school.website || school.contact?.website || 'www.edulogix.com',
+                    schoolName: school.name || school.schoolName || user?.schoolName,
+                    schoolCode: school.code || school.schoolCode || user?.schoolCode,
+                    address: formattedAddress,
+                    phone: school.contact?.phone || school.phone || school.contactNumber || '+91-XXXXXXXXXX',
+                    email: school.contact?.email || school.email || school.contactEmail || school.principalEmail || 'info@school.com',
+                    website: formattedWebsite,
                     logoUrl: school.logoUrl || school.logo || ''
                   };
                 }
@@ -148,7 +269,7 @@ const UniversalTemplate: React.FC = () => {
           }
         }
       }
-      
+
       // If we got school data, update the template settings
       if (schoolData) {
         console.log('Updating template settings with school data:', schoolData);
@@ -250,12 +371,12 @@ const UniversalTemplate: React.FC = () => {
             <!-- Header -->
             <div class="flex justify-between items-start mb-8 pb-4 border-b-2" style="border-color: ${templateSettings.accentColor};">
               <div class="flex items-center space-x-4">
-                ${templateSettings.logoUrl ? 
-                  `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" />` :
-                  `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+                ${templateSettings.logoUrl ?
+        `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" />` :
+        `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
                     <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
                   </div>`
-                }
+      }
                 <div>
                   <h1 class="text-2xl font-bold" style="color: ${templateSettings.headerColor};">
                     ${templateSettings.schoolName}
@@ -290,7 +411,7 @@ const UniversalTemplate: React.FC = () => {
                   <span>Powered by</span>
                   <div class="ml-2 flex items-center">
                     <div class="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
-                    <span class="font-semibold">EduLgix</span>
+                    <span class="font-semibold">EduLogix</span>
                   </div>
                 </div>
               </div>
@@ -327,11 +448,11 @@ const UniversalTemplate: React.FC = () => {
 
   const TemplatePreview = () => {
     const data = templateData[templateType];
-    
+
     // Special layout for invoice template (portrait with vertical partition)
     if (templateType === 'invoice') {
       return (
-        <div className="w-full max-w-4xl mx-auto bg-white shadow-lg" style={{ 
+        <div className="w-full max-w-4xl mx-auto bg-white shadow-lg" style={{
           fontFamily: 'Arial, sans-serif',
           aspectRatio: '210/148', // A5 landscape ratio (smaller height)
           minHeight: '148mm',
@@ -342,9 +463,9 @@ const UniversalTemplate: React.FC = () => {
           flexDirection: 'row'
         }}>
           {/* Admin Copy */}
-          <div style={{ 
-            flex: 1, 
-            borderRight: '2px dashed #ccc', 
+          <div style={{
+            flex: 1,
+            borderRight: '2px dashed #ccc',
             paddingRight: '5mm',
             marginRight: '5mm',
             display: 'flex',
@@ -373,13 +494,13 @@ const UniversalTemplate: React.FC = () => {
                 ADMIN COPY
               </div>
             </div>
-            
+
             <div className="text-center mb-2">
               <h2 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
                 PAYMENT RECEIPT
               </h2>
             </div>
-            
+
             <div className="text-center text-gray-400 flex-1 flex items-center justify-center">
               <div>
                 <div className="text-2xl mb-2">🧾</div>
@@ -387,18 +508,18 @@ const UniversalTemplate: React.FC = () => {
                 <p className="text-xs">Student details</p>
               </div>
             </div>
-            
+
             <div className="text-center mt-auto text-xs text-gray-600 border-t pt-2">
               <div className="mb-1">This is a computer generated copy.</div>
               <div className="flex items-center justify-center gap-1 mt-1">
                 <span>Powered by</span>
-                <strong style={{ color: '#2563eb' }}>EduLgix</strong>
+                <strong style={{ color: '#2563eb' }}>EduLogix</strong>
               </div>
             </div>
           </div>
-          
+
           {/* Student Copy */}
-          <div style={{ 
+          <div style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
@@ -426,13 +547,13 @@ const UniversalTemplate: React.FC = () => {
                 STUDENT COPY
               </div>
             </div>
-            
+
             <div className="text-center mb-2">
               <h2 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
                 PAYMENT RECEIPT
               </h2>
             </div>
-            
+
             <div className="text-center text-gray-400 flex-1 flex items-center justify-center">
               <div>
                 <div className="text-2xl mb-2">🧾</div>
@@ -440,22 +561,22 @@ const UniversalTemplate: React.FC = () => {
                 <p className="text-xs">Student details</p>
               </div>
             </div>
-            
+
             <div className="text-center mt-auto text-xs text-gray-600 border-t pt-2">
               <div className="mb-1">This is a computer generated copy.</div>
               <div className="flex items-center justify-center gap-1 mt-1">
                 <span>Powered by</span>
-                <strong style={{ color: '#2563eb' }}>EduLgix</strong>
+                <strong style={{ color: '#2563eb' }}>EduLogix</strong>
               </div>
             </div>
           </div>
         </div>
       );
     }
-    
+
     // Regular portrait layout for other templates
     return (
-      <div className="w-full max-w-4xl mx-auto bg-white shadow-lg flex flex-col" style={{ 
+      <div className="w-full max-w-4xl mx-auto bg-white shadow-lg flex flex-col" style={{
         fontFamily: 'Arial, sans-serif',
         aspectRatio: '210/297', // A4 ratio
         minHeight: '297mm',
@@ -515,7 +636,7 @@ const UniversalTemplate: React.FC = () => {
               <span>Powered by</span>
               <div className="ml-2 flex items-center">
                 <div className="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
-                <span className="font-semibold">EduLgix</span>
+                <span className="font-semibold">EduLogix</span>
               </div>
             </div>
           </div>
@@ -556,7 +677,7 @@ const UniversalTemplate: React.FC = () => {
             </button>
           </div>
         </div>
-        
+
         {/* A4 Preview Container */}
         <div className="bg-gray-100 p-8 rounded-lg overflow-auto">
           <div className="transform scale-75 origin-top-left">

@@ -1474,37 +1474,45 @@ exports.getSchoolById = async (req, res) => {
         return res.status(404).json({ message: 'School not found' });
       }
 
-      // If user is accessing their own school (not superadmin), try to get school info from school-specific database
-      if (req.user.role !== 'superadmin' && req.user.schoolCode) {
+      // Skip school-specific database lookup for now and use main database
+      // This prevents 500 errors when school-specific database doesn't exist
+      console.log(`[getSchoolById] Using main database for school: ${school.name} (${school.code})`);
+      
+      // Optionally try school-specific database but don't fail if it doesn't work
+      if (req.user.role !== 'superadmin' && req.user.schoolCode && false) { // Disabled for now
         try {
           const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(req.user.schoolCode);
           const schoolInfoCollection = schoolConnection.collection('school_info');
           const schoolInfo = await schoolInfoCollection.findOne({});
 
           if (schoolInfo) {
+            console.log(`[getSchoolById] Found school info in school-specific database`);
             // Return the school info from the school-specific database
             return res.json({
-              _id: school._id,
-              name: schoolInfo.name,
-              code: schoolInfo.code,
-              address: schoolInfo.address,
-              contact: schoolInfo.contact,
-              principalName: schoolInfo.principalName,
-              principalEmail: schoolInfo.principalEmail,
-              bankDetails: schoolInfo.bankDetails,
-              accessMatrix: schoolInfo.accessMatrix,
-              settings: schoolInfo.settings,
-              schoolType: schoolInfo.schoolType,
-              establishedYear: schoolInfo.establishedYear,
-              affiliationBoard: schoolInfo.affiliationBoard,
-              website: schoolInfo.website,
-              secondaryContact: schoolInfo.secondaryContact,
-              logoUrl: schoolInfo.logoUrl,
-              databaseName: school.databaseName,
-              databaseCreated: school.databaseCreated,
-              isActive: school.isActive,
-              createdAt: school.createdAt,
-              updatedAt: school.updatedAt
+              success: true,
+              data: {
+                _id: school._id,
+                name: schoolInfo.name,
+                code: schoolInfo.code,
+                address: schoolInfo.address,
+                contact: schoolInfo.contact,
+                principalName: schoolInfo.principalName,
+                principalEmail: schoolInfo.principalEmail,
+                bankDetails: schoolInfo.bankDetails,
+                accessMatrix: schoolInfo.accessMatrix,
+                settings: schoolInfo.settings,
+                schoolType: schoolInfo.schoolType,
+                establishedYear: schoolInfo.establishedYear,
+                affiliationBoard: schoolInfo.affiliationBoard,
+                website: schoolInfo.website,
+                secondaryContact: schoolInfo.secondaryContact,
+                logoUrl: schoolInfo.logoUrl,
+                databaseName: school.databaseName,
+                databaseCreated: school.databaseCreated,
+                isActive: school.isActive,
+                createdAt: school.createdAt,
+                updatedAt: school.updatedAt
+              }
             });
           }
         } catch (error) {
@@ -1514,13 +1522,92 @@ exports.getSchoolById = async (req, res) => {
       }
 
       // Return school info from main database (for superadmin or if school-specific fetch failed)
-      res.json(school);
+      console.log(`[getSchoolById] Returning main database info for: ${school.name} (${school.code})`);
+      res.json({
+        success: true,
+        data: school
+      });
     } else {
       res.status(403).json({ message: 'Access denied' });
     }
   } catch (error) {
     console.error('Error fetching school:', error);
-    res.status(500).json({ message: 'Error fetching school', error: error.message });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching school', 
+      error: error.message 
+    });
+  }
+};
+
+// Get school info directly from main database (no school-specific database lookup)
+exports.getSchoolInfo = async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    console.log(`[getSchoolInfo] Fetching school info for: ${schoolId}`);
+
+    let school = null;
+    
+    // Check if schoolId is a valid ObjectId before attempting findById 
+    const mongoose = require('mongoose'); 
+    if (mongoose.Types.ObjectId.isValid(schoolId)) {
+      console.log(`[getSchoolInfo] Attempting find by ID: ${schoolId}`);
+      school = await School.findById(schoolId);
+    }
+
+    // Fallback: Try to find by school code (case-insensitive) if not found by ID or if ID format was invalid
+    if (!school) {
+      console.log(`[getSchoolInfo] Attempting find by code: ${schoolId}`);
+      school = await School.findOne({ code: new RegExp(`^${schoolId}$`, 'i') });
+    }
+
+    if (!school) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'School not found' 
+      });
+    }
+
+    console.log(`[getSchoolInfo] Found school: ${school.name} (${school.code})`);
+    
+    // Return school info directly from main database
+    res.json({
+      success: true,
+      data: {
+        _id: school._id,
+        name: school.name,
+        code: school.code,
+        address: school.address,
+        contact: school.contact,
+        principalName: school.principalName,
+        principalEmail: school.principalEmail,
+        mobile: school.mobile,
+        bankDetails: school.bankDetails,
+        accessMatrix: school.accessMatrix,
+        settings: school.settings,
+        features: school.features,
+        stats: school.stats,
+        schoolType: school.schoolType,
+        establishedYear: school.establishedYear,
+        affiliationBoard: school.affiliationBoard,
+        website: school.website,
+        secondaryContact: school.secondaryContact,
+        logoUrl: school.logoUrl,
+        isActive: school.isActive,
+        createdAt: school.createdAt,
+        updatedAt: school.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching school info:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching school info', 
+      error: error.message 
+    });
   }
 };
 
