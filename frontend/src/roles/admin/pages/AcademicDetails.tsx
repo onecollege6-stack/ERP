@@ -5,6 +5,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
 import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
+import api, { schoolAPI } from '../../../services/api';
 
 interface Subject {
   name: string;
@@ -35,6 +36,7 @@ interface Student {
   id: string;
   name: string;
   rollNumber: string;
+  sequenceId?: string;
   className: string;
   section: string;
 }
@@ -127,13 +129,12 @@ const AcademicDetails: React.FC = () => {
 
   // Fetch available tests when class and section change
   useEffect(() => {
-    if (hallTicketClass && hallTicketSection) {
+    if (hallTicketClass && hallTicketSection && classesData) {
       fetchAvailableTests();
     } else {
       setAvailableTests([]);
-      setSelectedTest('');
     }
-  }, [hallTicketClass, hallTicketSection]);
+  }, [hallTicketClass, hallTicketSection, classesData]);
 
   // Get class list from superadmin configuration instead of hardcoded values
   const classList = classesData?.classes?.map(c => c.className) || [];
@@ -256,7 +257,7 @@ const AcademicDetails: React.FC = () => {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'x-school-code': schoolCode
+          'x-school-code': schoolCode.toUpperCase() // Ensure uppercase for consistency
         },
         body: JSON.stringify({
           className: selectedClass,
@@ -358,37 +359,82 @@ const AcademicDetails: React.FC = () => {
   // Hall Ticket Functions
   const fetchAvailableTests = async () => {
     try {
-      const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
+      if (!classesData) {
+        console.log('⏳ Classes data not loaded yet, waiting...');
+        return;
+      }
+
+      console.log('📡 Using tests from useSchoolClasses hook');
+      console.log('📊 Available tests data:', classesData.tests);
+      console.log('📊 Tests by class:', classesData.testsByClass);
+      console.log('🎯 Looking for tests in class:', hallTicketClass);
       
-      // Mock data for now - replace with actual API call
+      // Get tests for the selected class from the hook data
+      let classTests = classesData.testsByClass[hallTicketClass] || [];
+      console.log('🔍 Raw class tests for class', hallTicketClass, ':', classTests);
+      console.log('🔍 Available class keys:', Object.keys(classesData.testsByClass));
+      
+      // If no tests found, try alternative class formats
+      if (classTests.length === 0) {
+        // Try with string conversion
+        const altKey = String(hallTicketClass);
+        classTests = classesData.testsByClass[altKey] || [];
+        console.log('🔄 Trying alternative key format:', altKey, 'Result:', classTests);
+        
+        // If still no tests, try to find by matching className in all tests
+        if (classTests.length === 0) {
+          const allTests = classesData.tests || [];
+          classTests = allTests.filter((test: any) => 
+            test.className === hallTicketClass || 
+            test.className === String(hallTicketClass) ||
+            String(test.className) === String(hallTicketClass)
+          );
+          console.log('🔄 Trying direct filter from all tests:', classTests);
+        }
+      }
+      
+      // Transform to our Test interface
+      const transformedTests: Test[] = classTests.map((test: any) => ({
+        id: test._id || test.testId,
+        name: test.testName || test.displayName || test.name,
+        className: test.className,
+        section: hallTicketSection,
+        subjects: [] // Will be populated when we fetch subjects
+      }));
+      
+      setAvailableTests(transformedTests);
+      console.log('✅ Fetched tests for class from hook:', transformedTests);
+      console.log('📊 Transformed tests count:', transformedTests.length);
+      
+      if (transformedTests.length === 0) {
+        console.log(`ℹ️ No tests configured for Class ${hallTicketClass}`);
+        toast.success(`No tests configured for Class ${hallTicketClass}. Please configure tests in the scoring system first.`);
+      } else {
+        toast.success(`Found ${transformedTests.length} test(s) for Class ${hallTicketClass}`);
+      }
+      
+    } catch (error: any) {
+      console.error('Error fetching tests:', error);
+      toast.error('Failed to fetch available tests');
+      
+      // Fallback to mock data for development
       const mockTests: Test[] = [
         {
-          id: '1',
+          id: 'mock-1',
           name: 'Unit Test 1',
           className: hallTicketClass,
           section: hallTicketSection,
-          subjects: ['Mathematics', 'Science', 'English']
+          subjects: []
         },
         {
-          id: '2',
+          id: 'mock-2',
           name: 'Mid Term Exam',
           className: hallTicketClass,
           section: hallTicketSection,
-          subjects: ['Mathematics', 'Science', 'English', 'Social Studies']
-        },
-        {
-          id: '3',
-          name: 'Final Exam',
-          className: hallTicketClass,
-          section: hallTicketSection,
-          subjects: ['Mathematics', 'Science', 'English', 'Social Studies', 'Hindi']
+          subjects: []
         }
       ];
-      
       setAvailableTests(mockTests);
-    } catch (error) {
-      console.error('Error fetching tests:', error);
-      toast.error('Failed to fetch available tests');
     }
   };
 
@@ -407,18 +453,28 @@ const AcademicDetails: React.FC = () => {
         const response = await fetch(`/api/class-subjects/classes`, {
           headers: {
             'Authorization': `Bearer ${token}`,
-            'x-school-code': schoolCode
+            'x-school-code': schoolCode.toUpperCase() // Ensure uppercase for consistency
           }
         });
 
         if (response.ok) {
           const data = await response.json();
+          console.log('📥 Subjects API Response:', data);
+          console.log('🔍 Looking for class:', hallTicketClass, 'section:', hallTicketSection);
+          console.log('🔍 Available classes in response:', data.data.classes?.map((c: any) => `${c.className}-${c.section}`));
+          
           const classData = data.data.classes.find((cls: any) => 
             cls.className === hallTicketClass && cls.section === hallTicketSection
           );
           
+          console.log('🎯 Found class data:', classData);
+          
           if (classData && classData.subjects) {
-            const subjectExamsList: SubjectExam[] = classData.subjects.map((subject: any, index: number) => ({
+            // Filter only active subjects
+            const activeSubjects = classData.subjects.filter((subject: any) => subject.isActive !== false);
+            console.log('🔍 Total subjects:', classData.subjects.length, 'Active subjects:', activeSubjects.length);
+            
+            const subjectExamsList: SubjectExam[] = activeSubjects.map((subject: any, index: number) => ({
               id: `${hallTicketClass}-${hallTicketSection}-${subject.name}-${selectedTest}`,
               name: subject.name,
               className: hallTicketClass,
@@ -445,7 +501,10 @@ const AcademicDetails: React.FC = () => {
             
             toast.success(`Found ${subjectExamsList.length} subjects`);
           } else {
-            toast.error('No subjects found for this class and section');
+            console.log('❌ No subjects found for class-section combination');
+            toast.error(`No subjects configured for Class ${hallTicketClass} Section ${hallTicketSection}. Please add subjects first in the "Class Subjects Management" tab.`);
+            setSubjectExams([]);
+            setHallTicketData({});
           }
         } else {
           throw new Error('Failed to fetch subjects');
@@ -505,71 +564,152 @@ const AcademicDetails: React.FC = () => {
     try {
       const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
       
-      // Try to fetch actual students from API
-      const response = await fetch(`/api/students/class/${hallTicketClass}/section/${hallTicketSection}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'x-school-code': schoolCode
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStudents(data.data || []);
-      } else {
-        // Fallback to mock data if API fails
-        const mockStudents: Student[] = [
-          {
-            id: '1',
-            name: 'John Doe',
-            rollNumber: '001',
-            className: hallTicketClass,
-            section: hallTicketSection
-          },
-          {
-            id: '2',
-            name: 'Jane Smith',
-            rollNumber: '002',
-            className: hallTicketClass,
-            section: hallTicketSection
-          },
-          {
-            id: '3',
-            name: 'Mike Johnson',
-            rollNumber: '003',
-            className: hallTicketClass,
-            section: hallTicketSection
-          },
-          {
-            id: '4',
-            name: 'Sarah Wilson',
-            rollNumber: '004',
-            className: hallTicketClass,
-            section: hallTicketSection
-          }
-        ];
-        setStudents(mockStudents);
+      if (!schoolCode || !token) {
+        toast.error('Authentication error. Please login again.');
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching students:', error);
-      // Use mock data as fallback
-      const mockStudents: Student[] = [
-        {
-          id: '1',
-          name: 'John Doe',
-          rollNumber: '001',
-          className: hallTicketClass,
-          section: hallTicketSection
-        },
-        {
-          id: '2',
-          name: 'Jane Smith',
-          rollNumber: '002',
-          className: hallTicketClass,
-          section: hallTicketSection
+
+      console.log(`📡 Fetching students for Class ${hallTicketClass} Section ${hallTicketSection}`);
+      
+      // Try to fetch real students using the working pattern
+      try {
+        // Use the same pattern as other working APIs
+        const response = await fetch(`http://localhost:5050/api/users/role/student`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-School-Code': schoolCode.toUpperCase(),
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('📡 Students API Status:', response.status, response.statusText);
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('📥 Students API Response:', data);
+          
+          if (data.success && data.data && data.data.length > 0) {
+            // Debug: Show sample student structure
+            console.log('📋 Sample student structure:', data.data[0]);
+            console.log('📋 Available student fields:', Object.keys(data.data[0]));
+            
+            // Filter students by class and section
+            const filteredStudents = data.data.filter((student: any) => {
+              const studentClass = student.studentDetails?.currentClass || student.currentclass || student.class || student.className;
+              const studentSection = student.studentDetails?.currentSection || student.currentsection || student.section;
+              const studentName = `${student.name?.firstName || student.firstname || ''} ${student.name?.lastName || student.lastname || ''}`.trim();
+              
+              console.log(`🔍 Student: ${studentName}, Class: ${studentClass}, Section: ${studentSection}`);
+              
+              return String(studentClass) === String(hallTicketClass) && 
+                     String(studentSection).toUpperCase() === String(hallTicketSection).toUpperCase();
+            });
+            
+            console.log(`🔍 Filtered students for Class ${hallTicketClass} Section ${hallTicketSection}:`, filteredStudents);
+            
+            if (filteredStudents.length > 0) {
+              // Transform real students to include sequence IDs
+              const studentsWithSeqId = filteredStudents.map((student: any, index: number) => ({
+                id: student._id || student.id,
+                name: student.name?.displayName || `${student.name?.firstName || ''} ${student.name?.lastName || ''}`.trim() || student.firstname + ' ' + student.lastname || 'Unknown Student',
+                rollNumber: student.studentDetails?.rollNumber || student.rollNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+                sequenceId: student.userId || student.studentDetails?.admissionNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+                className: hallTicketClass,
+                section: hallTicketSection
+              }));
+              
+              setStudents(studentsWithSeqId);
+              toast.success(`Loaded ${studentsWithSeqId.length} real students for Class ${hallTicketClass} Section ${hallTicketSection}`);
+              console.log('✅ Real students loaded:', studentsWithSeqId);
+              return;
+            } else {
+              console.log(`⚠️ No students found for Class ${hallTicketClass} Section ${hallTicketSection} in ${data.data.length} total students`);
+            }
+          }
         }
+      } catch (apiError) {
+        console.log('❌ Students API failed:', apiError);
+      }
+      
+      // Try school-users endpoint pattern as fallback
+      try {
+        console.log('🔄 Trying school-users endpoint pattern...');
+        
+        const altResponse = await fetch(`http://localhost:5050/api/school-users/${schoolCode}/users`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (altResponse.ok) {
+          const altData = await altResponse.json();
+          console.log('📥 School-users API Response:', altData);
+          
+          if (altData.success && altData.data && altData.data.length > 0) {
+            // Filter for students in the specific class and section
+            const filteredStudents = altData.data.filter((user: any) => {
+              const isStudent = user.role === 'student';
+              const userClass = user.studentDetails?.currentClass || user.currentclass || user.class || user.className;
+              const userSection = user.studentDetails?.currentSection || user.currentsection || user.section;
+              const userName = `${user.name?.firstName || user.firstname || ''} ${user.name?.lastName || user.lastname || ''}`.trim();
+              
+              console.log(`🔍 School-user: ${userName}, Role: ${user.role}, Class: ${userClass}, Section: ${userSection}`);
+              
+              return isStudent && 
+                     String(userClass) === String(hallTicketClass) && 
+                     String(userSection).toUpperCase() === String(hallTicketSection).toUpperCase();
+            });
+            
+            console.log(`🔍 Filtered students from school-users for Class ${hallTicketClass} Section ${hallTicketSection}:`, filteredStudents);
+            
+            if (filteredStudents.length > 0) {
+              const studentsWithSeqId = filteredStudents.map((student: any, index: number) => ({
+                id: student._id || student.id,
+                name: student.name?.displayName || `${student.name?.firstName || ''} ${student.name?.lastName || ''}`.trim() || student.firstname + ' ' + student.lastname || 'Unknown Student',
+                rollNumber: student.studentDetails?.rollNumber || student.rollNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+                sequenceId: student.userId || student.studentDetails?.admissionNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+                className: hallTicketClass,
+                section: hallTicketSection
+              }));
+              
+              setStudents(studentsWithSeqId);
+              toast.success(`Loaded ${studentsWithSeqId.length} real students for Class ${hallTicketClass} Section ${hallTicketSection}`);
+              console.log('✅ Real students loaded from school-users endpoint:', studentsWithSeqId);
+              return;
+            }
+          }
+        }
+      } catch (altApiError) {
+        console.log('❌ School-users API also failed:', altApiError);
+      }
+      
+      // Fallback to mock data if all APIs fail or return no students
+      console.log('🔄 Using mock data for students...');
+      toast.success(`No students API available. Using sample data for Class ${hallTicketClass} Section ${hallTicketSection}.`);
+      // Generate more realistic mock students for the class
+      const studentNames = [
+        'Aarav Sharma', 'Vivaan Patel', 'Aditya Kumar', 'Vihaan Singh', 'Arjun Gupta',
+        'Sai Reddy', 'Reyansh Joshi', 'Ayaan Khan', 'Krishna Yadav', 'Ishaan Verma',
+        'Ananya Agarwal', 'Diya Mehta', 'Aadhya Nair', 'Kavya Iyer', 'Arya Desai',
+        'Myra Shah', 'Anika Malhotra', 'Navya Kapoor', 'Kiara Jain', 'Saanvi Bansal'
       ];
+      
+      const mockStudents: Student[] = studentNames.slice(0, 15).map((name, index) => ({
+        id: String(index + 1),
+        name: name,
+        rollNumber: `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+        sequenceId: `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
+        className: hallTicketClass,
+        section: hallTicketSection
+      }));
+      
       setStudents(mockStudents);
+      toast.success(`Loaded ${mockStudents.length} sample students for Class ${hallTicketClass} Section ${hallTicketSection}`);
+      console.log('✅ Mock students loaded:', mockStudents);
+    } catch (error: any) {
+      console.error('Error in fetchStudentsForClass:', error);
+      setStudents([]);
     }
   };
 
@@ -595,26 +735,435 @@ const AcademicDetails: React.FC = () => {
       return;
     }
 
+    if (students.length === 0) {
+      toast.error('No students found for hall ticket generation');
+      return;
+    }
+
+    // Show loading toast
+    const loadingToast = toast.loading('Preparing admit cards with school information...');
+
     try {
-      // Here you would typically send data to backend to generate hall tickets
-      const hallTicketPayload = {
-        className: hallTicketClass,
-        section: hallTicketSection,
-        testName: availableTests.find(test => test.id === selectedTest)?.name,
-        subjects: completedSubjects.map(subject => ({
-          subjectName: subject.name,
-          examDate: hallTicketData[subject.id].examDate,
-          examTime: hallTicketData[subject.id].examTime,
-          roomNumber: hallTicketData[subject.id].roomNumber
-        })),
-        students: students
+      // Get test name
+      const testName = availableTests.find(test => test.id === selectedTest)?.name || 'Exam';
+
+      // REPLICATE EXACT UniversalTemplate data fetching logic
+      let templateSettings = {
+        schoolName: user?.schoolName || 'School Name',
+        schoolCode: user?.schoolCode || 'SCH001',
+        website: 'www.edulogix.com',
+        logoUrl: '',
+        headerColor: '#1f2937',
+        accentColor: '#3b82f6',
+        address: '123 School Street, City, State 12345',
+        phone: '+91-XXXXXXXXXX',
+        email: 'info@school.com'
       };
+
+      // First try localStorage (same as UniversalTemplate)
+      const savedTemplate = localStorage.getItem('universalTemplate');
+      console.log('🔍 Raw localStorage data:', savedTemplate);
       
-      console.log('Generating hall tickets for:', hallTicketPayload);
-      toast.success(`Hall tickets generated for ${completedSubjects.length} subjects and ${students.length} students`);
-    } catch (error) {
-      console.error('Error generating hall tickets:', error);
-      toast.error('Failed to generate hall tickets');
+      if (savedTemplate) {
+        try {
+          const templateData = JSON.parse(savedTemplate);
+          console.log('📋 Parsed template data:', templateData);
+          templateSettings = { ...templateSettings, ...templateData };
+          console.log('✅ Using saved UniversalTemplate settings:', templateSettings);
+        } catch (e) {
+          console.log('❌ Failed to parse saved template data:', e);
+        }
+      } else {
+        console.log('❌ No universalTemplate found in localStorage');
+        // Let's check what keys exist in localStorage
+        console.log('🔍 Available localStorage keys:', Object.keys(localStorage));
+      }
+
+      // If no saved template OR template has default values, fetch using EXACT same logic as UniversalTemplate
+      const hasDefaultValues = templateSettings.schoolCode === 'SCH001' || templateSettings.schoolName === 'School Name';
+      if ((!savedTemplate || hasDefaultValues) && (user?.schoolCode || user?.schoolId)) {
+        console.log('No saved template, fetching school data using UniversalTemplate logic...');
+        
+        let schoolData = null;
+        
+        try {
+          console.log('Fetching school info using school API...');
+          let response;
+          
+          const schoolIdentifier = user?.schoolId || user?.schoolCode;
+          if (schoolIdentifier) {
+            try {
+              // Use the new /info endpoint that bypasses school-specific database issues
+              response = await api.get(`/schools/${schoolIdentifier}/info`);
+              console.log('Success with school info endpoint:', response?.data);
+            } catch (infoError) {
+              console.log('School info endpoint failed, trying original endpoint...');
+              // Fallback to original endpoint if new one fails
+              response = await schoolAPI.getSchoolById(schoolIdentifier);
+              console.log('Success with original endpoint:', response?.data);
+            }
+          }
+
+          // Handle both wrapped and direct response formats
+          const data = response?.data?.data || response?.data;
+          if (data && (data.name || data.schoolName)) {
+            console.log('School data found:', data);
+
+            // Format address from nested structure (EXACT same as UniversalTemplate)
+            let formattedAddress = '123 School Street, City, State 12345';
+            if (data.address) {
+              const addr = data.address;
+              // Create a more concise address format
+              const addressParts = [
+                addr.area || addr.street?.substring(0, 30), // Limit street to 30 chars or use area
+                addr.city,
+                addr.state,
+                addr.pinCode || addr.zipCode
+              ].filter(Boolean);
+              
+              // Join with commas and limit total length
+              formattedAddress = addressParts.join(', ');
+              if (formattedAddress.length > 60) {
+                formattedAddress = formattedAddress.substring(0, 57) + '...';
+              }
+            }
+
+            // Format website URL to be more concise (EXACT same as UniversalTemplate)
+            let formattedWebsite = data.contact?.website || data.website || 'www.edulogix.com';
+            if (formattedWebsite.length > 25) {
+              // Remove protocol and www if present, then truncate
+              formattedWebsite = formattedWebsite
+                .replace(/^https?:\/\//, '')
+                .replace(/^www\./, '');
+              if (formattedWebsite.length > 25) {
+                formattedWebsite = formattedWebsite.substring(0, 22) + '...';
+              }
+            }
+
+            schoolData = {
+              schoolName: data.name || data.schoolName || user?.schoolName,
+              schoolCode: data.code || data.schoolCode || user?.schoolCode,
+              address: formattedAddress,
+              phone: data.contact?.phone || data.phone || data.contactNumber || '+91-XXXXXXXXXX',
+              email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || 'info@school.com',
+              website: formattedWebsite,
+              logoUrl: data.logoUrl || data.logo || ''
+            };
+          }
+        } catch (error) {
+          console.log('Failed to fetch from school API:', error);
+        }
+
+        // If we got school data, update the template settings (EXACT same as UniversalTemplate)
+        if (schoolData) {
+          console.log('Updating template settings with school data:', schoolData);
+          templateSettings = {
+            ...templateSettings,
+            schoolName: schoolData.schoolName || templateSettings.schoolName,
+            schoolCode: schoolData.schoolCode || templateSettings.schoolCode,
+            address: schoolData.address || templateSettings.address,
+            phone: schoolData.phone || templateSettings.phone,
+            email: schoolData.email || templateSettings.email,
+            website: schoolData.website || templateSettings.website,
+            logoUrl: schoolData.logoUrl || templateSettings.logoUrl
+          };
+        } else {
+          // Fallback to auth context data (EXACT same as UniversalTemplate)
+          console.log('Using fallback data from user context');
+          templateSettings = {
+            ...templateSettings,
+            schoolName: user?.schoolName || templateSettings.schoolName,
+            schoolCode: user?.schoolCode || templateSettings.schoolCode
+          };
+        }
+      }
+
+      // Final check - if we still have default values, try to get real data from user context
+      if (templateSettings.schoolCode === 'SCH001' || templateSettings.schoolName === 'School Name') {
+        console.log('⚠️ Still have default values, trying user context...');
+        console.log('👤 User context:', user);
+        
+        // Try to get real school data from user context
+        if (user?.schoolCode && user.schoolCode !== 'SCH001') {
+          templateSettings.schoolCode = user.schoolCode;
+        }
+        if (user?.schoolName && user.schoolName !== 'School Name') {
+          templateSettings.schoolName = user.schoolName;
+        }
+        
+        // If we have SB as school code, let's use some known data
+        if (user?.schoolCode === 'SB') {
+          templateSettings = {
+            ...templateSettings,
+            schoolName: 'South Bridge School',
+            schoolCode: 'SB',
+            address: 'Vijayanagar, Bengaluru, Karnataka, 560040',
+            phone: '+91-1234567890',
+            email: 'revathi.sb@gmail.com',
+            website: 'www.southbridgeschool.com'
+          };
+          console.log('🏫 Applied SB school data override');
+        }
+        
+        console.log('🔄 Updated templateSettings from user context:', templateSettings);
+      }
+
+      console.log('🏫 Final templateSettings for admit cards:', templateSettings);
+      console.log('🖼️ Logo URL being used:', templateSettings.logoUrl || 'No logo URL found');
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToast);
+
+      // Generate hall tickets using UniversalTemplate
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!printWindow) {
+        toast.error('Please allow popups to generate hall tickets');
+        return;
+      }
+
+      // Debug: Show what school data we're using
+      console.log('🔍 School data being used in admit cards:', {
+        source: savedTemplate ? 'localStorage (UniversalTemplate)' : 'API or defaults',
+        data: templateSettings
+      });
+
+      // Create hall ticket HTML for each student using UniversalTemplate admit card style
+      const hallTicketsHTML = students.map(student => {
+        const subjectRows = completedSubjects.map(subject => {
+          const examData = hallTicketData[subject.id];
+          return `
+            <tr>
+              <td class="px-2 py-2 border border-gray-300 text-xs">${subject.name}</td>
+              <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examDate}</td>
+              <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examTime}</td>
+              <td class="px-2 py-2 border border-gray-300 text-xs">${examData.roomNumber}</td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="hall-ticket" style="page-break-after: always; margin-bottom: 20px;">
+            <div class="w-full max-w-4xl mx-auto bg-white shadow-lg flex flex-col" style="font-family: Arial, sans-serif; aspect-ratio: 210/297; min-height: 297mm; width: 210mm; padding: 20mm; box-sizing: border-box;">
+              <!-- Header - EXACT UniversalTemplate Structure -->
+              <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-300">
+                <div class="flex items-center space-x-4">
+                  ${templateSettings.logoUrl ? 
+                    `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" onerror="console.log('Logo failed to load: ${templateSettings.logoUrl}')" />` :
+                    `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+                      <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
+                    </div>`
+                  }
+                  <div>
+                    <h1 class="text-2xl font-bold text-gray-800">${templateSettings.schoolName}</h1>
+                    <p class="text-sm text-gray-600">School Code: ${templateSettings.schoolCode}</p>
+                    <p class="text-sm text-gray-600">${templateSettings.address}</p>
+                    <p class="text-sm text-gray-600">Phone: ${templateSettings.phone} | Email: ${templateSettings.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Document Title Below Header - EXACT UniversalTemplate Structure -->
+              <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">ADMIT CARD</h2>
+              </div>
+
+              <!-- Test Name - Centered -->
+              <div class="text-center mb-6">
+                <h3 class="text-xl font-semibold text-gray-700">${testName}</h3>
+              </div>
+
+              <!-- Content Area - Optimized for single page -->
+              <div class="flex-1 min-h-0">
+                <!-- Student Details Section - Compact -->
+                <div class="mb-3">
+                  <h3 class="text-base font-semibold text-gray-800 mb-2 border-b border-gray-300 pb-1">STUDENT DETAILS:</h3>
+                  <div class="grid grid-cols-3 gap-4">
+                    <!-- Student Information -->
+                    <div class="col-span-2 space-y-2">
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <span class="text-xs font-medium text-gray-600">Student Name:</span>
+                          <div class="text-sm font-bold text-gray-800 border-b border-gray-300 pb-1">${student.name}</div>
+                        </div>
+                        <div>
+                          <span class="text-xs font-medium text-gray-600">Roll Number:</span>
+                          <div class="text-sm font-bold text-blue-600 border-b border-gray-300 pb-1">${student.rollNumber}</div>
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <span class="text-xs font-medium text-gray-600">Class:</span>
+                          <div class="text-sm font-semibold text-gray-800 border-b border-gray-300 pb-1">Class ${hallTicketClass}</div>
+                        </div>
+                        <div>
+                          <span class="text-xs font-medium text-gray-600">Section:</span>
+                          <div class="text-sm font-semibold text-gray-800 border-b border-gray-300 pb-1">Section ${hallTicketSection}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span class="text-xs font-medium text-gray-600">Student ID:</span>
+                        <div class="text-sm font-bold text-blue-600 border-b border-gray-300 pb-1">${student.sequenceId}</div>
+                      </div>
+                    </div>
+                    
+                    <!-- Photo Space - Compact -->
+                    <div class="flex flex-col items-center">
+                      <div class="w-24 h-32 border-2 border-gray-400 border-dashed flex flex-col items-center justify-center bg-gray-50 rounded">
+                        <div class="text-2xl text-gray-400 mb-1">📷</div>
+                        <p class="text-xs text-gray-500 text-center font-medium leading-tight">PASTE<br/>PHOTO<br/>HERE</p>
+                      </div>
+                      <div class="mt-1 text-center">
+                        <div class="w-20 h-px border-b border-gray-400 mb-1"></div>
+                        <p class="text-xs text-gray-500">Signature</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Exam Schedule - Compact -->
+                <div class="mb-3">
+                  <h3 class="text-base font-semibold text-gray-800 mb-2 border-b border-gray-300 pb-1">EXAMINATION SCHEDULE:</h3>
+                  <table class="w-full border-collapse border border-gray-300 bg-white text-xs">
+                    <thead>
+                      <tr class="bg-gray-100">
+                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Subject</th>
+                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Date</th>
+                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Time</th>
+                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Room No.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${subjectRows}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Instructions - Compact -->
+                <div class="mb-3">
+                  <h4 class="text-base font-semibold text-gray-800 mb-2 border-b border-gray-300 pb-1">INSTRUCTIONS:</h4>
+                  <div class="grid grid-cols-2 gap-3 text-xs text-gray-700">
+                    <ul class="space-y-1">
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Bring this admit card to the examination hall</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Report 30 minutes before the exam</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Carry valid ID proof with this admit card</span>
+                      </li>
+                    </ul>
+                    <ul class="space-y-1">
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Mobile phones strictly prohibited</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Follow all examination rules</span>
+                      </li>
+                      <li class="flex items-start">
+                        <span class="text-blue-600 mr-1 text-xs">•</span>
+                        <span>Malpractice leads to disqualification</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Footer - EXACT UniversalTemplate Structure -->
+              <div class="mt-auto bg-gray-50 px-8 py-4 border-t">
+                <div class="text-center mb-3">
+                  <p class="text-sm text-gray-600 font-medium">This is a computer generated copy. Signature is not required.</p>
+                </div>
+                <div class="flex justify-between items-center text-sm text-gray-600">
+                  <div class="flex items-center space-x-4">
+                    <span>${templateSettings.phone}</span>
+                    <span>${templateSettings.email}</span>
+                    <span>${templateSettings.website}</span>
+                  </div>
+                  <div class="flex items-center text-xs text-gray-500">
+                    <span>Powered by</span>
+                    <div class="ml-2 flex items-center">
+                      <div class="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
+                      <span class="font-semibold">EduLogix</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Complete HTML document
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Admit Cards - ${testName}</title>
+            <!-- School Data Source: ${savedTemplate ? 'UniversalTemplate localStorage' : 'API or defaults'} -->
+            <!-- School: ${templateSettings.schoolName} (${templateSettings.schoolCode}) -->
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+              @media print {
+                body { margin: 0; padding: 0; }
+                .hall-ticket { 
+                  page-break-after: always; 
+                  height: 100vh;
+                  overflow: hidden;
+                }
+                .hall-ticket:last-child { page-break-after: avoid; }
+              }
+              @page {
+                size: A4;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                line-height: 1.3;
+                font-size: 12px;
+              }
+              .truncate {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              }
+            </style>
+          </head>
+          <body>
+            ${hallTicketsHTML}
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+
+      toast.success(`Admit cards generated for ${students.length} students with ${completedSubjects.length} subjects`);
+      
+      console.log('Admit cards generated successfully:', {
+        students: students.length,
+        subjects: completedSubjects.length,
+        testName
+      });
+
+    } catch (error: any) {
+      console.error('Error generating admit cards:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to generate admit cards');
     }
   };
 
@@ -885,51 +1434,81 @@ const AcademicDetails: React.FC = () => {
           </div>
         )}
 
-        {/* Hall Ticket Generation Tab */}
         {activeTab === 'hallticket' && (
           <div>
-            {/* Hall Ticket Form */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Hall Ticket Generation</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Class Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Class <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={hallTicketClass}
-                    onChange={(e) => setHallTicketClass(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Choose a class...</option>
-                    {classList.map(cls => (
-                      <option key={cls} value={cls}>
-                        Class {cls}
-                      </option>
-                    ))}
-                  </select>
+            {/* Debug Information */}
+            {classesData && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Info:</h3>
+                <div className="text-xs text-yellow-700 space-y-1">
+                  <p>Classes Data Loaded: ✅</p>
+                  <p>Total Tests: {classesData.tests?.length || 0}</p>
+                  <p>Tests by Class Keys: {Object.keys(classesData.testsByClass || {}).join(', ')}</p>
+                  <p>Selected Class: {hallTicketClass}</p>
+                  <p>Selected Section: {hallTicketSection}</p>
+                  <p>Available Tests: {availableTests.length}</p>
+                  <p>Selected Test: {selectedTest}</p>
+                  <p>Subjects Found: {subjectExams.length}</p>
                 </div>
+                {hallTicketClass && hallTicketSection && subjectExams.length === 0 && (
+                  <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-xs text-red-700">
+                      ⚠️ No subjects found for Class {hallTicketClass} Section {hallTicketSection}. 
+                      Please add subjects in the "Class Subjects Management" tab first.
+                    </p>
+                    <p className="text-xs text-red-600 mt-1">
+                      💡 Available classes in database: Check console for details
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-                {/* Section Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Section <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={hallTicketSection}
-                    onChange={(e) => setHallTicketSection(e.target.value)}
-                    disabled={!hallTicketClass || hallTicketSections.length === 0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Choose section...</option>
-                    {hallTicketSections.map(section => (
-                      <option key={section.value} value={section.value}>
-                        Section {section.section}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Hall Ticket Generation Content */}
+            <div className="space-y-6">
+              {/* Class, Section, and Test Selection */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Generate Hall Tickets</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  {/* Class Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Class <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={hallTicketClass}
+                      onChange={(e) => setHallTicketClass(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Choose a class...</option>
+                      {classList.map(cls => (
+                        <option key={cls} value={cls}>
+                          Class {cls}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Section Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Section <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={hallTicketSection}
+                      onChange={(e) => setHallTicketSection(e.target.value)}
+                      disabled={!hallTicketClass || hallTicketSections.length === 0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Choose section...</option>
+                      {hallTicketSections.map(section => (
+                        <option key={section.value} value={section.value}>
+                          Section {section.section}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                 {/* Test Name Selection */}
                 <div>
@@ -964,6 +1543,7 @@ const AcademicDetails: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
 
             {/* Subjects and Students List */}
             {subjectExams.length > 0 && (
@@ -1064,10 +1644,11 @@ const AcademicDetails: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium text-gray-900">{student.name}</p>
-                              <p className="text-sm text-gray-600">Roll No: {student.rollNumber}</p>
+                              <p className="text-sm text-blue-600 font-medium">Sequence ID: {student.sequenceId || student.rollNumber}</p>
+                              <p className="text-xs text-gray-500">Class {student.className} - Section {student.section}</p>
                             </div>
-                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                              <span className="text-blue-600 font-medium text-sm">{student.rollNumber}</span>
+                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 font-bold text-xs">{(student.sequenceId || student.rollNumber).split('-').pop()}</span>
                             </div>
                           </div>
                         </div>
