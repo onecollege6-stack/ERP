@@ -136,8 +136,23 @@ const AcademicDetails: React.FC = () => {
     }
   }, [hallTicketClass, hallTicketSection, classesData]);
 
-  // Get class list from superadmin configuration instead of hardcoded values
-  const classList = classesData?.classes?.map(c => c.className) || [];
+  // Get class list from superadmin configuration and sort in ascending order
+  const classList = (classesData?.classes?.map(c => c.className) || []).sort((a, b) => {
+    // Convert to numbers for proper numeric sorting
+    const numA = parseInt(a);
+    const numB = parseInt(b);
+    
+    // If both are numbers, sort numerically
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    
+    // If one or both are not numbers, sort alphabetically
+    return a.localeCompare(b);
+  });
+  
+  // Debug log to verify sorting
+  console.log('📚 Classes sorted in ascending order:', classList);
 
   // Fetch subjects for all classes
   const fetchAllClassSubjects = async () => {
