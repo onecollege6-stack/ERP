@@ -66,6 +66,7 @@ const FeePaymentsTab: React.FC = () => {
     }
   };
 
+
   const handleDownloadReceipt = async (receiptNumber: string) => {
     try {
       if (!historyRecord) {

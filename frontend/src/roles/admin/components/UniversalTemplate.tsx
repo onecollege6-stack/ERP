@@ -30,7 +30,7 @@ const UniversalTemplate: React.FC = () => {
   const [templateSettings, setTemplateSettings] = useState<TemplateSettings>({
     schoolName: user?.schoolName || 'School Name',
     schoolCode: user?.schoolCode || 'SCH001',
-    website: 'www.school.com',
+    website: 'www.edulogix.com',
     logoUrl: '',
     headerColor: '#1f2937',
     accentColor: '#3b82f6',
@@ -88,7 +88,7 @@ const UniversalTemplate: React.FC = () => {
             address: data.address || data.location?.address || '123 School Street, City, State 12345',
             phone: data.phone || data.contact?.phone || data.contactNumber || '+91-XXXXXXXXXX',
             email: data.email || data.contact?.email || data.contactEmail || 'info@school.com',
-            website: data.website || data.contact?.website || 'www.school.com',
+            website: data.website || data.contact?.website || 'www.edulogix.com',
             logoUrl: data.logoUrl || data.logo || ''
           };
         }
@@ -110,12 +110,42 @@ const UniversalTemplate: React.FC = () => {
               address: data.school?.address || data.address || '123 School Street, City, State 12345',
               phone: data.school?.phone || data.phone || '+91-XXXXXXXXXX',
               email: data.school?.email || data.email || 'info@school.com',
-              website: data.school?.website || data.website || 'www.school.com',
+              website: data.school?.website || data.website || 'www.edulogix.com',
               logoUrl: data.school?.logoUrl || data.logoUrl || ''
             };
           }
         } catch (fallbackError: any) {
           console.log('Classes endpoint also failed:', fallbackError.response?.status || fallbackError.message);
+          
+          // Try one more fallback - get all schools and find by code
+          if (user?.schoolCode && !schoolData) {
+            try {
+              console.log('Trying getAllSchools as final fallback...');
+              const allSchoolsResponse = await schoolAPI.getAllSchools();
+              if (allSchoolsResponse?.data?.success && allSchoolsResponse.data?.data) {
+                const schools = allSchoolsResponse.data.data;
+                const school = schools.find((s: any) => 
+                  s.schoolCode === user.schoolCode || 
+                  s.code === user.schoolCode ||
+                  s.name?.toLowerCase().includes(user.schoolName?.toLowerCase() || '')
+                );
+                if (school) {
+                  console.log('School found in getAllSchools:', school);
+                  schoolData = {
+                    schoolName: school.schoolName || school.name || user?.schoolName,
+                    schoolCode: school.schoolCode || school.code || user?.schoolCode,
+                    address: school.address || school.location?.address || '123 School Street, City, State 12345',
+                    phone: school.phone || school.contact?.phone || school.contactNumber || '+91-XXXXXXXXXX',
+                    email: school.email || school.contact?.email || school.contactEmail || 'info@school.com',
+                    website: school.website || school.contact?.website || 'www.edulogix.com',
+                    logoUrl: school.logoUrl || school.logo || ''
+                  };
+                }
+              }
+            } catch (finalError: any) {
+              console.log('Final fallback also failed:', finalError.response?.status || finalError.message);
+            }
+          }
         }
       }
       
@@ -260,7 +290,7 @@ const UniversalTemplate: React.FC = () => {
                   <span>Powered by</span>
                   <div class="ml-2 flex items-center">
                     <div class="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
-                    <span class="font-semibold">ERP System</span>
+                    <span class="font-semibold">EduLgix</span>
                   </div>
                 </div>
               </div>
@@ -316,7 +346,10 @@ const UniversalTemplate: React.FC = () => {
             flex: 1, 
             borderRight: '2px dashed #ccc', 
             paddingRight: '5mm',
-            marginRight: '5mm'
+            marginRight: '5mm',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%'
           }}>
             {/* Header */}
             <div className="flex flex-col items-center mb-2 pb-1 border-b-2" style={{ borderColor: templateSettings.accentColor }}>
@@ -357,11 +390,20 @@ const UniversalTemplate: React.FC = () => {
             
             <div className="text-center mt-auto text-xs text-gray-600 border-t pt-2">
               <div className="mb-1">This is a computer generated copy.</div>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <span>Powered by</span>
+                <strong style={{ color: '#2563eb' }}>EduLgix</strong>
+              </div>
             </div>
           </div>
           
           {/* Student Copy */}
-          <div style={{ flex: 1 }}>
+          <div style={{ 
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%'
+          }}>
             {/* Header */}
             <div className="flex flex-col items-center mb-2 pb-1 border-b-2" style={{ borderColor: templateSettings.accentColor }}>
               <div className="flex items-center space-x-1 mb-1">
@@ -401,14 +443,10 @@ const UniversalTemplate: React.FC = () => {
             
             <div className="text-center mt-auto text-xs text-gray-600 border-t pt-2">
               <div className="mb-1">This is a computer generated copy.</div>
-            </div>
-          </div>
-          
-          {/* Footer */}
-          <div className="absolute bottom-2 left-0 right-0 text-center text-xs text-gray-600">
-            <div className="flex items-center justify-center gap-1">
-              <span>Powered by</span>
-              <strong style={{ color: '#2563eb' }}>EduLogix</strong>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <span>Powered by</span>
+                <strong style={{ color: '#2563eb' }}>EduLgix</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -477,7 +515,7 @@ const UniversalTemplate: React.FC = () => {
               <span>Powered by</span>
               <div className="ml-2 flex items-center">
                 <div className="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
-                <span className="font-semibold">EduLogix</span>
+                <span className="font-semibold">EduLgix</span>
               </div>
             </div>
           </div>
