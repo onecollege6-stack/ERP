@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Plus, Edit, Trash2, Download, Upload, Filter, X,
   UserCheck, UserX, Eye, EyeOff, Lock, Unlock, Building, // Added Eye, EyeOff, X
-  RotateCcw, FileText, AlertTriangle, Check, Users, GraduationCap, Shield, KeyRound // Added KeyRound if needed for reset
+  RotateCcw, FileText, AlertTriangle, Check, Users, GraduationCap, Shield, KeyRound, Camera // Added Camera for profile image
 } from 'lucide-react';
 // Use ApiUser alias here
 import { schoolUserAPI, User as ApiUser } from '../../../api/schoolUsers';
@@ -15,6 +15,7 @@ import { User, UserFormData, getDefaultFormData, transformUserToFormData } from 
 import { useSchoolClasses } from '../../../hooks/useSchoolClasses';
 import { ImportUsersDialog } from '../../superadmin/components/ImportUsersDialog'; // Keep if used
 import UserForm from '../../../components/forms/UserForm';
+import { compressImage, validateImageFile, blobToFile } from '../../../utils/schoolConfig';
 interface School {
   _id: string;
   name: string;
@@ -854,6 +855,12 @@ const ManageUsers: React.FC = () => {
   const [editingUser, setEditingUser] = useState<DisplayUser | null>(null);
   const [selectedUser, setSelectedUser] = useState<DisplayUser | null>(null);
   const [activeTab, setActiveTab] = useState<'admin' | 'teacher' | 'student'>('student');
+
+  // Profile image state
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [imageCompressing, setImageCompressing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [showResetCredentials, setShowResetCredentials] = useState<{ userId: string, password: string, email: string, role: string } | null>(null);
@@ -1232,12 +1239,12 @@ const ManageUsers: React.FC = () => {
   const [selectedTeacherName, setSelectedTeacherName] = useState<string>('');
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [passwordModalLoading, setPasswordModalLoading] = useState(false);
-  const [allTeacherPasswords, setAllTeacherPasswords] = useState<Array<{userId: string, email: string, name: string, temporaryPassword: string | null}>>([]);
+  const [allTeacherPasswords, setAllTeacherPasswords] = useState<Array<{ userId: string, email: string, name: string, temporaryPassword: string | null }>>([]);
   const [allPasswordsVisible, setAllPasswordsVisible] = useState(false); // Track if all passwords are shown
-  
+
   // Change Password Modal State
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [selectedUserForPasswordChange, setSelectedUserForPasswordChange] = useState<{userId: string, name: string, email: string} | null>(null);
+  const [selectedUserForPasswordChange, setSelectedUserForPasswordChange] = useState<{ userId: string, name: string, email: string } | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
@@ -1303,7 +1310,7 @@ const ManageUsers: React.FC = () => {
       // Get token from localStorage
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
-      
+
       if (!token) {
         toast.error('Authentication token not found');
         setPasswordModalLoading(false);
@@ -1313,7 +1320,7 @@ const ManageUsers: React.FC = () => {
       const schoolCode = user?.schoolCode || school?.code || 'SB';
       console.log('Verifying admin password with school code:', schoolCode);
       console.log('Token available:', !!token);
-      
+
       const response = await schoolUserAPI.verifyAdminAndGetPasswords(
         schoolCode,
         adminPasswordInput,
@@ -1332,7 +1339,7 @@ const ManageUsers: React.FC = () => {
           setSelectedTeacherName('');
           return;
         }
-        
+
         // Show single password
         setPasswordVisibility(prev => ({
           ...prev,
@@ -1341,17 +1348,17 @@ const ManageUsers: React.FC = () => {
         toast.success('Password revealed');
       } else {
         // Show all passwords
-        const teachersWithPasswords = Array.isArray(response.data) 
-          ? response.data.filter((t: any) => t.temporaryPassword) 
+        const teachersWithPasswords = Array.isArray(response.data)
+          ? response.data.filter((t: any) => t.temporaryPassword)
           : [];
-        
+
         if (teachersWithPasswords.length === 0) {
           toast.error('No passwords available. Teachers may have been created without storing temporary passwords.');
           setShowPasswordModal(false);
           setAdminPasswordInput('');
           return;
         }
-        
+
         setAllTeacherPasswords(response.data || []);
         const visibilityState: Record<string, boolean> = {};
         (response.data || []).forEach((teacher: any) => {
@@ -1361,10 +1368,10 @@ const ManageUsers: React.FC = () => {
         });
         setPasswordVisibility(visibilityState);
         setAllPasswordsVisible(true); // Mark that all passwords are now visible
-        
+
         const availableCount = teachersWithPasswords.length;
         const totalCount = response.count || (Array.isArray(response.data) ? response.data.length : 0);
-        
+
         if (availableCount < totalCount) {
           toast.success(`Revealed ${availableCount} of ${totalCount} teacher passwords. Some passwords are not available.`, { duration: 5000 });
         } else {
@@ -1993,11 +2000,11 @@ const ManageUsers: React.FC = () => {
         }
 
         console.log('Processed users:', allUsers);
-        console.log('Processed Users with Passwords:', allUsers.filter(u => u.role === 'teacher').map(t => ({ 
-          id: t.userId, 
+        console.log('Processed Users with Passwords:', allUsers.filter(u => u.role === 'teacher').map(t => ({
+          id: t.userId,
           name: t.name,
           pass: t.temporaryPassword,
-          hasPassword: !!t.temporaryPassword 
+          hasPassword: !!t.temporaryPassword
         }))); // Log teacher IDs and passwords
         console.log('Raw teacher data from API:', response.data?.filter((u: any) => u.role === 'teacher').map((t: any) => ({
           userId: t.userId,
@@ -2931,11 +2938,49 @@ const ManageUsers: React.FC = () => {
 
       console.log('Updating user with data:', updateData);
 
-      // Make API call to update user
-      await schoolUserAPI.updateUser(schoolCode, editingUser._id, updateData, token);
+      // Make API call to update user - use FormData if profile image is present
+      if (profileImageFile) {
+        console.log('📸 Uploading with profile image...');
+        const formDataToSend = new FormData();
+
+        // Append all user data
+        Object.entries(updateData).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            formDataToSend.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+          }
+        });
+
+        // Append profile image
+        formDataToSend.append('profileImage', profileImageFile);
+
+        console.log('Sending FormData with image...');
+
+        // Make fetch call with FormData
+        const response = await fetch(`http://localhost:5050/api/user-management/${schoolCode}/users/${editingUser._id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formDataToSend
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update user with image');
+        }
+
+        console.log('✅ User updated with image successfully');
+      } else {
+        // No image - use regular API call
+        console.log('Updating without image...');
+        await schoolUserAPI.updateUser(schoolCode, editingUser._id, updateData, token);
+      }
+
       toast.success('User updated successfully');
       setShowEditModal(false);
       setEditingUser(null);
+      setProfileImageFile(null);
+      setProfileImagePreview(null);
       resetForm();
       fetchUsers();
     } catch (error: any) {
@@ -3006,16 +3051,16 @@ const ManageUsers: React.FC = () => {
     try {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
-      
+
       if (!token) {
         toast.error('Authentication token not found');
         return;
       }
 
       const schoolCode = user?.schoolCode || school?.code || 'SB';
-      
+
       const response = await schoolUserAPI.resetPassword(schoolCode, userId, token);
-      
+
       if (response.data) {
         setShowResetCredentials({
           userId: response.data.userId,
@@ -3023,7 +3068,7 @@ const ManageUsers: React.FC = () => {
           email: response.data.email,
           role: response.data.role
         });
-        
+
         toast.success('Password reset successfully');
         fetchUsers(); // Refresh the list
       }
@@ -3071,26 +3116,26 @@ const ManageUsers: React.FC = () => {
     try {
       const authData = localStorage.getItem('erp.auth');
       const token = authData ? JSON.parse(authData).token : null;
-      
+
       if (!token) {
         toast.error('Authentication token not found');
         return;
       }
 
       const schoolCode = user?.schoolCode || school?.code || 'SB';
-      
+
       console.log('Calling changePassword API with:', { schoolCode, userId: selectedUserForPasswordChange.userId });
-      
+
       // Call API to change password
       const response = await schoolUserAPI.changePassword(
-        schoolCode, 
-        selectedUserForPasswordChange.userId, 
+        schoolCode,
+        selectedUserForPasswordChange.userId,
         newPassword,
         token
       );
-      
+
       console.log('Change password response:', response);
-      
+
       if (response.data || response.success) {
         toast.success('Password changed successfully');
         setShowChangePasswordModal(false);
@@ -4363,29 +4408,29 @@ const ManageUsers: React.FC = () => {
     try {
       const schoolCode = user?.schoolCode || 'SB';
       console.log('Starting import for school:', schoolCode);
-      
+
       const response = await exportImportAPI.importUsers(schoolCode, importFile);
       console.log('Import response:', response);
 
       setImportProgress(100);
-      
+
       // Handle different response structures
       const results = response.data?.results || response.data || { successData: [], errors: [] };
-      
+
       // Backend returns 'successData' not 'success'
-      const successArray = Array.isArray(results.successData) ? results.successData : 
-                          Array.isArray(results.success) ? results.success : [];
+      const successArray = Array.isArray(results.successData) ? results.successData :
+        Array.isArray(results.success) ? results.success : [];
       const errorsArray = Array.isArray(results.errors) ? results.errors : [];
-      
+
       // Use insertedCount if available (actual DB inserts)
       const actualInserted = results.insertedCount || successArray.length;
-      
+
       // Ensure results has the expected structure
       const importResults = {
         success: successArray,
         errors: errorsArray
       };
-      
+
       setImportResults(importResults);
 
       if (actualInserted > 0) {
@@ -4397,7 +4442,7 @@ const ManageUsers: React.FC = () => {
       if (errorsArray.length > 0) {
         toast.error(`${errorsArray.length} rows had errors`);
       }
-      
+
       if (actualInserted === 0 && errorsArray.length === 0) {
         toast.error('No users were imported. Please check your CSV file.');
       }
@@ -4406,7 +4451,7 @@ const ManageUsers: React.FC = () => {
       console.error('Import error:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to import users. Please try again.';
       toast.error(errorMessage);
-      
+
       // Check if there are partial results in the error response
       const partialResults = error.response?.data?.results;
       if (partialResults) {
@@ -4415,9 +4460,9 @@ const ManageUsers: React.FC = () => {
           errors: partialResults.errors || []
         });
       } else {
-        setImportResults({ 
-          success: [], 
-          errors: [{ row: 'N/A', error: errorMessage, data: {} }] 
+        setImportResults({
+          success: [],
+          errors: [{ row: 'N/A', error: errorMessage, data: {} }]
         });
       }
     } finally {
@@ -5132,10 +5177,10 @@ const ManageUsers: React.FC = () => {
     setSelectedSection('all'); // Reset section when grade changes
   };
   const userData = user as DisplayUser;
-  
+
   // Add error boundary state
   const [hasRenderError, setHasRenderError] = React.useState(false);
-  
+
   if (hasRenderError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -5155,1823 +5200,2662 @@ const ManageUsers: React.FC = () => {
       </div>
     );
   }
-  
+
   try {
     return (
       <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center space-x-3">
-            <Building className="h-8 w-8 text-blue-600" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
-              <p className="text-gray-600">Add, edit, and manage system users</p>
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center space-x-3">
+              <Building className="h-8 w-8 text-blue-600" />
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
+                <p className="text-gray-600">Add, edit, and manage system users</p>
+              </div>
+            </div>
+            {school && (
+              <div className="flex items-center space-x-3">
+                {school.logoUrl && (
+                  <img src={school.logoUrl} alt={school.name} className="h-12 w-12 rounded-lg object-cover" />
+                )}
+                <div className="text-right">
+                  <h3 className="font-semibold text-gray-900">{school.name}</h3>
+                  <p className="text-sm text-gray-500">School Code: {school.code}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Role Tabs */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => {
+                  console.log('🔄 Switching to Student tab');
+                  setActiveTab('student');
+                  // If modal is open, update the role immediately
+                  if (showAddModal) {
+                    handleRoleChange('student');
+                  }
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'student'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                Students ({users.filter(u => u.role === 'student').length})
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🔄 Switching to Teacher tab');
+                  setActiveTab('teacher');
+                  // If modal is open, update the role immediately
+                  if (showAddModal) {
+                    handleRoleChange('teacher');
+                  }
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'teacher'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                Teachers ({users.filter(u => u.role === 'teacher').length})
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🔄 Switching to Admin tab');
+                  setActiveTab('admin');
+                  // If modal is open, update the role immediately
+                  if (showAddModal) {
+                    handleRoleChange('admin');
+                  }
+                }}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'admin'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                Admins ({users.filter(u => u.role === 'admin').length})
+              </button>
+            </nav>
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-4">
+            <div className="flex flex-col md:flex-row gap-4 flex-1">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              {activeTab === 'student' && (
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-5 w-5 text-gray-400" />
+                    <select
+                      value={selectedGrade}
+                      onChange={(e) => handleGradeChange(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="all">All Classes</option>
+                      <option value="LKG">LKG</option>
+                      <option value="UKG">UKG</option>
+                      <option value="1">Class 1</option>
+                      <option value="2">Class 2</option>
+                      <option value="3">Class 3</option>
+                      <option value="4">Class 4</option>
+                      <option value="5">Class 5</option>
+                      <option value="6">Class 6</option>
+                      <option value="7">Class 7</option>
+                      <option value="8">Class 8</option>
+                      <option value="9">Class 9</option>
+                      <option value="10">Class 10</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                    </select>
+
+                    {/* Section Dropdown - only show when a specific class is selected */}
+                    {selectedGrade !== 'all' && (
+                      <select
+                        value={selectedSection}
+                        onChange={(e) => setSelectedSection(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="all">All Sections</option>
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                        <option value="E">Section E</option>
+                        <option value="F">Section F</option>
+                      </select>
+                    )}
+                  </div>
+
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'table'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                    >
+                      Table View
+                    </button>
+                    <button
+                      onClick={() => setViewMode('hierarchy')}
+                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'hierarchy'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                    >
+                      Class View
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={exportUsers}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <Download className="h-4 w-4" />
+                <span>Export</span>
+              </button>
+              <button
+                onClick={() => {
+                  try {
+                    console.log('Opening import modal for:', activeTab);
+                    setShowImportModal(true);
+                  } catch (error) {
+                    console.error('Error opening import modal:', error);
+                    toast.error('Failed to open import dialog');
+                  }
+                }}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Import</span>
+              </button>
+              <button
+                onClick={() => generateTemplate(activeTab)}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                title={`Download ${activeTab} import template`}
+              >
+                <FileText className="h-4 w-4" />
+                <span>Template</span>
+              </button>
+              {activeTab === 'teacher' && (
+                <button
+                  onClick={handleShowAllPasswords}
+                  className={`flex items-center space-x-2 px-4 py-2 border rounded-lg ${allPasswordsVisible
+                    ? 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                    : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                    }`}
+                  title={allPasswordsVisible ? "Hide all teacher passwords" : "Show all teacher passwords (requires admin password)"}
+                >
+                  {allPasswordsVisible ? (
+                    <>
+                      <EyeOff className="h-4 w-4" />
+                      <span>Hide All Passwords</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4" />
+                      <span>Show All Passwords</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  setShowAddModal(true);
+                  // Set role based on active tab and generate credentials
+                  setFormData(prev => ({
+                    ...prev,
+                    role: activeTab
+                  }));
+                  // Generate credentials automatically
+                  const schoolCode = user?.schoolCode || 'P';
+                  const userId = await generateUserId(activeTab, schoolCode);
+                  // For students, don't generate password until DOB is entered
+                  const password = activeTab === 'student' ? '' : generatePassword();
+                  setFormData(prev => ({
+                    ...prev,
+                    userId: userId,
+                    generatedPassword: password
+                  }));
+                }}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</span>
+              </button>
             </div>
           </div>
-          {school && (
-            <div className="flex items-center space-x-3">
-              {school.logoUrl && (
-                <img src={school.logoUrl} alt={school.name} className="h-12 w-12 rounded-lg object-cover" />
+        </div>
+
+        {/* Users Display */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {activeTab === 'student' && viewMode === 'hierarchy' ? (
+            /* Hierarchical Student View */
+            <div className="p-6">
+              {Object.keys(organizeStudentsByClass()).length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No students found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(organizeStudentsByClass()).map(([className, sections]) => (
+                    <div key={className} className="border border-gray-200 rounded-lg">
+                      {/* Class Header */}
+                      <div
+                        className="bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        onClick={() => toggleClassExpansion(className)}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className={`transform transition-transform ${expandedClasses.has(className) ? 'rotate-90' : ''}`}>
+                            ▶️
+                          </div>
+                          <h3 className="text-lg font-semibold text-gray-800">
+                            Class {className}
+                          </h3>
+                          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+                            {Object.values(sections).reduce((total, students) => total + students.length, 0)} students
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sections */}
+                      {expandedClasses.has(className) && (
+                        <div className="border-t border-gray-200">
+                          {Object.entries(sections).map(([section, students]) => (
+                            <div key={section} className="border-b border-gray-100 last:border-b-0">
+                              {/* Section Header */}
+                              <div className="bg-gray-25 px-6 py-2 border-b border-gray-100">
+                                <h4 className="text-md font-medium text-gray-700 flex items-center space-x-2">
+                                  <span>Section {section}</span>
+                                  <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">
+                                    {students.length} students
+                                  </span>
+                                </h4>
+                              </div>
+
+                              {/* Students in Section */}
+                              <div className="divide-y divide-gray-100">
+                                {students.map((student) => (
+                                  <div key={student._id} className="px-6 py-3 hover:bg-gray-50 flex items-center justify-between">
+                                    <div className="flex items-center space-x-4">
+                                      <div className="flex-shrink-0">
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <span className="text-sm font-medium text-blue-600">
+                                            {student.name.charAt(0)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                                        <div className="text-sm text-gray-500">{student.email}</div>
+                                        {student.studentDetails?.studentId && (
+                                          <div className="text-xs text-gray-400">ID: {student.studentDetails.studentId}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="flex items-center">
+                                        {student.isActive ? (
+                                          <UserCheck className="h-4 w-4 text-green-500 mr-1" />
+                                        ) : (
+                                          <UserX className="h-4 w-4 text-red-500 mr-1" />
+                                        )}
+                                        <span className={`text-sm ${student.isActive ? 'text-green-700' : 'text-red-700'}`}>
+                                          {student.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                      </div>
+                                      <div className="flex space-x-1">
+                                        <button
+                                          onClick={() => handleEditClick(student)}
+                                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                                          title="Edit User"
+                                        >
+                                          <Edit className="h-4 w-4" />
+                                        </button>
+                                        {/* Reset Password removed for students */}
+                                        <button
+                                          onClick={() => handleDeleteUser(student._id, student.name || `User ${student._id}`)}
+                                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                                          title="Delete User"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
-              <div className="text-right">
-                <h3 className="font-semibold text-gray-900">{school.name}</h3>
-                <p className="text-sm text-gray-500">School Code: {school.code}</p>
-              </div>
+            </div>
+          ) : (
+            /* Table View */
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                    {activeTab === 'student' && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
+                      </>
+                    )}
+                    {activeTab === 'teacher' && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Password</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                      </>
+                    )}
+                    {activeTab === 'admin' && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Level</th>
+                      </>
+                    )}
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">Loading users...</td>
+                    </tr>
+                  ) : filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">No users found</td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr key={user._id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {(user as any).name?.displayName ||
+                                ((user as any).name?.firstName && (user as any).name?.lastName
+                                  ? `${(user as any).name.firstName} ${(user as any).name.lastName}`
+                                  : (user as any).name?.firstName || user.name || 'No name')}
+                            </div>
+                            <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <div>
+                            <div>{user.email}</div>
+                            <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
+                          </div>
+                        </td>
+                        {activeTab === 'student' && (
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {/* Reads from the processed studentDetails object */}
+                              {user.studentDetails?.class || 'Not assigned'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {/* Reads from the processed studentDetails object */}
+                              {user.studentDetails?.section || 'Not assigned'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {(user as any).userId || user._id || 'Not assigned'}
+                            </td>
+                          </>
+                        )}
+                        {activeTab === 'teacher' && (
+                          <>
+                            {/* Employee ID Column - Access via user.teacherDetails */}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {user.teacherDetails?.employeeId || 'N/A'}
+                            </td>
+
+                            {/* Password Column - Access user.temporaryPassword directly */}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <div className="flex items-center space-x-1">
+                                {(user as any).temporaryPassword ? (
+                                  <>
+                                    {/* Display Password with Show/Hide */}
+                                    <span className="flex-grow font-mono text-xs text-gray-700">
+                                      {passwordVisibility[user.userId]
+                                        ? (user as any).temporaryPassword
+                                        : '********'
+                                      }
+                                    </span>
+                                    {/* Show/Hide Button */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePasswordVisibility(user.userId, (user as any).name?.displayName || 'this user');
+                                      }}
+                                      className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
+                                      title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires admin password)"}
+                                      type="button"
+                                    >
+                                      {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic">Not Available</span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Experience Column - Access via user.teacherDetails */}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {/* Check if experience is defined and not null */}
+                              {user.teacherDetails?.experience !== undefined && user.teacherDetails?.experience !== null
+                                ? `${user.teacherDetails.experience} years`
+                                : 'N/A'}
+                            </td>
+                          </>
+                        )}
+                        {activeTab === 'admin' && (
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              Employee ID
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              Administration
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              Full Access
+                            </td>
+                          </>
+                        )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            {user.isActive ? (
+                              <UserCheck className="h-4 w-4 text-green-500 mr-1" />
+                            ) : (
+                              <UserX className="h-4 w-4 text-red-500 mr-1" />
+                            )}
+                            <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
+                              {user.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEditClick(user)}
+                              className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                              title="Edit User"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            {/* Change Password only for teachers */}
+                            {activeTab === 'teacher' && (
+                              <button
+                                onClick={() => {
+                                  console.log('Change password clicked for:', user.userId, user.email);
+                                  handleOpenChangePassword(
+                                    user.userId || user._id,
+                                    (user as any).name?.displayName || (user as any).name || 'User',
+                                    user.email
+                                  );
+                                }}
+                                className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                                title="Change Password (Set New Password)"
+                              >
+                                <KeyRound className="h-4 w-4" />
+                              </button>
+                            )}
+                            {/* Delete button - prevent self-deletion */}
+                            <button
+                              onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
+                              className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete User"
+                              disabled={false} // Temporarily allow all deletions for testing
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
 
-        {/* Role Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => {
-                console.log('🔄 Switching to Student tab');
-                setActiveTab('student');
-                // If modal is open, update the role immediately
-                if (showAddModal) {
-                  handleRoleChange('student');
-                }
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'student'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              Students ({users.filter(u => u.role === 'student').length})
-            </button>
-            <button
-              onClick={() => {
-                console.log('🔄 Switching to Teacher tab');
-                setActiveTab('teacher');
-                // If modal is open, update the role immediately
-                if (showAddModal) {
-                  handleRoleChange('teacher');
-                }
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'teacher'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              Teachers ({users.filter(u => u.role === 'teacher').length})
-            </button>
-            <button
-              onClick={() => {
-                console.log('🔄 Switching to Admin tab');
-                setActiveTab('admin');
-                // If modal is open, update the role immediately
-                if (showAddModal) {
-                  handleRoleChange('admin');
-                }
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'admin'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-            >
-              Admins ({users.filter(u => u.role === 'admin').length})
-            </button>
-          </nav>
-        </div>
+        {/* Add User Modal */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto relative z-[61]">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">
+                Add New {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - Enrollment Form
+              </h3>
+              <form onSubmit={handleAddUser} onKeyDown={handleFormKeyDown} className="space-y-6">
 
-        {/* Controls */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-4">
-          <div className="flex flex-col md:flex-row gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            {activeTab === 'student' && (
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Filter className="h-5 w-5 text-gray-400" />
-                  <select
-                    value={selectedGrade}
-                    onChange={(e) => handleGradeChange(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="all">All Classes</option>
-                    <option value="LKG">LKG</option>
-                    <option value="UKG">UKG</option>
-                    <option value="1">Class 1</option>
-                    <option value="2">Class 2</option>
-                    <option value="3">Class 3</option>
-                    <option value="4">Class 4</option>
-                    <option value="5">Class 5</option>
-                    <option value="6">Class 6</option>
-                    <option value="7">Class 7</option>
-                    <option value="8">Class 8</option>
-                    <option value="9">Class 9</option>
-                    <option value="10">Class 10</option>
-                    <option value="11">Class 11</option>
-                    <option value="12">Class 12</option>
-                  </select>
-
-                  {/* Section Dropdown - only show when a specific class is selected */}
-                  {selectedGrade !== 'all' && (
-                    <select
-                      value={selectedSection}
-                      onChange={(e) => setSelectedSection(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="all">All Sections</option>
-                      <option value="A">Section A</option>
-                      <option value="B">Section B</option>
-                      <option value="C">Section C</option>
-                      <option value="D">Section D</option>
-                      <option value="E">Section E</option>
-                      <option value="F">Section F</option>
-                    </select>
-                  )}
-                </div>
-
-                {/* View Mode Toggle */}
-                <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'table'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                  >
-                    Table View
-                  </button>
-                  <button
-                    onClick={() => setViewMode('hierarchy')}
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${viewMode === 'hierarchy'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                  >
-                    Class View
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={exportUsers}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4" />
-              <span>Export</span>
-            </button>
-            <button
-              onClick={() => {
-                try {
-                  console.log('Opening import modal for:', activeTab);
-                  setShowImportModal(true);
-                } catch (error) {
-                  console.error('Error opening import modal:', error);
-                  toast.error('Failed to open import dialog');
-                }
-              }}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Import</span>
-            </button>
-            <button
-              onClick={() => generateTemplate(activeTab)}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              title={`Download ${activeTab} import template`}
-            >
-              <FileText className="h-4 w-4" />
-              <span>Template</span>
-            </button>
-            {activeTab === 'teacher' && (
-              <button
-                onClick={handleShowAllPasswords}
-                className={`flex items-center space-x-2 px-4 py-2 border rounded-lg ${
-                  allPasswordsVisible 
-                    ? 'border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100' 
-                    : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                }`}
-                title={allPasswordsVisible ? "Hide all teacher passwords" : "Show all teacher passwords (requires admin password)"}
-              >
-                {allPasswordsVisible ? (
-                  <>
-                    <EyeOff className="h-4 w-4" />
-                    <span>Hide All Passwords</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-4 w-4" />
-                    <span>Show All Passwords</span>
-                  </>
-                )}
-              </button>
-            )}
-            <button
-              onClick={async () => {
-                setShowAddModal(true);
-                // Set role based on active tab and generate credentials
-                setFormData(prev => ({
-                  ...prev,
-                  role: activeTab
-                }));
-                // Generate credentials automatically
-                const schoolCode = user?.schoolCode || 'P';
-                const userId = await generateUserId(activeTab, schoolCode);
-                // For students, don't generate password until DOB is entered
-                const password = activeTab === 'student' ? '' : generatePassword();
-                setFormData(prev => ({
-                  ...prev,
-                  userId: userId,
-                  generatedPassword: password
-                }));
-              }}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Users Display */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {activeTab === 'student' && viewMode === 'hierarchy' ? (
-          /* Hierarchical Student View */
-          <div className="p-6">
-            {Object.keys(organizeStudentsByClass()).length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No students found</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {Object.entries(organizeStudentsByClass()).map(([className, sections]) => (
-                  <div key={className} className="border border-gray-200 rounded-lg">
-                    {/* Class Header */}
-                    <div
-                      className="bg-gray-50 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
-                      onClick={() => toggleClassExpansion(className)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <div className={`transform transition-transform ${expandedClasses.has(className) ? 'rotate-90' : ''}`}>
-                          ▶️
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-800">
-                          Class {className}
-                        </h3>
-                        <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
-                          {Object.values(sections).reduce((total, students) => total + students.length, 0)} students
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Sections */}
-                    {expandedClasses.has(className) && (
-                      <div className="border-t border-gray-200">
-                        {Object.entries(sections).map(([section, students]) => (
-                          <div key={section} className="border-b border-gray-100 last:border-b-0">
-                            {/* Section Header */}
-                            <div className="bg-gray-25 px-6 py-2 border-b border-gray-100">
-                              <h4 className="text-md font-medium text-gray-700 flex items-center space-x-2">
-                                <span>Section {section}</span>
-                                <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">
-                                  {students.length} students
-                                </span>
-                              </h4>
-                            </div>
-
-                            {/* Students in Section */}
-                            <div className="divide-y divide-gray-100">
-                              {students.map((student) => (
-                                <div key={student._id} className="px-6 py-3 hover:bg-gray-50 flex items-center justify-between">
-                                  <div className="flex items-center space-x-4">
-                                    <div className="flex-shrink-0">
-                                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <span className="text-sm font-medium text-blue-600">
-                                          {student.name.charAt(0)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                                      <div className="text-sm text-gray-500">{student.email}</div>
-                                      {student.studentDetails?.studentId && (
-                                        <div className="text-xs text-gray-400">ID: {student.studentDetails.studentId}</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <div className="flex items-center">
-                                      {student.isActive ? (
-                                        <UserCheck className="h-4 w-4 text-green-500 mr-1" />
-                                      ) : (
-                                        <UserX className="h-4 w-4 text-red-500 mr-1" />
-                                      )}
-                                      <span className={`text-sm ${student.isActive ? 'text-green-700' : 'text-red-700'}`}>
-                                        {student.isActive ? 'Active' : 'Inactive'}
-                                      </span>
-                                    </div>
-                                    <div className="flex space-x-1">
-                                      <button
-                                        onClick={() => handleEditClick(student)}
-                                        className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                                        title="Edit User"
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </button>
-                                      {/* Reset Password removed for students */}
-                                      <button
-                                        onClick={() => handleDeleteUser(student._id, student.name || `User ${student._id}`)}
-                                        className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
-                                        title="Delete User"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                {/* Role Selection */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Selected Role</label>
+                  <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 font-medium">
+                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Table View */
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                  {activeTab === 'student' && (
-                    <>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Class</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student ID</th>
-                    </>
-                  )}
-                  {activeTab === 'teacher' && (
-                    <>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Password</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
-                    </>
-                  )}
-                  {activeTab === 'admin' && (
-                    <>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Level</th>
-                    </>
-                  )}
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">Loading users...</td>
-                  </tr>
-                ) : filteredUsers.length === 0 ? (
-                  <tr>
-                    <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">No users found</td>
-                  </tr>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <tr key={user._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {(user as any).name?.displayName ||
-                              ((user as any).name?.firstName && (user as any).name?.lastName
-                                ? `${(user as any).name.firstName} ${(user as any).name.lastName}`
-                                : (user as any).name?.firstName || user.name || 'No name')}
-                          </div>
-                          <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div>
-                          <div>{user.email}</div>
-                          <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
-                        </div>
-                      </td>
-                      {activeTab === 'student' && (
-                        <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {/* Reads from the processed studentDetails object */}
-                            {user.studentDetails?.class || 'Not assigned'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {/* Reads from the processed studentDetails object */}
-                            {user.studentDetails?.section || 'Not assigned'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(user as any).userId || user._id || 'Not assigned'}
-                          </td>
-                        </>
-                      )}
-                      {activeTab === 'teacher' && (
-                        <>
-                          {/* Employee ID Column - Access via user.teacherDetails */}
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.teacherDetails?.employeeId || 'N/A'}
-                          </td>
-
-                          {/* Password Column - Access user.temporaryPassword directly */}
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            <div className="flex items-center space-x-1">
-                              {(user as any).temporaryPassword ? (
-                                <>
-                                  {/* Display Password with Show/Hide */}
-                                  <span className="flex-grow font-mono text-xs text-gray-700">
-                                    {passwordVisibility[user.userId] 
-                                      ? (user as any).temporaryPassword 
-                                      : '********'
-                                    }
-                                  </span>
-                                  {/* Show/Hide Button */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      togglePasswordVisibility(user.userId, (user as any).name?.displayName || 'this user');
-                                    }}
-                                    className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
-                                    title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires admin password)"}
-                                    type="button"
-                                  >
-                                    {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">Not Available</span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Experience Column - Access via user.teacherDetails */}
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {/* Check if experience is defined and not null */}
-                            {user.teacherDetails?.experience !== undefined && user.teacherDetails?.experience !== null
-                              ? `${user.teacherDetails.experience} years`
-                              : 'N/A'}
-                          </td>
-                        </>
-                      )}
-                      {activeTab === 'admin' && (
-                        <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            Employee ID
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            Administration
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            Full Access
-                          </td>
-                        </>
-                      )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {user.isActive ? (
-                            <UserCheck className="h-4 w-4 text-green-500 mr-1" />
-                          ) : (
-                            <UserX className="h-4 w-4 text-red-500 mr-1" />
-                          )}
-                          <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
-                            {user.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEditClick(user)}
-                            className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                            title="Edit User"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          {/* Change Password only for teachers */}
-                          {activeTab === 'teacher' && (
-                            <button
-                              onClick={() => {
-                                console.log('Change password clicked for:', user.userId, user.email);
-                                handleOpenChangePassword(
-                                  user.userId || user._id, 
-                                  (user as any).name?.displayName || (user as any).name || 'User',
-                                  user.email
-                                );
-                              }}
-                              className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
-                              title="Change Password (Set New Password)"
-                            >
-                              <KeyRound className="h-4 w-4" />
-                            </button>
-                          )}
-                          {/* Delete button - prevent self-deletion */}
-                          <button
-                            onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
-                            className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Delete User"
-                            disabled={false} // Temporarily allow all deletions for testing
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[95vh] overflow-y-auto relative z-[61]">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">
-              Add New {formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} - Enrollment Form
-            </h3>
-            <form onSubmit={handleAddUser} onKeyDown={handleFormKeyDown} className="space-y-6">
-
-              {/* Role Selection */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Selected Role</label>
-                <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 font-medium">
-                  {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                  <p className="text-xs text-gray-500 mt-1">Role is automatically set based on the current tab</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Role is automatically set based on the current tab</p>
-              </div>
 
-              {/* Generated Information */}
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Generated Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Next User ID
-                      {loadingNextId && <span className="text-blue-500 ml-1">(Loading...)</span>}
-                      {!loadingNextId && formData.userId && <span className="text-green-600 ml-1">✅</span>}
-                    </label>
-                    <input
-                      type="text"
-                      value={loadingNextId ? 'Generating next ID...' : (formData.userId || nextUserId || 'Select a role to auto-generate ID')}
-                      readOnly
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
-                      placeholder="Next sequential ID will appear here"
-                    />
-                    {!formData.userId && !loadingNextId && formData.role && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-xs text-blue-700">
-                          💡 Select a role above to automatically fetch the next available ID from the database
-                        </p>
-                      </div>
-                    )}
-                    {formData.userId && !loadingNextId && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                        <p className="text-xs text-green-700 font-medium">
-                          ✅ Next available ID for {formData.role} role: <strong>{formData.userId}</strong>
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">
-                          This ID has been reserved from the backend database
-                        </p>
-                      </div>
-                    )}
-                    {loadingNextId && (
-                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-xs text-blue-700">
-                          🔄 Fetching next available ID from database...
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {formData.role === 'student' ? 'Student Password' : 'Generated Password'}
-                      {formData.generatedPassword && <span className="text-green-600 ml-1">✅</span>}
-                    </label>
-                    {formData.role === 'student' ? (
-                      <div>
-                        {formData.generatedPassword ? (
-                          <div className="w-full border rounded-lg px-3 py-2 bg-green-50 border-green-300 text-green-800 font-mono">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-lg">{formData.generatedPassword}</span>
-                              <span className="text-green-600 text-sm font-semibold">✅ Generated from DOB</span>
-                            </div>
-                            <div className="text-xs text-green-600 mt-1">
-                              Password format: DDMMYYYY (e.g., 15032010)
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="w-full border rounded-lg px-3 py-2 bg-blue-50 border-blue-300 text-blue-800">
-                            <div className="flex items-center">
-                              <span className="text-blue-500 mr-2">📅</span>
-                              <span className="font-medium">Enter Date of Birth to generate password</span>
-                            </div>
-                            <div className="text-sm text-blue-600 mt-1">
-                              Password will be in DDMMYYYY format (e.g., 15032010)
-                            </div>
-                          </div>
-                        )}
-                        {formData.generatedPassword && (
-                          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="flex items-start">
-                              <div className="flex-shrink-0">
-                                <span className="text-green-500 text-lg">🔐</span>
-                              </div>
-                              <div className="ml-3">
-                                <p className="text-sm text-green-700 font-medium">
-                                  ✅ Password created from Date of Birth: <code className="bg-green-100 px-2 py-1 rounded font-mono text-sm">{formData.generatedPassword}</code>
-                                </p>
-                                <p className="text-xs text-green-600 mt-1">
-                                  Give this password to the student for their first login. They will be required to change it on first login.
-                                </p>
-                                <div className="mt-2 text-xs text-green-600">
-                                  <strong>Format:</strong> DDMMYYYY (Day-Month-Year)
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
+                {/* Generated Information */}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Generated Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Next User ID
+                        {loadingNextId && <span className="text-blue-500 ml-1">(Loading...)</span>}
+                        {!loadingNextId && formData.userId && <span className="text-green-600 ml-1">✅</span>}
+                      </label>
                       <input
                         type="text"
-                        value={formData.generatedPassword || 'Password will be generated when role is selected'}
+                        value={loadingNextId ? 'Generating next ID...' : (formData.userId || nextUserId || 'Select a role to auto-generate ID')}
                         readOnly
-                        className={`w-full border rounded-lg px-3 py-2 font-mono ${formData.generatedPassword
-                          ? 'bg-green-50 border-green-300 text-green-800'
-                          : 'bg-gray-100 border-gray-300 text-gray-500'
-                          }`}
-                        placeholder="8-character secure password will appear here"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100"
+                        placeholder="Next sequential ID will appear here"
                       />
-                    )}
-                    {formData.generatedPassword && formData.role !== 'student' && (
-                      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
-                        <p className="text-xs text-green-700 font-medium">
-                          ✅ 8-character secure password generated:
-                          <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
-                        </p>
-                        <p className="text-xs text-green-600 mt-1">
-                          Copy this password - user will need it for first login
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {(formData.userId || formData.generatedPassword) && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-sm text-yellow-800 font-medium">
-                      ⚠️ <strong>Important:</strong> Save this password! It will be needed for the user's first login.
-                    </p>
-                    <p className="text-xs text-yellow-600 mt-1">
-                      The user will be required to change this password on their first login.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Basic Information */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter first name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter last name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter phone number (10 digits)"
-                      pattern="[0-9]{10}"
-                      maxLength={10}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.dateOfBirth || formData.studentDetails?.dateOfBirth || ''}
-                      onChange={(e) => handleDOBChangeWithStudentDetails(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
-                    <select
-                      required
-                      value={formData.gender || formData.studentDetails?.gender || 'male'}
-                      onChange={(e) => {
-                        const newGender = e.target.value;
-                        setFormData({
-                          ...formData,
-                          gender: newGender as any,
-                          studentDetails: {
-                            ...formData.studentDetails,
-                            gender: newGender
-                          }
-                        });
-                      }}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Role-specific Information */}
-              {formData.role === 'student' && (
-                <div className="space-y-6">
-
-                  {/* Basic Information - SATS Standard */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment No</label>
+                      {!formData.userId && !loadingNextId && formData.role && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-700">
+                            💡 Select a role above to automatically fetch the next available ID from the database
+                          </p>
+                        </div>
+                      )}
+                      {formData.userId && !loadingNextId && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                          <p className="text-xs text-green-700 font-medium">
+                            ✅ Next available ID for {formData.role} role: <strong>{formData.userId}</strong>
+                          </p>
+                          <p className="text-xs text-green-600 mt-1">
+                            This ID has been reserved from the backend database
+                          </p>
+                        </div>
+                      )}
+                      {loadingNextId && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-700">
+                            🔄 Fetching next available ID from database...
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formData.role === 'student' ? 'Student Password' : 'Generated Password'}
+                        {formData.generatedPassword && <span className="text-green-600 ml-1">✅</span>}
+                      </label>
+                      {formData.role === 'student' ? (
+                        <div>
+                          {formData.generatedPassword ? (
+                            <div className="w-full border rounded-lg px-3 py-2 bg-green-50 border-green-300 text-green-800 font-mono">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-lg">{formData.generatedPassword}</span>
+                                <span className="text-green-600 text-sm font-semibold">✅ Generated from DOB</span>
+                              </div>
+                              <div className="text-xs text-green-600 mt-1">
+                                Password format: DDMMYYYY (e.g., 15032010)
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-full border rounded-lg px-3 py-2 bg-blue-50 border-blue-300 text-blue-800">
+                              <div className="flex items-center">
+                                <span className="text-blue-500 mr-2">📅</span>
+                                <span className="font-medium">Enter Date of Birth to generate password</span>
+                              </div>
+                              <div className="text-sm text-blue-600 mt-1">
+                                Password will be in DDMMYYYY format (e.g., 15032010)
+                              </div>
+                            </div>
+                          )}
+                          {formData.generatedPassword && (
+                            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                              <div className="flex items-start">
+                                <div className="flex-shrink-0">
+                                  <span className="text-green-500 text-lg">🔐</span>
+                                </div>
+                                <div className="ml-3">
+                                  <p className="text-sm text-green-700 font-medium">
+                                    ✅ Password created from Date of Birth: <code className="bg-green-100 px-2 py-1 rounded font-mono text-sm">{formData.generatedPassword}</code>
+                                  </p>
+                                  <p className="text-xs text-green-600 mt-1">
+                                    Give this password to the student for their first login. They will be required to change it on first login.
+                                  </p>
+                                  <div className="mt-2 text-xs text-green-600">
+                                    <strong>Format:</strong> DDMMYYYY (Day-Month-Year)
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
                         <input
                           type="text"
-                          value={formData.enrollmentNo}
-                          onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter enrollment number"
+                          value={formData.generatedPassword || 'Password will be generated when role is selected'}
+                          readOnly
+                          className={`w-full border rounded-lg px-3 py-2 font-mono ${formData.generatedPassword
+                            ? 'bg-green-50 border-green-300 text-green-800'
+                            : 'bg-gray-100 border-gray-300 text-gray-500'
+                            }`}
+                          placeholder="8-character secure password will appear here"
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">TC No</label>
-                        <input
-                          type="text"
-                          value={formData.tcNo}
-                          onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter TC number"
-                        />
-                      </div>
+                      )}
+                      {formData.generatedPassword && formData.role !== 'student' && (
+                        <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                          <p className="text-xs text-green-700 font-medium">
+                            ✅ 8-character secure password generated:
+                            <code className="bg-green-100 px-1 rounded">{formData.generatedPassword}</code>
+                          </p>
+                          <p className="text-xs text-green-600 mt-1">
+                            Copy this password - user will need it for first login
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {(formData.userId || formData.generatedPassword) && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800 font-medium">
+                        ⚠️ <strong>Important:</strong> Save this password! It will be needed for the user's first login.
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        The user will be required to change this password on their first login.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
-                  {/* Admission Details - SATS Standard */}
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Admission Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Admission to Class *</label>
-                        {classesLoading ? (
-                          <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
-                            Loading classes...
-                          </div>
-                        ) : (
+                {/* Basic Information */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter first name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                      <input
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter phone number (10 digits)"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.dateOfBirth || formData.studentDetails?.dateOfBirth || ''}
+                        onChange={(e) => handleDOBChangeWithStudentDetails(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
+                      <select
+                        required
+                        value={formData.gender || formData.studentDetails?.gender || 'male'}
+                        onChange={(e) => {
+                          const newGender = e.target.value;
+                          setFormData({
+                            ...formData,
+                            gender: newGender as any,
+                            studentDetails: {
+                              ...formData.studentDetails,
+                              gender: newGender
+                            }
+                          });
+                        }}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Role-specific Information */}
+                {formData.role === 'student' && (
+                  <div className="space-y-6">
+
+                    {/* Basic Information - SATS Standard */}
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment No</label>
+                          <input
+                            type="text"
+                            value={formData.enrollmentNo}
+                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter enrollment number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">TC No</label>
+                          <input
+                            type="text"
+                            value={formData.tcNo}
+                            onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter TC number"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Admission Details - SATS Standard */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Admission Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Admission to Class *</label>
+                          {classesLoading ? (
+                            <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                              Loading classes...
+                            </div>
+                          ) : (
+                            <select
+                              required
+                              value={formData.class || formData.studentDetails?.currentClass || ''}
+                              onChange={(e) => {
+                                const newClass = e.target.value;
+                                handleClassSelection(newClass); // Update sections
+                                setFormData({
+                                  ...formData,
+                                  class: newClass,
+                                  section: '', // Clear section when class changes
+                                  studentDetails: {
+                                    ...formData.studentDetails,
+                                    currentClass: newClass,
+                                    currentSection: '' // Clear section when class changes
+                                  }
+                                });
+                              }}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="">Select Class</option>
+                              {hasClasses() ? (
+                                getClassOptions().map(cls => (
+                                  <option key={cls.value} value={cls.value}>{cls.label}</option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="LKG">LKG</option>
+                                  <option value="UKG">UKG</option>
+                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                                    <option key={num} value={num.toString()}>{num}</option>
+                                  ))}
+                                </>
+                              )}
+                            </select>
+                          )}
+                          {classesError && <p className="text-yellow-600 text-sm mt-1">⚠️ Using default classes (Super Admin hasn't configured classes yet)</p>}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
                           <select
                             required
-                            value={formData.class || formData.studentDetails?.currentClass || ''}
+                            value={formData.studentDetails?.academicYear || '2024-25'}
                             onChange={(e) => {
-                              const newClass = e.target.value;
-                              handleClassSelection(newClass); // Update sections
+                              const newYear = e.target.value;
                               setFormData({
                                 ...formData,
-                                class: newClass,
-                                section: '', // Clear section when class changes
                                 studentDetails: {
                                   ...formData.studentDetails,
-                                  currentClass: newClass,
-                                  currentSection: '' // Clear section when class changes
+                                  academicYear: newYear
                                 }
                               });
                             }}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
-                            <option value="">Select Class</option>
-                            {hasClasses() ? (
-                              getClassOptions().map(cls => (
-                                <option key={cls.value} value={cls.value}>{cls.label}</option>
-                              ))
-                            ) : (
-                              <>
-                                <option value="LKG">LKG</option>
-                                <option value="UKG">UKG</option>
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                                  <option key={num} value={num.toString()}>{num}</option>
-                                ))}
-                              </>
-                            )}
-                          </select>
-                        )}
-                        {classesError && <p className="text-yellow-600 text-sm mt-1">⚠️ Using default classes (Super Admin hasn't configured classes yet)</p>}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
-                        <select
-                          required
-                          value={formData.studentDetails?.academicYear || '2024-25'}
-                          onChange={(e) => {
-                            const newYear = e.target.value;
-                            setFormData({
-                              ...formData,
-                              studentDetails: {
-                                ...formData.studentDetails,
-                                academicYear: newYear
-                              }
-                            });
-                          }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="2024-25">2024-25</option>
-                          <option value="2025-26">2025-26</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                        <select
-                          value={formData.section || formData.studentDetails?.currentSection || ''}
-                          onChange={(e) => {
-                            const newSection = e.target.value;
-                            setFormData({
-                              ...formData,
-                              section: newSection,
-                              studentDetails: {
-                                ...formData.studentDetails,
-                                currentSection: newSection
-                              }
-                            });
-                          }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          disabled={!formData.class && !formData.studentDetails?.currentClass}
-                        >
-                          <option value="">
-                            {!formData.class && !formData.studentDetails?.currentClass
-                              ? 'Select Class First'
-                              : 'Select Section'
-                            }
-                          </option>
-                          {availableSections.length > 0 ? (
-                            availableSections.map(section => (
-                              <option key={section.value} value={section.value}>{section.label}</option>
-                            ))
-                          ) : (
-                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
-                              <option key={letter} value={letter}>Section {letter}</option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Medium of Instruction *</label>
-                        <select
-                          required
-                          value={formData.mediumOfInstruction}
-                          onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="English">English</option>
-                          <option value="Kannada">Kannada</option>
-                          <option value="Hindi">Hindi</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
-                        <select
-                          value={formData.motherTongue}
-                          onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Mother Tongue</option>
-                          <option value="Kannada">Kannada</option>
-                          <option value="Hindi">Hindi</option>
-                          <option value="Tamil">Tamil</option>
-                          <option value="Telugu">Telugu</option>
-                          <option value="Malayalam">Malayalam</option>
-                          <option value="English">English</option>
-                          <option value="Urdu">Urdu</option>
-                          <option value="Marathi">Marathi</option>
-                          <option value="Bengali">Bengali</option>
-                          <option value="Gujarati">Gujarati</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.motherTongue === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.motherTongueOther || ''}
-                            onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify mother tongue"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Student Details - SATS Standard */}
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Student Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (English) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter full name in English"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (Kannada)</label>
-                        <input
-                          type="text"
-                          value={formData.studentNameKannada}
-                          onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter name in Kannada"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
-                        <input
-                          type="date"
-                          required
-                          value={formData.dateOfBirth}
-                          onChange={(e) => handleDOBChange(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Age (Years)</label>
-                        <input
-                          type="number"
-                          value={formData.ageYears}
-                          onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Years"
-                          min="0"
-                          max="25"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Age (Months)</label>
-                        <input
-                          type="number"
-                          value={formData.ageMonths}
-                          onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Months"
-                          min="0"
-                          max="11"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
-                        <select
-                          required
-                          value={formData.gender}
-                          onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="male">Male</option>
-                          <option value="female">Female</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Family Details - SATS Standard */}
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Family Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (English) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.fatherName}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            fatherName: e.target.value,
-                            studentDetails: {
-                              ...formData.studentDetails,
-                              fatherName: e.target.value
-                            }
-                          })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter father's name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (Kannada)</label>
-                        <input
-                          type="text"
-                          value={formData.fatherNameKannada}
-                          onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter father's name in Kannada"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Aadhaar No</label>
-                        <input
-                          type="text"
-                          value={formData.fatherAadhaar}
-                          onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (English) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.motherName}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            motherName: e.target.value,
-                            studentDetails: {
-                              ...formData.studentDetails,
-                              motherName: e.target.value
-                            }
-                          })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mother's name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (Kannada)</label>
-                        <input
-                          type="text"
-                          value={formData.motherNameKannada}
-                          onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mother's name in Kannada"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Aadhaar No</label>
-                        <input
-                          type="text"
-                          value={formData.motherAadhaar}
-                          onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Identity Documents - SATS Standard */}
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Identity Documents</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Aadhaar/KPR No</label>
-                        <input
-                          type="text"
-                          value={formData.studentAadhaar}
-                          onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste Certificate No</label>
-                        <input
-                          type="text"
-                          value={formData.studentCasteCertNo}
-                          onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter certificate number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste Certificate No</label>
-                        <input
-                          type="text"
-                          value={formData.fatherCasteCertNo}
-                          onChange={(e) => setFormData({ ...formData, fatherCasteCertNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter certificate number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste Certificate No</label>
-                        <input
-                          type="text"
-                          value={formData.motherCasteCertNo}
-                          onChange={(e) => setFormData({ ...formData, motherCasteCertNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter certificate number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Caste and Category - SATS Standard */}
-                  <div className="bg-indigo-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Caste and Category</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
-                        <select
-                          value={formData.studentCaste}
-                          onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.studentCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.studentCasteOther}
-                            onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify student caste"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
-                        <select
-                          value={formData.fatherCaste}
-                          onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.fatherCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.fatherCasteOther}
-                            onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify father caste"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
-                        <select
-                          value={formData.motherCaste}
-                          onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.motherCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.motherCasteOther}
-                            onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify mother caste"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
-                        <select
-                          value={formData.socialCategory}
-                          onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Category</option>
-                          <option value="General">General</option>
-                          <option value="SC">SC (Scheduled Caste)</option>
-                          <option value="ST">ST (Scheduled Tribe)</option>
-                          <option value="OBC">OBC (Other Backward Class)</option>
-                          <option value="Category-1">Category-1</option>
-                          <option value="Category-2A">Category-2A</option>
-                          <option value="Category-2B">Category-2B</option>
-                          <option value="Category-3A">Category-3A</option>
-                          <option value="Category-3B">Category-3B</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.socialCategory === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.socialCategoryOther}
-                            onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify social category"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
-                        <select
-                          value={formData.religion}
-                          onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Religion</option>
-                          <option value="Hindu">Hindu</option>
-                          <option value="Muslim">Muslim</option>
-                          <option value="Christian">Christian</option>
-                          <option value="Sikh">Sikh</option>
-                          <option value="Buddhist">Buddhist</option>
-                          <option value="Jain">Jain</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.religion === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.religionOther}
-                            onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify religion"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Economic Status - SATS Standard */}
-                  <div className="bg-orange-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Economic Status</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Belonging to BPL</label>
-                        <select
-                          value={formData.belongingToBPL}
-                          onChange={(e) => setFormData({ ...formData, belongingToBPL: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">BPL Card No</label>
-                        <input
-                          type="text"
-                          value={formData.bplCardNo}
-                          onChange={(e) => setFormData({ ...formData, bplCardNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter BPL card number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bhagyalakshmi Bond No</label>
-                        <input
-                          type="text"
-                          value={formData.bhagyalakshmiBondNo}
-                          onChange={(e) => setFormData({ ...formData, bhagyalakshmiBondNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter bond number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Special Needs - SATS Standard */}
-                  <div className="bg-pink-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
-                        <select
-                          value={formData.disability}
-                          onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="Not Applicable">Not Applicable</option>
-                          <option value="Visual Impairment">Visual Impairment</option>
-                          <option value="Hearing Impairment">Hearing Impairment</option>
-                          <option value="Speech and Language Disability">Speech and Language Disability</option>
-                          <option value="Locomotor Disability">Locomotor Disability</option>
-                          <option value="Intellectual Disability">Intellectual Disability</option>
-                          <option value="Learning Disability">Learning Disability</option>
-                          <option value="Autism Spectrum Disorder">Autism Spectrum Disorder</option>
-                          <option value="Multiple Disabilities">Multiple Disabilities</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.disability === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.disabilityOther}
-                            onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify disability type"
-                          />
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={formData.isRTECandidate || ''}
-                          onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Option</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Address Information - SATS Standard */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Address Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
-                        <textarea
-                          required
-                          value={formData.address}
-                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter complete address"
-                          rows={2}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">City/Village/Town *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.cityVillageTown}
-                          onChange={(e) => setFormData({ ...formData, cityVillageTown: e.target.value, city: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter city/village/town"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Locality</label>
-                        <input
-                          type="text"
-                          value={formData.locality}
-                          onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter locality"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Taluka/Taluk *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.taluka}
-                          onChange={(e) => setFormData({ ...formData, taluka: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter taluka/taluk"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">District *</label>
-                        <select
-                          required
-                          value={formData.district}
-                          onChange={(e) => setFormData({ ...formData, district: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select District</option>
-                          <option value="Bagalkot">Bagalkot</option>
-                          <option value="Bangalore Rural">Bangalore Rural</option>
-                          <option value="Bangalore Urban">Bangalore Urban</option>
-                          <option value="Belgaum">Belgaum</option>
-                          <option value="Bellary">Bellary</option>
-                          <option value="Bidar">Bidar</option>
-                          <option value="Chamarajanagar">Chamarajanagar</option>
-                          <option value="Chikkaballapur">Chikkaballapur</option>
-                          <option value="Chikkamagaluru">Chikkamagaluru</option>
-                          <option value="Chitradurga">Chitradurga</option>
-                          <option value="Dakshina Kannada">Dakshina Kannada</option>
-                          <option value="Davanagere">Davanagere</option>
-                          <option value="Dharwad">Dharwad</option>
-                          <option value="Gadag">Gadag</option>
-                          <option value="Gulbarga">Gulbarga</option>
-                          <option value="Hassan">Hassan</option>
-                          <option value="Haveri">Haveri</option>
-                          <option value="Kodagu">Kodagu</option>
-                          <option value="Kolar">Kolar</option>
-                          <option value="Koppal">Koppal</option>
-                          <option value="Mandya">Mandya</option>
-                          <option value="Mysore">Mysore</option>
-                          <option value="Raichur">Raichur</option>
-                          <option value="Ramanagara">Ramanagara</option>
-                          <option value="Shimoga">Shimoga</option>
-                          <option value="Tumkur">Tumkur</option>
-                          <option value="Udupi">Udupi</option>
-                          <option value="Uttara Kannada">Uttara Kannada</option>
-                          <option value="Vijayapura">Vijayapura</option>
-                          <option value="Yadgir">Yadgir</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
-                        <select
-                          required
-                          value={formData.state || formData.permanentState || 'Karnataka'}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            state: e.target.value,
-                            permanentState: e.target.value
-                          })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="Karnataka">Karnataka</option>
-                          <option value="Andhra Pradesh">Andhra Pradesh</option>
-                          <option value="Telangana">Telangana</option>
-                          <option value="Tamil Nadu">Tamil Nadu</option>
-                          <option value="Kerala">Kerala</option>
-                          <option value="Goa">Goa</option>
-                          <option value="Maharashtra">Maharashtra</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.pinCode}
-                          onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="6-digit pin code"
-                          pattern="[0-9]{6}"
-                          maxLength={6}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Communication Details - SATS Standard */}
-                  <div className="bg-cyan-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Communication Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Mobile No</label>
-                        <input
-                          type="tel"
-                          value={formData.studentMobile}
-                          onChange={(e) => setFormData({ ...formData, studentMobile: e.target.value, phone: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="10-digit mobile number"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Email ID</label>
-                        <input
-                          type="email"
-                          value={formData.studentEmail}
-                          onChange={(e) => setFormData({ ...formData, studentEmail: e.target.value, email: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Mobile No</label>
-                        <input
-                          type="tel"
-                          value={formData.fatherMobile}
-                          onChange={(e) => setFormData({ ...formData, fatherMobile: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="10-digit mobile number"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Email ID</label>
-                        <input
-                          type="email"
-                          value={formData.fatherEmail}
-                          onChange={(e) => setFormData({ ...formData, fatherEmail: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Mobile No</label>
-                        <input
-                          type="tel"
-                          value={formData.motherMobile}
-                          onChange={(e) => setFormData({ ...formData, motherMobile: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="10-digit mobile number"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Email ID</label>
-                        <input
-                          type="email"
-                          value={formData.motherEmail}
-                          onChange={(e) => setFormData({ ...formData, motherEmail: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* School and Banking - SATS Standard */}
-                  <div className="bg-teal-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">School and Banking</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">School Admission Date</label>
-                        <input
-                          type="date"
-                          value={formData.schoolAdmissionDate}
-                          onChange={(e) => setFormData({ ...formData, schoolAdmissionDate: e.target.value, admissionDate: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={formData.bankName}
-                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter bank name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account No</label>
-                        <input
-                          type="text"
-                          value={formData.bankAccountNo}
-                          onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter account number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank IFSC Code</label>
-                        <input
-                          type="text"
-                          value={formData.bankIFSC}
-                          onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="11-character IFSC code"
-                          pattern="[A-Z]{4}0[A-Z0-9]{6}"
-                          maxLength={11}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Additional Information for Section/Roll Number */}
-                  <div className="bg-emerald-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                        <select
-                          value={formData.section}
-                          onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Section</option>
-                          {['A', 'B', 'C', 'D', 'E'].map(section => (
-                            <option key={section} value={section}>{section}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
-                        <input
-                          type="text"
-                          value={formData.rollNumber}
-                          onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter roll number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Additional Essential Information - Missing Fields */}
-                  <div className="bg-rose-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Essential Information</h4>
-
-                    {/* Personal Details */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Personal Details</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
-                          <select
-                            value={formData.bloodGroup || ''}
-                            onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          >
-                            <option value="">Select Blood Group</option>
-                            <option value="A+">A+</option>
-                            <option value="A-">A-</option>
-                            <option value="B+">B+</option>
-                            <option value="B-">B-</option>
-                            <option value="AB+">AB+</option>
-                            <option value="AB-">AB-</option>
-                            <option value="O+">O+</option>
-                            <option value="O-">O-</option>
+                            <option value="2024-25">2024-25</option>
+                            <option value="2025-26">2025-26</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Nationality *</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                          <select
+                            value={formData.section || formData.studentDetails?.currentSection || ''}
+                            onChange={(e) => {
+                              const newSection = e.target.value;
+                              setFormData({
+                                ...formData,
+                                section: newSection,
+                                studentDetails: {
+                                  ...formData.studentDetails,
+                                  currentSection: newSection
+                                }
+                              });
+                            }}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            disabled={!formData.class && !formData.studentDetails?.currentClass}
+                          >
+                            <option value="">
+                              {!formData.class && !formData.studentDetails?.currentClass
+                                ? 'Select Class First'
+                                : 'Select Section'
+                              }
+                            </option>
+                            {availableSections.length > 0 ? (
+                              availableSections.map(section => (
+                                <option key={section.value} value={section.value}>{section.label}</option>
+                              ))
+                            ) : (
+                              ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
+                                <option key={letter} value={letter}>Section {letter}</option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Medium of Instruction *</label>
+                          <select
+                            required
+                            value={formData.mediumOfInstruction}
+                            onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="English">English</option>
+                            <option value="Kannada">Kannada</option>
+                            <option value="Hindi">Hindi</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
+                          <select
+                            value={formData.motherTongue}
+                            onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Mother Tongue</option>
+                            <option value="Kannada">Kannada</option>
+                            <option value="Hindi">Hindi</option>
+                            <option value="Tamil">Tamil</option>
+                            <option value="Telugu">Telugu</option>
+                            <option value="Malayalam">Malayalam</option>
+                            <option value="English">English</option>
+                            <option value="Urdu">Urdu</option>
+                            <option value="Marathi">Marathi</option>
+                            <option value="Bengali">Bengali</option>
+                            <option value="Gujarati">Gujarati</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.motherTongue === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.motherTongueOther || ''}
+                              onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify mother tongue"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Student Details - SATS Standard */}
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Student Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (English) *</label>
                           <input
                             type="text"
                             required
-                            value={formData.nationality || 'Indian'}
-                            onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter nationality"
+                            placeholder="Enter full name in English"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Place of Birth</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (Kannada)</label>
                           <input
                             type="text"
-                            value={formData.placeOfBirth || ''}
-                            onChange={(e) => setFormData({ ...formData, placeOfBirth: e.target.value })}
+                            value={formData.studentNameKannada}
+                            onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter place of birth"
+                            placeholder="Enter name in Kannada"
                           />
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Previous School Details */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Previous School Details</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Previous School Name</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
                           <input
-                            type="text"
-                            value={formData.previousSchool || ''}
-                            onChange={(e) => setFormData({ ...formData, previousSchool: e.target.value })}
+                            type="date"
+                            required
+                            value={formData.dateOfBirth}
+                            onChange={(e) => handleDOBChange(e.target.value)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter previous school name"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">TC Number</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Age (Years)</label>
                           <input
-                            type="text"
-                            value={formData.tcNumber || ''}
-                            onChange={(e) => setFormData({ ...formData, tcNumber: e.target.value })}
+                            type="number"
+                            value={formData.ageYears}
+                            onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter TC number"
+                            placeholder="Years"
+                            min="0"
+                            max="25"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Migration Certificate</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Age (Months)</label>
                           <input
-                            type="text"
-                            value={formData.migrationCertificate || ''}
-                            onChange={(e) => setFormData({ ...formData, migrationCertificate: e.target.value })}
+                            type="number"
+                            value={formData.ageMonths}
+                            onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter migration certificate number"
+                            placeholder="Months"
+                            min="0"
+                            max="11"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Last Class Passed</label>
-                          <input
-                            type="text"
-                            value={formData.previousClass || ''}
-                            onChange={(e) => setFormData({ ...formData, previousClass: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter last class passed"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Guardian/Emergency Contact Details */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Guardian & Emergency Contact</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Name</label>
-                          <input
-                            type="text"
-                            value={formData.guardianName || ''}
-                            onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter guardian name"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Relationship</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
                           <select
-                            value={formData.guardianRelation || ''}
-                            onChange={(e) => setFormData({ ...formData, guardianRelation: e.target.value })}
+                            required
+                            value={formData.gender}
+                            onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
-                            <option value="">Select Relationship</option>
-                            <option value="Father">Father</option>
-                            <option value="Mother">Mother</option>
-                            <option value="Uncle">Uncle</option>
-                            <option value="Aunt">Aunt</option>
-                            <option value="Grandfather">Grandfather</option>
-                            <option value="Grandmother">Grandmother</option>
-                            <option value="Elder Brother">Elder Brother</option>
-                            <option value="Elder Sister">Elder Sister</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Family Details - SATS Standard */}
+                    <div className="bg-purple-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Family Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (English) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.fatherName}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              fatherName: e.target.value,
+                              studentDetails: {
+                                ...formData.studentDetails,
+                                fatherName: e.target.value
+                              }
+                            })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (Kannada)</label>
+                          <input
+                            type="text"
+                            value={formData.fatherNameKannada}
+                            onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's name in Kannada"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Aadhaar No</label>
+                          <input
+                            type="text"
+                            value={formData.fatherAadhaar}
+                            onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (English) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.motherName}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              motherName: e.target.value,
+                              studentDetails: {
+                                ...formData.studentDetails,
+                                motherName: e.target.value
+                              }
+                            })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (Kannada)</label>
+                          <input
+                            type="text"
+                            value={formData.motherNameKannada}
+                            onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's name in Kannada"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Aadhaar No</label>
+                          <input
+                            type="text"
+                            value={formData.motherAadhaar}
+                            onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Identity Documents - SATS Standard */}
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Identity Documents</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Aadhaar/KPR No</label>
+                          <input
+                            type="text"
+                            value={formData.studentAadhaar}
+                            onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste Certificate No</label>
+                          <input
+                            type="text"
+                            value={formData.studentCasteCertNo}
+                            onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter certificate number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste Certificate No</label>
+                          <input
+                            type="text"
+                            value={formData.fatherCasteCertNo}
+                            onChange={(e) => setFormData({ ...formData, fatherCasteCertNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter certificate number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste Certificate No</label>
+                          <input
+                            type="text"
+                            value={formData.motherCasteCertNo}
+                            onChange={(e) => setFormData({ ...formData, motherCasteCertNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter certificate number"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Caste and Category - SATS Standard */}
+                    <div className="bg-indigo-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Caste and Category</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
+                          <select
+                            value={formData.studentCaste}
+                            onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.studentCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.studentCasteOther}
+                              onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify student caste"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
+                          <select
+                            value={formData.fatherCaste}
+                            onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.fatherCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.fatherCasteOther}
+                              onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify father caste"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
+                          <select
+                            value={formData.motherCaste}
+                            onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.motherCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.motherCasteOther}
+                              onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify mother caste"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
+                          <select
+                            value={formData.socialCategory}
+                            onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Category</option>
+                            <option value="General">General</option>
+                            <option value="SC">SC (Scheduled Caste)</option>
+                            <option value="ST">ST (Scheduled Tribe)</option>
+                            <option value="OBC">OBC (Other Backward Class)</option>
+                            <option value="Category-1">Category-1</option>
+                            <option value="Category-2A">Category-2A</option>
+                            <option value="Category-2B">Category-2B</option>
+                            <option value="Category-3A">Category-3A</option>
+                            <option value="Category-3B">Category-3B</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.socialCategory === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.socialCategoryOther}
+                              onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify social category"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
+                          <select
+                            value={formData.religion}
+                            onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Religion</option>
+                            <option value="Hindu">Hindu</option>
+                            <option value="Muslim">Muslim</option>
+                            <option value="Christian">Christian</option>
+                            <option value="Sikh">Sikh</option>
+                            <option value="Buddhist">Buddhist</option>
+                            <option value="Jain">Jain</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.religion === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.religionOther}
+                              onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify religion"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Economic Status - SATS Standard */}
+                    <div className="bg-orange-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Economic Status</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Belonging to BPL</label>
+                          <select
+                            value={formData.belongingToBPL}
+                            onChange={(e) => setFormData({ ...formData, belongingToBPL: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="No">No</option>
+                            <option value="Yes">Yes</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">BPL Card No</label>
+                          <input
+                            type="text"
+                            value={formData.bplCardNo}
+                            onChange={(e) => setFormData({ ...formData, bplCardNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter BPL card number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bhagyalakshmi Bond No</label>
+                          <input
+                            type="text"
+                            value={formData.bhagyalakshmiBondNo}
+                            onChange={(e) => setFormData({ ...formData, bhagyalakshmiBondNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter bond number"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Special Needs - SATS Standard */}
+                    <div className="bg-pink-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
+                          <select
+                            value={formData.disability}
+                            onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="Not Applicable">Not Applicable</option>
+                            <option value="Visual Impairment">Visual Impairment</option>
+                            <option value="Hearing Impairment">Hearing Impairment</option>
+                            <option value="Speech and Language Disability">Speech and Language Disability</option>
+                            <option value="Locomotor Disability">Locomotor Disability</option>
+                            <option value="Intellectual Disability">Intellectual Disability</option>
+                            <option value="Learning Disability">Learning Disability</option>
+                            <option value="Autism Spectrum Disorder">Autism Spectrum Disorder</option>
+                            <option value="Multiple Disabilities">Multiple Disabilities</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.disability === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.disabilityOther}
+                              onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify disability type"
+                            />
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={formData.isRTECandidate || ''}
+                            onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Option</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Address Information - SATS Standard */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Address Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
+                          <textarea
+                            required
+                            value={formData.address}
+                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter complete address"
+                            rows={2}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City/Village/Town *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.cityVillageTown}
+                            onChange={(e) => setFormData({ ...formData, cityVillageTown: e.target.value, city: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter city/village/town"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Locality</label>
+                          <input
+                            type="text"
+                            value={formData.locality}
+                            onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter locality"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Taluka/Taluk *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.taluka}
+                            onChange={(e) => setFormData({ ...formData, taluka: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter taluka/taluk"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">District *</label>
+                          <select
+                            required
+                            value={formData.district}
+                            onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select District</option>
+                            <option value="Bagalkot">Bagalkot</option>
+                            <option value="Bangalore Rural">Bangalore Rural</option>
+                            <option value="Bangalore Urban">Bangalore Urban</option>
+                            <option value="Belgaum">Belgaum</option>
+                            <option value="Bellary">Bellary</option>
+                            <option value="Bidar">Bidar</option>
+                            <option value="Chamarajanagar">Chamarajanagar</option>
+                            <option value="Chikkaballapur">Chikkaballapur</option>
+                            <option value="Chikkamagaluru">Chikkamagaluru</option>
+                            <option value="Chitradurga">Chitradurga</option>
+                            <option value="Dakshina Kannada">Dakshina Kannada</option>
+                            <option value="Davanagere">Davanagere</option>
+                            <option value="Dharwad">Dharwad</option>
+                            <option value="Gadag">Gadag</option>
+                            <option value="Gulbarga">Gulbarga</option>
+                            <option value="Hassan">Hassan</option>
+                            <option value="Haveri">Haveri</option>
+                            <option value="Kodagu">Kodagu</option>
+                            <option value="Kolar">Kolar</option>
+                            <option value="Koppal">Koppal</option>
+                            <option value="Mandya">Mandya</option>
+                            <option value="Mysore">Mysore</option>
+                            <option value="Raichur">Raichur</option>
+                            <option value="Ramanagara">Ramanagara</option>
+                            <option value="Shimoga">Shimoga</option>
+                            <option value="Tumkur">Tumkur</option>
+                            <option value="Udupi">Udupi</option>
+                            <option value="Uttara Kannada">Uttara Kannada</option>
+                            <option value="Vijayapura">Vijayapura</option>
+                            <option value="Yadgir">Yadgir</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
+                          <select
+                            required
+                            value={formData.state || formData.permanentState || 'Karnataka'}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              state: e.target.value,
+                              permanentState: e.target.value
+                            })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="Karnataka">Karnataka</option>
+                            <option value="Andhra Pradesh">Andhra Pradesh</option>
+                            <option value="Telangana">Telangana</option>
+                            <option value="Tamil Nadu">Tamil Nadu</option>
+                            <option value="Kerala">Kerala</option>
+                            <option value="Goa">Goa</option>
+                            <option value="Maharashtra">Maharashtra</option>
                             <option value="Other">Other</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.pinCode}
+                            onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="6-digit pin code"
+                            pattern="[0-9]{6}"
+                            maxLength={6}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Communication Details - SATS Standard */}
+                    <div className="bg-cyan-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Communication Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Mobile No</label>
                           <input
                             type="tel"
-                            value={formData.alternatePhone || ''}
-                            onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
+                            value={formData.studentMobile}
+                            onChange={(e) => setFormData({ ...formData, studentMobile: e.target.value, phone: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="10-digit emergency contact"
+                            placeholder="10-digit mobile number"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Email ID</label>
+                          <input
+                            type="email"
+                            value={formData.studentEmail}
+                            onChange={(e) => setFormData({ ...formData, studentEmail: e.target.value, email: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Mobile No</label>
+                          <input
+                            type="tel"
+                            value={formData.fatherMobile}
+                            onChange={(e) => setFormData({ ...formData, fatherMobile: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="10-digit mobile number"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Email ID</label>
+                          <input
+                            type="email"
+                            value={formData.fatherEmail}
+                            onChange={(e) => setFormData({ ...formData, fatherEmail: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Mobile No</label>
+                          <input
+                            type="tel"
+                            value={formData.motherMobile}
+                            onChange={(e) => setFormData({ ...formData, motherMobile: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="10-digit mobile number"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Email ID</label>
+                          <input
+                            type="email"
+                            value={formData.motherEmail}
+                            onChange={(e) => setFormData({ ...formData, motherEmail: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* School and Banking - SATS Standard */}
+                    <div className="bg-teal-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">School and Banking</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">School Admission Date</label>
+                          <input
+                            type="date"
+                            value={formData.schoolAdmissionDate}
+                            onChange={(e) => setFormData({ ...formData, schoolAdmissionDate: e.target.value, admissionDate: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                          <input
+                            type="text"
+                            value={formData.bankName}
+                            onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter bank name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account No</label>
+                          <input
+                            type="text"
+                            value={formData.bankAccountNo}
+                            onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter account number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank IFSC Code</label>
+                          <input
+                            type="text"
+                            value={formData.bankIFSC}
+                            onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="11-character IFSC code"
+                            pattern="[A-Z]{4}0[A-Z0-9]{6}"
+                            maxLength={11}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Information for Section/Roll Number */}
+                    <div className="bg-emerald-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                          <select
+                            value={formData.section}
+                            onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Section</option>
+                            {['A', 'B', 'C', 'D', 'E'].map(section => (
+                              <option key={section} value={section}>{section}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
+                          <input
+                            type="text"
+                            value={formData.rollNumber}
+                            onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter roll number"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Essential Information - Missing Fields */}
+                    <div className="bg-rose-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Additional Essential Information</h4>
+
+                      {/* Personal Details */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Personal Details</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Blood Group</label>
+                            <select
+                              value={formData.bloodGroup || ''}
+                              onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="">Select Blood Group</option>
+                              <option value="A+">A+</option>
+                              <option value="A-">A-</option>
+                              <option value="B+">B+</option>
+                              <option value="B-">B-</option>
+                              <option value="AB+">AB+</option>
+                              <option value="AB-">AB-</option>
+                              <option value="O+">O+</option>
+                              <option value="O-">O-</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nationality *</label>
+                            <input
+                              type="text"
+                              required
+                              value={formData.nationality || 'Indian'}
+                              onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter nationality"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Place of Birth</label>
+                            <input
+                              type="text"
+                              value={formData.placeOfBirth || ''}
+                              onChange={(e) => setFormData({ ...formData, placeOfBirth: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter place of birth"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Previous School Details */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Previous School Details</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Previous School Name</label>
+                            <input
+                              type="text"
+                              value={formData.previousSchool || ''}
+                              onChange={(e) => setFormData({ ...formData, previousSchool: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter previous school name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">TC Number</label>
+                            <input
+                              type="text"
+                              value={formData.tcNumber || ''}
+                              onChange={(e) => setFormData({ ...formData, tcNumber: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter TC number"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Migration Certificate</label>
+                            <input
+                              type="text"
+                              value={formData.migrationCertificate || ''}
+                              onChange={(e) => setFormData({ ...formData, migrationCertificate: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter migration certificate number"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Last Class Passed</label>
+                            <input
+                              type="text"
+                              value={formData.previousClass || ''}
+                              onChange={(e) => setFormData({ ...formData, previousClass: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter last class passed"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Guardian/Emergency Contact Details */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Guardian & Emergency Contact</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Name</label>
+                            <input
+                              type="text"
+                              value={formData.guardianName || ''}
+                              onChange={(e) => setFormData({ ...formData, guardianName: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter guardian name"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Guardian Relationship</label>
+                            <select
+                              value={formData.guardianRelation || ''}
+                              onChange={(e) => setFormData({ ...formData, guardianRelation: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="">Select Relationship</option>
+                              <option value="Father">Father</option>
+                              <option value="Mother">Mother</option>
+                              <option value="Uncle">Uncle</option>
+                              <option value="Aunt">Aunt</option>
+                              <option value="Grandfather">Grandfather</option>
+                              <option value="Grandmother">Grandmother</option>
+                              <option value="Elder Brother">Elder Brother</option>
+                              <option value="Elder Sister">Elder Sister</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
+                            <input
+                              type="tel"
+                              value={formData.alternatePhone || ''}
+                              onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="10-digit emergency contact"
+                              pattern="[0-9]{10}"
+                              maxLength={10}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Medical Information */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Medical Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Medical Conditions</label>
+                            <textarea
+                              value={formData.medicalConditions || ''}
+                              onChange={(e) => setFormData({ ...formData, medicalConditions: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter any chronic medical conditions"
+                              rows={2}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Special Needs</label>
+                            <textarea
+                              value={formData.specialNeeds || ''}
+                              onChange={(e) => setFormData({ ...formData, specialNeeds: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter any special educational needs"
+                              rows={2}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Transport Details */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Transport Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Transport Required</label>
+                            <select
+                              value={formData.transportMode || 'Own'}
+                              onChange={(e) => setFormData({ ...formData, transportMode: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="Own">Own Transport</option>
+                              <option value="School Bus">School Bus</option>
+                              <option value="Public Transport">Public Transport</option>
+                              <option value="Walking">Walking</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Bus Route</label>
+                            <input
+                              type="text"
+                              value={formData.busRoute || ''}
+                              onChange={(e) => setFormData({ ...formData, busRoute: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter bus route (if applicable)"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Point</label>
+                            <input
+                              type="text"
+                              value={formData.pickupPoint || ''}
+                              onChange={(e) => setFormData({ ...formData, pickupPoint: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter pickup point"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Document Information */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Additional Documents</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Birth Certificate Number</label>
+                            <input
+                              type="text"
+                              value={formData.birthCertificateNumber || ''}
+                              onChange={(e) => setFormData({ ...formData, birthCertificateNumber: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter birth certificate number"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Ration Card Number</label>
+                            <input
+                              type="text"
+                              value={formData.rationCardNumber || ''}
+                              onChange={(e) => setFormData({ ...formData, rationCardNumber: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter ration card number"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Scholarship Details</label>
+                            <input
+                              type="text"
+                              value={formData.scholarshipDetails || ''}
+                              onChange={(e) => setFormData({ ...formData, scholarshipDetails: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter scholarship information"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Family Economic Information */}
+                      <div className="mb-6">
+                        <h5 className="text-md font-medium text-gray-800 mb-3">Family Economic Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Father Education</label>
+                            <input
+                              type="text"
+                              value={formData.fatherEducation || ''}
+                              onChange={(e) => setFormData({ ...formData, fatherEducation: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter father's education"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Mother Education</label>
+                            <input
+                              type="text"
+                              value={formData.motherEducation || ''}
+                              onChange={(e) => setFormData({ ...formData, motherEducation: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter mother's education"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Family Income (Annual)</label>
+                            <select
+                              value={formData.familyIncome || ''}
+                              onChange={(e) => setFormData({ ...formData, familyIncome: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="">Select Income Range</option>
+                              <option value="Below 1 Lakh">Below ₹1 Lakh</option>
+                              <option value="1-2 Lakhs">₹1-2 Lakhs</option>
+                              <option value="2-5 Lakhs">₹2-5 Lakhs</option>
+                              <option value="5-10 Lakhs">₹5-10 Lakhs</option>
+                              <option value="Above 10 Lakhs">Above ₹10 Lakhs</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Economic Status</label>
+                            <select
+                              value={formData.economicStatus || ''}
+                              onChange={(e) => setFormData({ ...formData, economicStatus: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            >
+                              <option value="">Select Status</option>
+                              <option value="BPL">Below Poverty Line (BPL)</option>
+                              <option value="APL">Above Poverty Line (APL)</option>
+                              <option value="EWS">Economically Weaker Section (EWS)</option>
+                              <option value="General">General</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">BPL Card Number</label>
+                            <input
+                              type="text"
+                              value={formData.bplCardNumber || ''}
+                              onChange={(e) => setFormData({ ...formData, bplCardNumber: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                              placeholder="Enter BPL card number"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.role === 'teacher' && (
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Professional Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Qualification *</label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.qualification}
+                          onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="Enter qualification"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Experience (Years)</label>
+                        <input
+                          type="number"
+                          value={formData.experience}
+                          onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="Enter experience in years"
+                          min="0"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Subjects Taught</label>
+                        <input
+                          type="text"
+                          value={formData.subjects}
+                          onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="Enter subjects separated by commas (e.g., Mathematics, Physics, Chemistry)"
+                        />
+                        <p className="text-sm text-gray-500 mt-1">Enter subjects separated by commas</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                        <input
+                          type="text"
+                          value={formData.employeeId}
+                          onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="Enter employee ID (optional)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {formData.role === 'admin' && (
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Administrative Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Admin Level *</label>
+                        <select
+                          required
+                          value={formData.adminLevel}
+                          onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Admin Level</option>
+                          <option value="Super Admin">Super Admin</option>
+                          <option value="Principal">Principal</option>
+                          <option value="Vice Principal">Vice Principal</option>
+                          <option value="Academic Coordinator">Academic Coordinator</option>
+                          <option value="Administrative Officer">Administrative Officer</option>
+                          <option value="Office Staff">Office Staff</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                        <select
+                          value={formData.department}
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Department</option>
+                          <option value="Administration">Administration</option>
+                          <option value="Academic Affairs">Academic Affairs</option>
+                          <option value="Student Affairs">Student Affairs</option>
+                          <option value="Finance">Finance</option>
+                          <option value="Human Resources">Human Resources</option>
+                          <option value="IT Department">IT Department</option>
+                          <option value="Facilities">Facilities</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                        <input
+                          type="text"
+                          value={formData.employeeId}
+                          onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="Enter employee ID"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
+                        <select
+                          value={formData.accessLevel}
+                          onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Access Level</option>
+                          <option value="Full Access">Full Access</option>
+                          <option value="Limited Access">Limited Access</option>
+                          <option value="Read Only">Read Only</option>
+                          <option value="Department Specific">Department Specific</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Enter address"
+                    rows={2}
+                  />
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading || !isFormValid()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    title={loading ? 'Please wait...' : (!isFormValid() ? missingFieldsForTooltip() : undefined)}
+                  >
+                    {loading ? 'Adding...' : 'Add User'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditModal && editingUser && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto relative z-[61]">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Edit User - {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}</h3>
+              <form onSubmit={handleUpdateUser} className="space-y-6">
+
+                {/* User ID Display */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">User Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                      <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 font-mono">
+                        {editingUser.userId || editingUser._id}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                      <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700">
+                        {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profile Picture */}
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Profile Picture</h4>
+                  <div className="flex items-start gap-6">
+                    {/* Image Preview */}
+                    <div className="flex-shrink-0">
+                      <div className="w-32 h-32 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50">
+                        {profileImagePreview || (editingUser.profileImage && `http://localhost:5050${editingUser.profileImage}`) ? (
+                          <img
+                            src={profileImagePreview || `http://localhost:5050${editingUser.profileImage}`}
+                            alt="Profile preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Camera className="w-12 h-12 text-gray-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upload Controls */}
+                    <div className="flex-1">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          console.log(`📸 Selected image: ${file.name}, Size: ${(file.size / 1024).toFixed(2)}KB`);
+
+                          const validation = validateImageFile(file);
+                          if (!validation.valid) {
+                            toast.error(validation.error || 'Invalid file');
+                            return;
+                          }
+
+                          // Create preview without compression (backend will compress)
+                          const reader = new FileReader();
+                          reader.onload = (e) => {
+                            setProfileImagePreview(e.target?.result as string);
+                          };
+                          reader.readAsDataURL(file);
+
+                          setProfileImageFile(file);
+                          toast.success('Image selected. Will be compressed on upload.');
+                        }}
+                        className="hidden"
+                        id="profile-image-input"
+                      />
+
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <label
+                            htmlFor="profile-image-input"
+                            className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors ${imageCompressing ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                          >
+                            {(profileImagePreview || editingUser.profileImage) ? 'Change Photo' : 'Upload Photo'}
+                          </label>
+
+                          {(profileImagePreview || editingUser.profileImage) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProfileImagePreview(null);
+                                setProfileImageFile(null);
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = '';
+                                }
+                              }}
+                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                            >
+                              <X className="w-4 h-4" />
+                              Remove
+                            </button>
+                          )}
+                        </div>
+
+                        <p className="text-sm text-gray-600">
+                          Upload JPG, PNG, GIF or WebP (max 10MB). Image will be automatically compressed to ~30KB on the server.
+                        </p>
+
+                        {editingUser.profileImage && !profileImagePreview && (
+                          <p className="text-sm text-blue-600">
+                            Current image will be kept if no new image is uploaded.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Basic Information */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter first name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                      <input
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter phone number (10 digits)"
+                        pattern="[0-9]{10}"
+                        maxLength={10}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={formData.dateOfBirth}
+                        onChange={(e) => handleDOBChange(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                      <select
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Role-Specific Fields */}
+                {editingUser.role === 'student' && (
+                  <div className="space-y-6">
+
+                    {/* Basic Information - SATS Standard */}
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment No</label>
+                          <input
+                            type="text"
+                            value={formData.enrollmentNo}
+                            onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter enrollment number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">TC No</label>
+                          <input
+                            type="text"
+                            value={formData.tcNo}
+                            onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter TC number"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Student Details - SATS Standard */}
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Student Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (English) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter full name in English"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (Kannada)</label>
+                          <input
+                            type="text"
+                            value={formData.studentNameKannada}
+                            onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter name in Kannada"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
+                          <input
+                            type="date"
+                            required
+                            value={formData.dateOfBirth}
+                            onChange={(e) => handleDOBChange(e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Age (Years)</label>
+                          <input
+                            type="number"
+                            value={formData.ageYears}
+                            onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Years"
+                            min="0"
+                            max="25"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Age (Months)</label>
+                          <input
+                            type="number"
+                            value={formData.ageMonths}
+                            onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Months"
+                            min="0"
+                            max="11"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
+                          <select
+                            required
+                            value={formData.gender}
+                            onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Admission Details - SATS Standard */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Admission Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
+                          <select
+                            required
+                            value={formData.academicYear}
+                            onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="2024-2025">2024-2025</option>
+                            <option value="2025-2026">2025-2026</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Medium of Instruction *</label>
+                          <select
+                            required
+                            value={formData.mediumOfInstruction}
+                            onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="English">English</option>
+                            <option value="Kannada">Kannada</option>
+                            <option value="Hindi">Hindi</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
+                          <select
+                            value={formData.motherTongue}
+                            onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Mother Tongue</option>
+                            <option value="Kannada">Kannada</option>
+                            <option value="Hindi">Hindi</option>
+                            <option value="Tamil">Tamil</option>
+                            <option value="Telugu">Telugu</option>
+                            <option value="Malayalam">Malayalam</option>
+                            <option value="English">English</option>
+                            <option value="Urdu">Urdu</option>
+                            <option value="Marathi">Marathi</option>
+                            <option value="Bengali">Bengali</option>
+                            <option value="Gujarati">Gujarati</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.motherTongue === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.motherTongueOther || ''}
+                              onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify mother tongue"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Academic Information */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Academic Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Class *</label>
+                          <select
+                            required
+                            value={formData.class}
+                            onChange={(e) => setFormData({ ...formData, class: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Class</option>
+                            <option value="LKG">LKG</option>
+                            <option value="UKG">UKG</option>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                              <option key={num} value={num.toString()}>{num}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                          <select
+                            value={formData.section}
+                            onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Section</option>
+                            {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
+                              <option key={letter} value={letter}>Section {letter}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
+                          <input
+                            type="text"
+                            value={formData.rollNumber}
+                            onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter roll number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Admission Date</label>
+                          <input
+                            type="date"
+                            value={formData.admissionDate}
+                            onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Family Details - SATS Standard */}
+                    <div className="bg-purple-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Family Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (English) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.fatherName}
+                            onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (Kannada)</label>
+                          <input
+                            type="text"
+                            value={formData.fatherNameKannada}
+                            onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's name in Kannada"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Aadhaar No</label>
+                          <input
+                            type="text"
+                            value={formData.fatherAadhaar}
+                            onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (English) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.motherName}
+                            onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (Kannada)</label>
+                          <input
+                            type="text"
+                            value={formData.motherNameKannada}
+                            onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's name in Kannada"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Aadhaar No</label>
+                          <input
+                            type="text"
+                            value={formData.motherAadhaar}
+                            onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father's Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.fatherPhone}
+                            onChange={(e) => setFormData({ ...formData, fatherPhone: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter father's phone (10 digits)"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.motherPhone}
+                            onChange={(e) => setFormData({ ...formData, motherPhone: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mother's phone (10 digits)"
                             pattern="[0-9]{10}"
                             maxLength={10}
                           />
@@ -6979,1846 +7863,1099 @@ const ManageUsers: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Medical Information */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Medical Information</h5>
+                    {/* Contact Information */}
+                    <div className="bg-cyan-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Contact Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Email</label>
+                          <input
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Mobile</label>
+                          <input
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter mobile number (10 digits)"
+                            pattern="[0-9]{10}"
+                            maxLength={10}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Identity Documents - SATS Standard */}
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Identity Documents</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Medical Conditions</label>
-                          <textarea
-                            value={formData.medicalConditions || ''}
-                            onChange={(e) => setFormData({ ...formData, medicalConditions: e.target.value })}
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Aadhaar/KPR No</label>
+                          <input
+                            type="text"
+                            value={formData.studentAadhaar}
+                            onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter any chronic medical conditions"
-                            rows={2}
+                            placeholder="12-digit Aadhaar number"
+                            pattern="[0-9]{12}"
+                            maxLength={12}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Special Needs</label>
-                          <textarea
-                            value={formData.specialNeeds || ''}
-                            onChange={(e) => setFormData({ ...formData, specialNeeds: e.target.value })}
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste Certificate No</label>
+                          <input
+                            type="text"
+                            value={formData.studentCasteCertNo}
+                            onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter any special educational needs"
-                            rows={2}
+                            placeholder="Enter certificate number"
                           />
                         </div>
                       </div>
                     </div>
 
-                    {/* Transport Details */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Transport Information</h5>
+                    {/* Caste and Category - SATS Standard */}
+                    <div className="bg-indigo-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Caste and Category</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Transport Required</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
                           <select
-                            value={formData.transportMode || 'Own'}
-                            onChange={(e) => setFormData({ ...formData, transportMode: e.target.value })}
+                            value={formData.socialCategory}
+                            onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
                           >
-                            <option value="Own">Own Transport</option>
-                            <option value="School Bus">School Bus</option>
-                            <option value="Public Transport">Public Transport</option>
-                            <option value="Walking">Walking</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Bus Route</label>
-                          <input
-                            type="text"
-                            value={formData.busRoute || ''}
-                            onChange={(e) => setFormData({ ...formData, busRoute: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter bus route (if applicable)"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Point</label>
-                          <input
-                            type="text"
-                            value={formData.pickupPoint || ''}
-                            onChange={(e) => setFormData({ ...formData, pickupPoint: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter pickup point"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Document Information */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Additional Documents</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Birth Certificate Number</label>
-                          <input
-                            type="text"
-                            value={formData.birthCertificateNumber || ''}
-                            onChange={(e) => setFormData({ ...formData, birthCertificateNumber: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter birth certificate number"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Ration Card Number</label>
-                          <input
-                            type="text"
-                            value={formData.rationCardNumber || ''}
-                            onChange={(e) => setFormData({ ...formData, rationCardNumber: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter ration card number"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Scholarship Details</label>
-                          <input
-                            type="text"
-                            value={formData.scholarshipDetails || ''}
-                            onChange={(e) => setFormData({ ...formData, scholarshipDetails: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter scholarship information"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Family Economic Information */}
-                    <div className="mb-6">
-                      <h5 className="text-md font-medium text-gray-800 mb-3">Family Economic Information</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Education</label>
-                          <input
-                            type="text"
-                            value={formData.fatherEducation || ''}
-                            onChange={(e) => setFormData({ ...formData, fatherEducation: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter father's education"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Education</label>
-                          <input
-                            type="text"
-                            value={formData.motherEducation || ''}
-                            onChange={(e) => setFormData({ ...formData, motherEducation: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter mother's education"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Family Income (Annual)</label>
-                          <select
-                            value={formData.familyIncome || ''}
-                            onChange={(e) => setFormData({ ...formData, familyIncome: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          >
-                            <option value="">Select Income Range</option>
-                            <option value="Below 1 Lakh">Below ₹1 Lakh</option>
-                            <option value="1-2 Lakhs">₹1-2 Lakhs</option>
-                            <option value="2-5 Lakhs">₹2-5 Lakhs</option>
-                            <option value="5-10 Lakhs">₹5-10 Lakhs</option>
-                            <option value="Above 10 Lakhs">Above ₹10 Lakhs</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Economic Status</label>
-                          <select
-                            value={formData.economicStatus || ''}
-                            onChange={(e) => setFormData({ ...formData, economicStatus: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          >
-                            <option value="">Select Status</option>
-                            <option value="BPL">Below Poverty Line (BPL)</option>
-                            <option value="APL">Above Poverty Line (APL)</option>
-                            <option value="EWS">Economically Weaker Section (EWS)</option>
+                            <option value="">Select Category</option>
                             <option value="General">General</option>
+                            <option value="SC">SC (Scheduled Caste)</option>
+                            <option value="ST">ST (Scheduled Tribe)</option>
+                            <option value="OBC">OBC (Other Backward Class)</option>
+                            <option value="Category-1">Category-1</option>
+                            <option value="Category-2A">Category-2A</option>
+                            <option value="Category-2B">Category-2B</option>
+                            <option value="Category-3A">Category-3A</option>
+                            <option value="Category-3B">Category-3B</option>
+                            <option value="Other">Other</option>
                           </select>
+                          {formData.socialCategory === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.socialCategoryOther}
+                              onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify social category"
+                            />
+                          )}
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">BPL Card Number</label>
-                          <input
-                            type="text"
-                            value={formData.bplCardNumber || ''}
-                            onChange={(e) => setFormData({ ...formData, bplCardNumber: e.target.value })}
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
+                          <select
+                            value={formData.religion}
+                            onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="Enter BPL card number"
+                          >
+                            <option value="">Select Religion</option>
+                            <option value="Hindu">Hindu</option>
+                            <option value="Muslim">Muslim</option>
+                            <option value="Christian">Christian</option>
+                            <option value="Sikh">Sikh</option>
+                            <option value="Buddhist">Buddhist</option>
+                            <option value="Jain">Jain</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.religion === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.religionOther}
+                              onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify religion"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
+                          <select
+                            value={formData.studentCaste}
+                            onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.studentCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.studentCasteOther}
+                              onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify student caste"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
+                          <select
+                            value={formData.fatherCaste}
+                            onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.fatherCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.fatherCasteOther}
+                              onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify father caste"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
+                          <select
+                            value={formData.motherCaste}
+                            onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Caste</option>
+                            <option value="Brahmin">Brahmin</option>
+                            <option value="Kshatriya">Kshatriya</option>
+                            <option value="Vaishya">Vaishya</option>
+                            <option value="Shudra">Shudra</option>
+                            <option value="Lingayat">Lingayat</option>
+                            <option value="Vokkaliga">Vokkaliga</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.motherCaste === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.motherCasteOther}
+                              onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify mother caste"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Special Needs - SATS Standard */}
+                    <div className="bg-pink-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
+                          <select
+                            value={formData.disability}
+                            onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="Not Applicable">Not Applicable</option>
+                            <option value="Visual Impairment">Visual Impairment</option>
+                            <option value="Hearing Impairment">Hearing Impairment</option>
+                            <option value="Speech and Language Disability">Speech and Language Disability</option>
+                            <option value="Locomotor Disability">Locomotor Disability</option>
+                            <option value="Intellectual Disability">Intellectual Disability</option>
+                            <option value="Learning Disability">Learning Disability</option>
+                            <option value="Autism Spectrum Disorder">Autism Spectrum Disorder</option>
+                            <option value="Multiple Disabilities">Multiple Disabilities</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {formData.disability === 'Other' && (
+                            <input
+                              type="text"
+                              value={formData.disabilityOther}
+                              onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
+                              className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                              placeholder="Please specify disability type"
+                            />
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={formData.isRTECandidate || ''}
+                            onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          >
+                            <option value="">Select Option</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Banking Information */}
+                    <div className="bg-teal-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Banking Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                          <input
+                            type="text"
+                            value={formData.bankName}
+                            onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter bank name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account No</label>
+                          <input
+                            type="text"
+                            value={formData.bankAccountNo}
+                            onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="Enter account number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Bank IFSC Code</label>
+                          <input
+                            type="text"
+                            value={formData.bankIFSC}
+                            onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            placeholder="11-character IFSC code"
+                            pattern="[A-Z]{4}0[A-Z0-9]{6}"
+                            maxLength={11}
                           />
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {formData.role === 'teacher' && (
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Professional Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Qualification *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.qualification}
-                        onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter qualification"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Experience (Years)</label>
-                      <input
-                        type="number"
-                        value={formData.experience}
-                        onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter experience in years"
-                        min="0"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Subjects Taught</label>
-                      <input
-                        type="text"
-                        value={formData.subjects}
-                        onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter subjects separated by commas (e.g., Mathematics, Physics, Chemistry)"
-                      />
-                      <p className="text-sm text-gray-500 mt-1">Enter subjects separated by commas</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                      <input
-                        type="text"
-                        value={formData.employeeId}
-                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter employee ID (optional)"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {formData.role === 'admin' && (
-                <div className="bg-purple-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Administrative Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Admin Level *</label>
-                      <select
-                        required
-                        value={formData.adminLevel}
-                        onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Admin Level</option>
-                        <option value="Super Admin">Super Admin</option>
-                        <option value="Principal">Principal</option>
-                        <option value="Vice Principal">Vice Principal</option>
-                        <option value="Academic Coordinator">Academic Coordinator</option>
-                        <option value="Administrative Officer">Administrative Officer</option>
-                        <option value="Office Staff">Office Staff</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                      <select
-                        value={formData.department}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Department</option>
-                        <option value="Administration">Administration</option>
-                        <option value="Academic Affairs">Academic Affairs</option>
-                        <option value="Student Affairs">Student Affairs</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Human Resources">Human Resources</option>
-                        <option value="IT Department">IT Department</option>
-                        <option value="Facilities">Facilities</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                      <input
-                        type="text"
-                        value={formData.employeeId}
-                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter employee ID"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
-                      <select
-                        value={formData.accessLevel}
-                        onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Access Level</option>
-                        <option value="Full Access">Full Access</option>
-                        <option value="Limited Access">Limited Access</option>
-                        <option value="Read Only">Read Only</option>
-                        <option value="Department Specific">Department Specific</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                <textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="Enter address"
-                  rows={2}
-                />
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddModal(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || !isFormValid()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  title={loading ? 'Please wait...' : (!isFormValid() ? missingFieldsForTooltip() : undefined)}
-                >
-                  {loading ? 'Adding...' : 'Add User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {showEditModal && editingUser && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto relative z-[61]">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Edit User - {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}</h3>
-            <form onSubmit={handleUpdateUser} className="space-y-6">
-
-              {/* User ID Display */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">User Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-                    <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700 font-mono">
-                      {editingUser.userId || editingUser._id}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <div className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-100 text-gray-700">
-                      {editingUser.role.charAt(0).toUpperCase() + editingUser.role.slice(1)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Basic Information */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value, name: `${e.target.value} ${formData.lastName}`.trim() })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter first name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value, name: `${formData.firstName} ${e.target.value}`.trim() })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter last name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter phone number (10 digits)"
-                      pattern="[0-9]{10}"
-                      maxLength={10}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={formData.dateOfBirth}
-                      onChange={(e) => handleDOBChange(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                    <select
-                      value={formData.gender}
-                      onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Role-Specific Fields */}
-              {editingUser.role === 'student' && (
-                <div className="space-y-6">
-
-                  {/* Basic Information - SATS Standard */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Basic Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Enrollment No</label>
-                        <input
-                          type="text"
-                          value={formData.enrollmentNo}
-                          onChange={(e) => setFormData({ ...formData, enrollmentNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter enrollment number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">TC No</label>
-                        <input
-                          type="text"
-                          value={formData.tcNo}
-                          onChange={(e) => setFormData({ ...formData, tcNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter TC number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Student Details - SATS Standard */}
+                {editingUser.role === 'teacher' && (
                   <div className="bg-yellow-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Student Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (English) *</label>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Teacher Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
                         <input
                           type="text"
-                          required
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value, firstName: e.target.value.split(' ')[0], lastName: e.target.value.split(' ').slice(1).join(' ') })}
+                          value={formData.employeeId}
+                          onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter full name in English"
+                          placeholder="Enter employee ID"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (Kannada)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Qualification</label>
                         <input
                           type="text"
-                          value={formData.studentNameKannada}
-                          onChange={(e) => setFormData({ ...formData, studentNameKannada: e.target.value })}
+                          value={formData.qualification}
+                          onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter name in Kannada"
+                          placeholder="Enter qualification"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
-                        <input
-                          type="date"
-                          required
-                          value={formData.dateOfBirth}
-                          onChange={(e) => handleDOBChange(e.target.value)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Age (Years)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Experience (Years)</label>
                         <input
                           type="number"
-                          value={formData.ageYears}
-                          onChange={(e) => setFormData({ ...formData, ageYears: parseInt(e.target.value) || 0 })}
+                          value={formData.experience}
+                          onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Years"
+                          placeholder="Enter years of experience"
                           min="0"
-                          max="25"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Age (Months)</label>
-                        <input
-                          type="number"
-                          value={formData.ageMonths}
-                          onChange={(e) => setFormData({ ...formData, ageMonths: parseInt(e.target.value) || 0 })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Months"
-                          min="0"
-                          max="11"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
-                        <select
-                          required
-                          value={formData.gender}
-                          onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' | 'other' })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="male">Male</option>
-                          <option value="female">Female</option>
-                          <option value="other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Admission Details - SATS Standard */}
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Admission Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year *</label>
-                        <select
-                          required
-                          value={formData.academicYear}
-                          onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="2024-2025">2024-2025</option>
-                          <option value="2025-2026">2025-2026</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Medium of Instruction *</label>
-                        <select
-                          required
-                          value={formData.mediumOfInstruction}
-                          onChange={(e) => setFormData({ ...formData, mediumOfInstruction: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="English">English</option>
-                          <option value="Kannada">Kannada</option>
-                          <option value="Hindi">Hindi</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Tongue</label>
-                        <select
-                          value={formData.motherTongue}
-                          onChange={(e) => setFormData({ ...formData, motherTongue: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Mother Tongue</option>
-                          <option value="Kannada">Kannada</option>
-                          <option value="Hindi">Hindi</option>
-                          <option value="Tamil">Tamil</option>
-                          <option value="Telugu">Telugu</option>
-                          <option value="Malayalam">Malayalam</option>
-                          <option value="English">English</option>
-                          <option value="Urdu">Urdu</option>
-                          <option value="Marathi">Marathi</option>
-                          <option value="Bengali">Bengali</option>
-                          <option value="Gujarati">Gujarati</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.motherTongue === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.motherTongueOther || ''}
-                            onChange={(e) => setFormData({ ...formData, motherTongueOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify mother tongue"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Academic Information */}
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Academic Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Class *</label>
-                        <select
-                          required
-                          value={formData.class}
-                          onChange={(e) => setFormData({ ...formData, class: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Class</option>
-                          <option value="LKG">LKG</option>
-                          <option value="UKG">UKG</option>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                            <option key={num} value={num.toString()}>{num}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
-                        <select
-                          value={formData.section}
-                          onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Section</option>
-                          {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'].map(letter => (
-                            <option key={letter} value={letter}>Section {letter}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Roll Number</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Subjects (comma-separated)</label>
                         <input
                           type="text"
-                          value={formData.rollNumber}
-                          onChange={(e) => setFormData({ ...formData, rollNumber: e.target.value })}
+                          value={formData.subjects}
+                          onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter roll number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Admission Date</label>
-                        <input
-                          type="date"
-                          value={formData.admissionDate}
-                          onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                          placeholder="e.g., Mathematics, Physics"
                         />
                       </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Family Details - SATS Standard */}
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Family Details</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (English) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.fatherName}
-                          onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter father's name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Name (Kannada)</label>
-                        <input
-                          type="text"
-                          value={formData.fatherNameKannada}
-                          onChange={(e) => setFormData({ ...formData, fatherNameKannada: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter father's name in Kannada"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Aadhaar No</label>
-                        <input
-                          type="text"
-                          value={formData.fatherAadhaar}
-                          onChange={(e) => setFormData({ ...formData, fatherAadhaar: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (English) *</label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.motherName}
-                          onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mother's name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Name (Kannada)</label>
-                        <input
-                          type="text"
-                          value={formData.motherNameKannada}
-                          onChange={(e) => setFormData({ ...formData, motherNameKannada: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mother's name in Kannada"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Aadhaar No</label>
-                        <input
-                          type="text"
-                          value={formData.motherAadhaar}
-                          onChange={(e) => setFormData({ ...formData, motherAadhaar: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father's Phone</label>
-                        <input
-                          type="tel"
-                          value={formData.fatherPhone}
-                          onChange={(e) => setFormData({ ...formData, fatherPhone: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter father's phone (10 digits)"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother's Phone</label>
-                        <input
-                          type="tel"
-                          value={formData.motherPhone}
-                          onChange={(e) => setFormData({ ...formData, motherPhone: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mother's phone (10 digits)"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information */}
-                  <div className="bg-cyan-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Contact Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Email</label>
-                        <input
-                          type="email"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter email address"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Mobile</label>
-                        <input
-                          type="tel"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter mobile number (10 digits)"
-                          pattern="[0-9]{10}"
-                          maxLength={10}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Identity Documents - SATS Standard */}
+                {editingUser.role === 'admin' && (
                   <div className="bg-red-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Identity Documents</h4>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Administrative Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Aadhaar/KPR No</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Admin Level *</label>
+                        <select
+                          required
+                          value={formData.adminLevel}
+                          onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Admin Level</option>
+                          <option value="Super Admin">Super Admin</option>
+                          <option value="Principal">Principal</option>
+                          <option value="Vice Principal">Vice Principal</option>
+                          <option value="Academic Coordinator">Academic Coordinator</option>
+                          <option value="Administrative Officer">Administrative Officer</option>
+                          <option value="Office Staff">Office Staff</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                        <select
+                          value={formData.department}
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        >
+                          <option value="">Select Department</option>
+                          <option value="Administration">Administration</option>
+                          <option value="Academic Affairs">Academic Affairs</option>
+                          <option value="Student Affairs">Student Affairs</option>
+                          <option value="Finance">Finance</option>
+                          <option value="Human Resources">Human Resources</option>
+                          <option value="IT Department">IT Department</option>
+                          <option value="Facilities">Facilities</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
                         <input
                           type="text"
-                          value={formData.studentAadhaar}
-                          onChange={(e) => setFormData({ ...formData, studentAadhaar: e.target.value })}
+                          value={formData.employeeId}
+                          onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="12-digit Aadhaar number"
-                          pattern="[0-9]{12}"
-                          maxLength={12}
+                          placeholder="Enter employee ID"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste Certificate No</label>
-                        <input
-                          type="text"
-                          value={formData.studentCasteCertNo}
-                          onChange={(e) => setFormData({ ...formData, studentCasteCertNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter certificate number"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Caste and Category - SATS Standard */}
-                  <div className="bg-indigo-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Caste and Category</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Social Category</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
                         <select
-                          value={formData.socialCategory}
-                          onChange={(e) => setFormData({ ...formData, socialCategory: e.target.value })}
+                          value={formData.accessLevel}
+                          onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2"
                         >
-                          <option value="">Select Category</option>
-                          <option value="General">General</option>
-                          <option value="SC">SC (Scheduled Caste)</option>
-                          <option value="ST">ST (Scheduled Tribe)</option>
-                          <option value="OBC">OBC (Other Backward Class)</option>
-                          <option value="Category-1">Category-1</option>
-                          <option value="Category-2A">Category-2A</option>
-                          <option value="Category-2B">Category-2B</option>
-                          <option value="Category-3A">Category-3A</option>
-                          <option value="Category-3B">Category-3B</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.socialCategory === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.socialCategoryOther}
-                            onChange={(e) => setFormData({ ...formData, socialCategoryOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify social category"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
-                        <select
-                          value={formData.religion}
-                          onChange={(e) => setFormData({ ...formData, religion: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Religion</option>
-                          <option value="Hindu">Hindu</option>
-                          <option value="Muslim">Muslim</option>
-                          <option value="Christian">Christian</option>
-                          <option value="Sikh">Sikh</option>
-                          <option value="Buddhist">Buddhist</option>
-                          <option value="Jain">Jain</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.religion === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.religionOther}
-                            onChange={(e) => setFormData({ ...formData, religionOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify religion"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Student Caste</label>
-                        <select
-                          value={formData.studentCaste}
-                          onChange={(e) => setFormData({ ...formData, studentCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.studentCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.studentCasteOther}
-                            onChange={(e) => setFormData({ ...formData, studentCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify student caste"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Father Caste</label>
-                        <select
-                          value={formData.fatherCaste}
-                          onChange={(e) => setFormData({ ...formData, fatherCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.fatherCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.fatherCasteOther}
-                            onChange={(e) => setFormData({ ...formData, fatherCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify father caste"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mother Caste</label>
-                        <select
-                          value={formData.motherCaste}
-                          onChange={(e) => setFormData({ ...formData, motherCaste: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Caste</option>
-                          <option value="Brahmin">Brahmin</option>
-                          <option value="Kshatriya">Kshatriya</option>
-                          <option value="Vaishya">Vaishya</option>
-                          <option value="Shudra">Shudra</option>
-                          <option value="Lingayat">Lingayat</option>
-                          <option value="Vokkaliga">Vokkaliga</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.motherCaste === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.motherCasteOther}
-                            onChange={(e) => setFormData({ ...formData, motherCasteOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify mother caste"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Special Needs - SATS Standard */}
-                  <div className="bg-pink-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Special Needs</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Disability / Child with Special Need</label>
-                        <select
-                          value={formData.disability}
-                          onChange={(e) => setFormData({ ...formData, disability: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="Not Applicable">Not Applicable</option>
-                          <option value="Visual Impairment">Visual Impairment</option>
-                          <option value="Hearing Impairment">Hearing Impairment</option>
-                          <option value="Speech and Language Disability">Speech and Language Disability</option>
-                          <option value="Locomotor Disability">Locomotor Disability</option>
-                          <option value="Intellectual Disability">Intellectual Disability</option>
-                          <option value="Learning Disability">Learning Disability</option>
-                          <option value="Autism Spectrum Disorder">Autism Spectrum Disorder</option>
-                          <option value="Multiple Disabilities">Multiple Disabilities</option>
-                          <option value="Other">Other</option>
-                        </select>
-                        {formData.disability === 'Other' && (
-                          <input
-                            type="text"
-                            value={formData.disabilityOther}
-                            onChange={(e) => setFormData({ ...formData, disabilityOther: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
-                            placeholder="Please specify disability type"
-                          />
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Is the student an RTE (Right to Education) candidate? <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={formData.isRTECandidate || ''}
-                          onChange={(e) => setFormData({ ...formData, isRTECandidate: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        >
-                          <option value="">Select Option</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
+                          <option value="">Select Access Level</option>
+                          <option value="Full Access">Full Access</option>
+                          <option value="Limited Access">Limited Access</option>
+                          <option value="Read Only">Read Only</option>
+                          <option value="Department Specific">Department Specific</option>
                         </select>
                       </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Banking Information */}
-                  <div className="bg-teal-50 p-4 rounded-lg">
-                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Banking Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={formData.bankName}
-                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter bank name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account No</label>
-                        <input
-                          type="text"
-                          value={formData.bankAccountNo}
-                          onChange={(e) => setFormData({ ...formData, bankAccountNo: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="Enter account number"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Bank IFSC Code</label>
-                        <input
-                          type="text"
-                          value={formData.bankIFSC}
-                          onChange={(e) => setFormData({ ...formData, bankIFSC: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          placeholder="11-character IFSC code"
-                          pattern="[A-Z]{4}0[A-Z0-9]{6}"
-                          maxLength={11}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {editingUser.role === 'teacher' && (
-                <div className="bg-yellow-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Teacher Information</h4>
+                {/* Address Information */}
+                <div className="bg-indigo-50 p-4 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Address Information</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                      <textarea
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Enter complete address"
+                        rows={2}
+                      />
+                    </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                       <input
                         type="text"
-                        value={formData.employeeId}
-                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter employee ID"
+                        placeholder="Enter city"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Qualification</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                       <input
                         type="text"
-                        value={formData.qualification}
-                        onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
+                        value={formData.state}
+                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter qualification"
+                        placeholder="Enter state"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Experience (Years)</label>
-                      <input
-                        type="number"
-                        value={formData.experience}
-                        onChange={(e) => setFormData({ ...formData, experience: parseInt(e.target.value) || 0 })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter years of experience"
-                        min="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Subjects (comma-separated)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code</label>
                       <input
                         type="text"
-                        value={formData.subjects}
-                        onChange={(e) => setFormData({ ...formData, subjects: e.target.value })}
+                        value={formData.pinCode}
+                        onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="e.g., Mathematics, Physics"
+                        placeholder="Enter pin code"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
                       />
                     </div>
                   </div>
                 </div>
-              )}
 
-              {editingUser.role === 'admin' && (
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Administrative Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Admin Level *</label>
-                      <select
-                        required
-                        value={formData.adminLevel}
-                        onChange={(e) => setFormData({ ...formData, adminLevel: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Admin Level</option>
-                        <option value="Super Admin">Super Admin</option>
-                        <option value="Principal">Principal</option>
-                        <option value="Vice Principal">Vice Principal</option>
-                        <option value="Academic Coordinator">Academic Coordinator</option>
-                        <option value="Administrative Officer">Administrative Officer</option>
-                        <option value="Office Staff">Office Staff</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                      <select
-                        value={formData.department}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Department</option>
-                        <option value="Administration">Administration</option>
-                        <option value="Academic Affairs">Academic Affairs</option>
-                        <option value="Student Affairs">Student Affairs</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Human Resources">Human Resources</option>
-                        <option value="IT Department">IT Department</option>
-                        <option value="Facilities">Facilities</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                      <input
-                        type="text"
-                        value={formData.employeeId}
-                        onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Enter employee ID"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Access Level</label>
-                      <select
-                        value={formData.accessLevel}
-                        onChange={(e) => setFormData({ ...formData, accessLevel: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select Access Level</option>
-                        <option value="Full Access">Full Access</option>
-                        <option value="Limited Access">Limited Access</option>
-                        <option value="Read Only">Read Only</option>
-                        <option value="Department Specific">Department Specific</option>
-                      </select>
-                    </div>
-                  </div>
+                {/* Form Actions */}
+                <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingUser(null);
+                      resetForm();
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {loading ? 'Updating...' : 'Update User'}
+                  </button>
                 </div>
-              )}
-
-              {/* Address Information */}
-              <div className="bg-indigo-50 p-4 rounded-lg">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">Address Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                    <textarea
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter complete address"
-                      rows={2}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter city"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                    <input
-                      type="text"
-                      value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter state"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Pin Code</label>
-                    <input
-                      type="text"
-                      value={formData.pinCode}
-                      onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="Enter pin code"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setEditingUser(null);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {loading ? 'Updating...' : 'Update User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Credentials Modal */}
-      {showCredentials && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
-            <div className="p-6">
-              <div className="text-center">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                  <UserCheck className="h-6 w-6 text-green-600" />
-                </div>
-                <h3 className="mt-4 text-lg font-medium text-gray-900">
-                  User Created Successfully!
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Please save these credentials and share them with the user.
-                </p>
-              </div>
-
-              <div className="mt-6 bg-gray-50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Login Credentials</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm font-mono text-gray-900">{showCredentials.userId}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showCredentials.userId)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm text-gray-900">{showCredentials.email}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showCredentials.email)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Password</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm font-mono text-gray-900">{showCredentials.password}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showCredentials.password)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
-                    <div className="mt-1 bg-white border rounded px-3 py-2">
-                      <span className="text-sm capitalize text-gray-900">{showCredentials.role}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowCredentials(null)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Done
-                </button>
-              </div>
+              </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Reset Password Credentials Modal */}
-      {showResetCredentials && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
-            <div className="p-6">
-              <div className="text-center">
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100">
-                  <RotateCcw className="h-6 w-6 text-purple-600" />
+        {/* Credentials Modal */}
+        {showCredentials && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
+              <div className="p-6">
+                <div className="text-center">
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                    <UserCheck className="h-6 w-6 text-green-600" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                    User Created Successfully!
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Please save these credentials and share them with the user.
+                  </p>
                 </div>
-                <h3 className="mt-4 text-lg font-medium text-gray-900">
-                  Password Reset Successfully!
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  Please save these new credentials and share them with the user.
-                </p>
-              </div>
 
-              <div className="mt-6 bg-gray-50 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">New Login Credentials</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm font-mono text-gray-900">{showResetCredentials.userId}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showResetCredentials.userId)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm text-gray-900">{showResetCredentials.email}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showResetCredentials.email)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">New Password</label>
-                    <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
-                      <span className="text-sm font-mono text-gray-900">{showResetCredentials.password}</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(showResetCredentials.password)}
-                        className="text-blue-600 hover:text-blue-800 text-xs"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
-                    <div className="mt-1 bg-white border rounded px-3 py-2">
-                      <span className="text-sm capitalize text-gray-900">{showResetCredentials.role}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => setShowResetCredentials(null)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Import Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative z-[61]">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Import {activeTab ? activeTab.charAt(0).toUpperCase() + activeTab.slice(1) : 'User'}s
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowImportModal(false);
-                    setImportFile(null);
-                    setImportPreview([]);
-                    setImportResults(null);
-                    setIsImporting(false);
-                    setImportProgress(0);
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <span className="sr-only">Close</span>
-                  ×
-                </button>
-              </div>
-
-              {!importResults ? (
-                <div className="space-y-6">
-                  {/* Instructions */}
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-2">Import Instructions</h4>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>• Download the template for {activeTab}s using the "Template" button</li>
-                      <li>• Fill in your data (required fields marked with *)</li>
-                      <li>• Date of Birth will be used as the default password (format: DDMMYYYY)</li>
-                      <li>• User IDs will be auto-generated sequentially</li>
-                      <li>• Upload the completed CSV file below</li>
-                    </ul>
-                  </div>
-
-                  {/* File Upload */}
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                      id="csv-upload"
-                    />
-                    <label htmlFor="csv-upload" className="cursor-pointer">
-                      <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                      <p className="text-lg text-gray-600 mb-2">
-                        {importFile ? importFile.name : 'Choose CSV file or drag and drop'}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        CSV files only. Make sure to use the template format.
-                      </p>
-                    </label>
-                  </div>
-
-                  {/* File Selected */}
-                  {importFile && (
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-medium text-gray-900">
-                          File Selected: {importFile.name}
-                        </h4>
-                        <div className="space-x-2">
-                          <button
-                            onClick={() => generateTemplate(activeTab)}
-                            className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
-                          >
-                            Download Template
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center">
-                          <FileText className="h-5 w-5 text-blue-500 mr-2" />
-                          <div>
-                            <p className="text-sm font-medium text-blue-800">
-                              Ready to import {activeTab} users
-                            </p>
-                            <p className="text-xs text-blue-600">
-                              Make sure your CSV file follows the template format
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {isImporting ? (
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Processing users...</span>
-                            <span>{Math.round(importProgress)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${importProgress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={() => {
-                              setImportFile(null);
-                              setImportPreview([]);
-                              setImportResults(null);
-                            }}
-                            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                          >
-                            Clear
-                          </button>
-                          <button
-                            onClick={processImport}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Import Users
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Import Results */
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                      <Check className="h-6 w-6 text-green-600" />
-                    </div>
-                    <h3 className="mt-4 text-lg font-medium text-gray-900">
-                      Import Completed
-                    </h3>
-                    <p className="mt-2 text-sm text-gray-500">
-                      {importResults.success.length} users imported successfully
-                      {importResults.errors.length > 0 && `, ${importResults.errors.length} failed`}
-                    </p>
-                  </div>
-
-                  {/* Success Summary */}
-                  {importResults.success.length > 0 && (
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-green-900 mb-2">
-                        Successfully Imported ({importResults.success.length})
-                      </h4>
-                      <div className="max-h-40 overflow-auto">
-                        <table className="min-w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-green-700">
-                              <th className="font-medium">User ID</th>
-                              <th className="font-medium">Email</th>
-                              <th className="font-medium">Password</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-green-800">
-                            {importResults.success.slice(0, 10).map((user, index) => (
-                              <tr key={index}>
-                                <td className="font-mono">{user.userId}</td>
-                                <td>{user.email}</td>
-                                <td className="font-mono">{user.password}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {importResults.success.length > 10 && (
-                          <p className="text-green-600 text-center mt-2">
-                            +{importResults.success.length - 10} more users
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Error Summary */}
-                  {importResults.errors.length > 0 && (
-                    <div className="bg-red-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-red-900 mb-2">
-                        Failed to Import ({importResults.errors.length})
-                      </h4>
-                      <div className="max-h-40 overflow-auto space-y-2">
-                        {importResults.errors.slice(0, 10).map((error, index) => (
-                          <div key={index} className="text-sm">
-                            <span className="font-medium text-red-800">Row {error.row}:</span>
-                            <span className="text-red-700 ml-2">{error.error}</span>
-                          </div>
-                        ))}
-                        {importResults.errors.length > 10 && (
-                          <p className="text-red-600 text-center">
-                            +{importResults.errors.length - 10} more errors
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-between">
-                    <button
-                      onClick={() => {
-                        setImportResults(null);
-                        setImportFile(null);
-                        setImportPreview([]);
-                      }}
-                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                      Import More
-                    </button>
-                    <div className="space-x-2">
-                      {importResults.success.length > 0 && (
+                <div className="mt-6 bg-gray-50 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">Login Credentials</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm font-mono text-gray-900">{showCredentials.userId}</span>
                         <button
-                          onClick={downloadCredentials}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                          onClick={() => navigator.clipboard.writeText(showCredentials.userId)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
                         >
-                          Download Credentials
+                          Copy
                         </button>
-                      )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm text-gray-900">{showCredentials.email}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(showCredentials.email)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Password</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm font-mono text-gray-900">{showCredentials.password}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(showCredentials.password)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
+                      <div className="mt-1 bg-white border rounded px-3 py-2">
+                        <span className="text-sm capitalize text-gray-900">{showCredentials.role}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowCredentials(null)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reset Password Credentials Modal */}
+        {showResetCredentials && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
+              <div className="p-6">
+                <div className="text-center">
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100">
+                    <RotateCcw className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                    Password Reset Successfully!
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Please save these new credentials and share them with the user.
+                  </p>
+                </div>
+
+                <div className="mt-6 bg-gray-50 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">New Login Credentials</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">User ID</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm font-mono text-gray-900">{showResetCredentials.userId}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(showResetCredentials.userId)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm text-gray-900">{showResetCredentials.email}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(showResetCredentials.email)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">New Password</label>
+                      <div className="mt-1 flex items-center justify-between bg-white border rounded px-3 py-2">
+                        <span className="text-sm font-mono text-gray-900">{showResetCredentials.password}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(showResetCredentials.password)}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Role</label>
+                      <div className="mt-1 bg-white border rounded px-3 py-2">
+                        <span className="text-sm capitalize text-gray-900">{showResetCredentials.role}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowResetCredentials(null)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Import Modal */}
+        {showImportModal && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto relative z-[61]">
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Import {activeTab ? activeTab.charAt(0).toUpperCase() + activeTab.slice(1) : 'User'}s
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowImportModal(false);
+                      setImportFile(null);
+                      setImportPreview([]);
+                      setImportResults(null);
+                      setIsImporting(false);
+                      setImportProgress(0);
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <span className="sr-only">Close</span>
+                    ×
+                  </button>
+                </div>
+
+                {!importResults ? (
+                  <div className="space-y-6">
+                    {/* Instructions */}
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h4 className="font-medium text-gray-900 mb-2">Import Instructions</h4>
+                      <ul className="text-sm text-gray-700 space-y-1">
+                        <li>• Download the template for {activeTab}s using the "Template" button</li>
+                        <li>• Fill in your data (required fields marked with *)</li>
+                        <li>• Date of Birth will be used as the default password (format: DDMMYYYY)</li>
+                        <li>• User IDs will be auto-generated sequentially</li>
+                        <li>• Upload the completed CSV file below</li>
+                      </ul>
+                    </div>
+
+                    {/* File Upload */}
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        id="csv-upload"
+                      />
+                      <label htmlFor="csv-upload" className="cursor-pointer">
+                        <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                        <p className="text-lg text-gray-600 mb-2">
+                          {importFile ? importFile.name : 'Choose CSV file or drag and drop'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          CSV files only. Make sure to use the template format.
+                        </p>
+                      </label>
+                    </div>
+
+                    {/* File Selected */}
+                    {importFile && (
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-medium text-gray-900">
+                            File Selected: {importFile.name}
+                          </h4>
+                          <div className="space-x-2">
+                            <button
+                              onClick={() => generateTemplate(activeTab)}
+                              className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                              Download Template
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <div className="flex items-center">
+                            <FileText className="h-5 w-5 text-blue-500 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium text-blue-800">
+                                Ready to import {activeTab} users
+                              </p>
+                              <p className="text-xs text-blue-600">
+                                Make sure your CSV file follows the template format
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {isImporting ? (
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span>Processing users...</span>
+                              <span>{Math.round(importProgress)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${importProgress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={() => {
+                                setImportFile(null);
+                                setImportPreview([]);
+                                setImportResults(null);
+                              }}
+                              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            >
+                              Clear
+                            </button>
+                            <button
+                              onClick={processImport}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                              Import Users
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Import Results */
+                  <div className="space-y-6">
+                    <div className="text-center">
+                      <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                        <Check className="h-6 w-6 text-green-600" />
+                      </div>
+                      <h3 className="mt-4 text-lg font-medium text-gray-900">
+                        Import Completed
+                      </h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        {importResults.success.length} users imported successfully
+                        {importResults.errors.length > 0 && `, ${importResults.errors.length} failed`}
+                      </p>
+                    </div>
+
+                    {/* Success Summary */}
+                    {importResults.success.length > 0 && (
+                      <div className="bg-green-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-green-900 mb-2">
+                          Successfully Imported ({importResults.success.length})
+                        </h4>
+                        <div className="max-h-40 overflow-auto">
+                          <table className="min-w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-green-700">
+                                <th className="font-medium">User ID</th>
+                                <th className="font-medium">Email</th>
+                                <th className="font-medium">Password</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-green-800">
+                              {importResults.success.slice(0, 10).map((user, index) => (
+                                <tr key={index}>
+                                  <td className="font-mono">{user.userId}</td>
+                                  <td>{user.email}</td>
+                                  <td className="font-mono">{user.password}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {importResults.success.length > 10 && (
+                            <p className="text-green-600 text-center mt-2">
+                              +{importResults.success.length - 10} more users
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error Summary */}
+                    {importResults.errors.length > 0 && (
+                      <div className="bg-red-50 p-4 rounded-lg">
+                        <h4 className="font-medium text-red-900 mb-2">
+                          Failed to Import ({importResults.errors.length})
+                        </h4>
+                        <div className="max-h-40 overflow-auto space-y-2">
+                          {importResults.errors.slice(0, 10).map((error, index) => (
+                            <div key={index} className="text-sm">
+                              <span className="font-medium text-red-800">Row {error.row}:</span>
+                              <span className="text-red-700 ml-2">{error.error}</span>
+                            </div>
+                          ))}
+                          {importResults.errors.length > 10 && (
+                            <p className="text-red-600 text-center">
+                              +{importResults.errors.length - 10} more errors
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between">
                       <button
                         onClick={() => {
-                          // Refresh the user list to show newly imported users
-                          fetchUsers();
-                          // Close the modal and reset state
-                          setShowImportModal(false);
+                          setImportResults(null);
                           setImportFile(null);
                           setImportPreview([]);
-                          setImportResults(null);
-                          setIsImporting(false);
-                          setImportProgress(0);
                         }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                       >
-                        Done
+                        Import More
                       </button>
+                      <div className="space-x-2">
+                        {importResults.success.length > 0 && (
+                          <button
+                            onClick={downloadCredentials}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                          >
+                            Download Credentials
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            // Refresh the user list to show newly imported users
+                            fetchUsers();
+                            // Close the modal and reset state
+                            setShowImportModal(false);
+                            setImportFile(null);
+                            setImportPreview([]);
+                            setImportResults(null);
+                            setIsImporting(false);
+                            setImportProgress(0);
+                          }}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          Done
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Password Verification Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md relative z-[71]">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">
-                {passwordModalType === 'single' 
-                  ? `Verify Admin Password${selectedTeacherName ? ` - ${selectedTeacherName}` : ''}` 
-                  : 'Show All Teacher Passwords'}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setAdminPasswordInput('');
-                  setSelectedTeacherId(null);
-                  setSelectedTeacherName('');
-                }}
-                className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start">
-                  <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-yellow-800">
-                      Admin Authentication Required
-                    </p>
-                    <p className="text-xs text-yellow-700 mt-1">
-                      {passwordModalType === 'single'
-                        ? `Enter your admin password to view the password${selectedTeacherName ? ` for ${selectedTeacherName}` : ''}`
-                        : 'Enter your admin password to reveal all teacher passwords'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-xs text-blue-700">
-                  <strong>Note:</strong> Only passwords stored during user creation are available. 
-                  Users created before this feature may not have viewable passwords.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Admin Password
-                </label>
-                <input
-                  type="password"
-                  value={adminPasswordInput}
-                  onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handlePasswordModalSubmit();
-                    }
-                  }}
-                  placeholder="Enter your admin password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-3 p-6 bg-gray-50 border-t rounded-b-xl">
-              <button
-                onClick={() => {
-                  setShowPasswordModal(false);
-                  setAdminPasswordInput('');
-                  setSelectedTeacherId(null);
-                  setSelectedTeacherName('');
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePasswordModalSubmit}
-                disabled={passwordModalLoading || !adminPasswordInput.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-              >
-                {passwordModalLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Verifying...</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-4 w-4" />
-                    <span>Show Password</span>
-                  </>
                 )}
-              </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Change Password Modal */}
-      {showChangePasswordModal && selectedUserForPasswordChange && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Change Password</h3>
+        {/* Password Verification Modal */}
+        {showPasswordModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md relative z-[71]">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {passwordModalType === 'single'
+                    ? `Verify Admin Password${selectedTeacherName ? ` - ${selectedTeacherName}` : ''}`
+                    : 'Show All Teacher Passwords'}
+                </h2>
                 <button
                   onClick={() => {
-                    setShowChangePasswordModal(false);
-                    setSelectedUserForPasswordChange(null);
-                    setNewPassword('');
-                    setConfirmNewPassword('');
+                    setShowPasswordModal(false);
+                    setAdminPasswordInput('');
+                    setSelectedTeacherId(null);
+                    setSelectedTeacherName('');
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 rounded-full p-1 hover:bg-gray-100"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="mb-4">
-                <p className="text-sm text-gray-600">
-                  Set a new password for <strong>{selectedUserForPasswordChange.name}</strong>
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Email: {selectedUserForPasswordChange.email}
-                </p>
-              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800">
+                        Admin Authentication Required
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-1">
+                        {passwordModalType === 'single'
+                          ? `Enter your admin password to view the password${selectedTeacherName ? ` for ${selectedTeacherName}` : ''}`
+                          : 'Enter your admin password to reveal all teacher passwords'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-700">
+                    <strong>Note:</strong> Only passwords stored during user creation are available.
+                    Users created before this feature may not have viewable passwords.
+                  </p>
+                </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Password *
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Admin Password
                   </label>
                   <input
                     type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter new password"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handlePasswordModalSubmit();
+                      }
+                    }}
+                    placeholder="Enter your admin password"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     autoFocus
                   />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm New Password *
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Re-enter new password"
-                  />
-                </div>
-
-                {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
-                  <div className="p-2 bg-red-50 border border-red-200 rounded">
-                    <p className="text-xs text-red-600">Passwords do not match</p>
-                  </div>
-                )}
-
-                {newPassword && newPassword.trim() !== '' && (
-                  <div className="p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-xs text-green-600">Password length: {newPassword.length} characters</p>
-                  </div>
-                )}
               </div>
 
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="flex justify-end space-x-3 p-6 bg-gray-50 border-t rounded-b-xl">
                 <button
                   onClick={() => {
-                    setShowChangePasswordModal(false);
-                    setSelectedUserForPasswordChange(null);
-                    setNewPassword('');
-                    setConfirmNewPassword('');
+                    setShowPasswordModal(false);
+                    setAdminPasswordInput('');
+                    setSelectedTeacherId(null);
+                    setSelectedTeacherName('');
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
-                  disabled={changePasswordLoading}
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleChangePassword}
-                  disabled={changePasswordLoading || !newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.trim() === ''}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  onClick={handlePasswordModalSubmit}
+                  disabled={passwordModalLoading || !adminPasswordInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  {changePasswordLoading ? (
+                  {passwordModalLoading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>Changing...</span>
+                      <span>Verifying...</span>
                     </>
                   ) : (
                     <>
-                      <KeyRound className="h-4 w-4" />
-                      <span>Change Password</span>
+                      <Eye className="h-4 w-4" />
+                      <span>Show Password</span>
                     </>
                   )}
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+
+        {/* Change Password Modal */}
+        {showChangePasswordModal && selectedUserForPasswordChange && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-[70]">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 relative z-[71]">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Change Password</h3>
+                  <button
+                    onClick={() => {
+                      setShowChangePasswordModal(false);
+                      setSelectedUserForPasswordChange(null);
+                      setNewPassword('');
+                      setConfirmNewPassword('');
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">
+                    Set a new password for <strong>{selectedUserForPasswordChange.name}</strong>
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Email: {selectedUserForPasswordChange.email}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      New Password *
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter new password"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirm New Password *
+                    </label>
+                    <input
+                      type="password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Re-enter new password"
+                    />
+                  </div>
+
+                  {newPassword && confirmNewPassword && newPassword !== confirmNewPassword && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded">
+                      <p className="text-xs text-red-600">Passwords do not match</p>
+                    </div>
+                  )}
+
+                  {newPassword && newPassword.trim() !== '' && (
+                    <div className="p-2 bg-green-50 border border-green-200 rounded">
+                      <p className="text-xs text-green-600">Password length: {newPassword.length} characters</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowChangePasswordModal(false);
+                      setSelectedUserForPasswordChange(null);
+                      setNewPassword('');
+                      setConfirmNewPassword('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+                    disabled={changePasswordLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={changePasswordLoading || !newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.trim() === ''}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {changePasswordLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Changing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="h-4 w-4" />
+                        <span>Change Password</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   } catch (error) {
     console.error('Render error in ManageUsers:', error);
     setHasRenderError(true);
