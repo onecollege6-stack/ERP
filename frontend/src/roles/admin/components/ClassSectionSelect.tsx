@@ -55,28 +55,11 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       setLoading(true);
       setError(null);
       
-      const response = await classesAPI.getSchoolClasses(targetSchoolCode);
+      const response = await classesAPI.getSchoolClasses(targetSchoolId);
       
       if (response.data?.success && response.data?.data) {
-        const apiData = response.data.data;
-        const rawClasses = (apiData?.classes || []) as any[];
-        // Normalize sections to objects with id+name for UI
-        const normalized: ClassData[] = rawClasses.map((c: any) => ({
-          _id: String(c._id),
-          className: String(c.className),
-          displayName: c.displayName || `Class ${c.className}`,
-          sections: (Array.isArray(c.sections) ? c.sections : []).map((sec: any, idx: number) => {
-            if (typeof sec === 'string') {
-              return { sectionId: `${c.className}-${sec}-${idx}` , sectionName: sec };
-            }
-            // If backend returns objects already
-            return {
-              sectionId: String(sec.sectionId || `${c.className}-${sec.sectionName || idx}`),
-              sectionName: String(sec.sectionName || sec.section || '')
-            };
-          })
-        }));
-        setClasses(normalized);
+        const payload = response.data.data as ClassData[];
+        setClasses(payload);
         
         // If current selections are invalid, reset them
         const validClasses = normalized.map((c: ClassData) => c.className);
@@ -85,6 +68,7 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
           onSectionChange('ALL');
         }
       } else {
+        console.warn('⚠️ No classes found in response');
         setClasses([]);
       }
 
@@ -113,7 +97,7 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       // Find the selected class and its sections
       const selectedClass = classes.find(c => c.className === className);
       if (selectedClass) {
-        const validSections = selectedClass.sections.map(s => s.sectionName);
+        const validSections = selectedClass.sections;
         if (valueSection !== 'ALL' && !validSections.includes(valueSection)) {
           onSectionChange('ALL');
         }
@@ -270,13 +254,13 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
                     <span className="font-normal block truncate">All Sections</span>
                   </div>
                 )}
-                {getAvailableSections().map((section) => (
+                {getAvailableSections().filter(section => section !== 'ALL').map((section) => (
                   <div
-                    key={section.sectionId}
+                    key={section}
                     className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-blue-50"
-                    onClick={() => handleSectionChange(section.sectionName)}
+                    onClick={() => handleSectionChange(section)}
                   >
-                    <span className="font-normal block truncate">Section {section.sectionName}</span>
+                    <span className="font-normal block truncate">Section {section}</span>
                   </div>
                 ))}
               </div>
