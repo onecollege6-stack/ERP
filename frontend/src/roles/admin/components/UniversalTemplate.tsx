@@ -344,87 +344,189 @@ const UniversalTemplate: React.FC = () => {
       return;
     }
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Template Preview - ${templateData[templateType].title}</title>
-          <script src="https://cdn.tailwindcss.com"></script>
-          <style>
-            @media print {
-              body { margin: 0; padding: 0; }
-              .no-print { display: none !important; }
-            }
-            @page {
-              size: A4;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: Arial, sans-serif;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="w-full bg-white flex flex-col" style="font-family: Arial, sans-serif; min-height: 100vh; padding: 20mm; box-sizing: border-box;">
-            <!-- Header -->
-            <div class="flex justify-between items-start mb-8 pb-4 border-b-2" style="border-color: ${templateSettings.accentColor};">
-              <div class="flex items-center space-x-4">
-                ${templateSettings.logoUrl ?
-        `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" />` :
-        `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
-                    <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
+    // Generate different HTML content based on template type
+    let htmlContent = '';
+
+    if (templateType === 'invoice') {
+      // Invoice template with partitioned layout
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Invoice Template Preview</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+              @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none !important; }
+              }
+              @page {
+                size: A4 landscape;
+                margin: 10mm;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="w-full bg-white" style="font-family: Arial, sans-serif; min-height: 100vh; padding: 10mm; box-sizing: border-box;">
+              <!-- Header -->
+              <div class="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-300">
+                <div class="flex items-center space-x-4">
+                  ${templateSettings.logoUrl ?
+        `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-12 h-12 object-contain" />` :
+        `<div class="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
+                    <div class="w-6 h-6 border-2 border-white rounded transform rotate-45"></div>
                   </div>`
       }
-                <div>
-                  <h1 class="text-2xl font-bold" style="color: ${templateSettings.headerColor};">
-                    ${templateSettings.schoolName}
-                  </h1>
-                  <p class="text-sm text-gray-600">School Code: ${templateSettings.schoolCode}</p>
-                  <p class="text-sm text-gray-600">${templateSettings.address}</p>
+                  <div>
+                    <h1 class="text-xl font-bold text-gray-800">${templateSettings.schoolName}</h1>
+                    <p class="text-xs text-gray-600">Code: ${templateSettings.schoolCode}</p>
+                    <p class="text-xs text-gray-600">${templateSettings.address}</p>
+                    <p class="text-xs text-gray-600">${templateSettings.phone} | ${templateSettings.email}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <h2 class="text-2xl font-bold text-gray-800">FEE RECEIPT</h2>
                 </div>
               </div>
-              <div class="text-right">
-                <h2 class="text-4xl font-bold" style="color: ${templateSettings.headerColor};">${templateData[templateType].title}</h2>
-              </div>
-            </div>
-            
-            <!-- Empty Content Area -->
-            <div class="flex-1 flex items-center justify-center">
-              <div class="text-center text-gray-400">
-                <div class="text-6xl mb-4">📄</div>
-                <p class="text-lg font-medium">Template Preview</p>
-                <p class="text-sm">Content will appear here when documents are generated</p>
-              </div>
-            </div>
-            
-            <!-- Footer -->
-            <div class="mt-auto bg-gray-50 px-8 py-4 border-t">
-              <div class="flex justify-between items-center text-sm text-gray-600">
-                <div class="flex items-center space-x-4">
-                  <span>${templateSettings.phone}</span>
-                  <span>${templateSettings.email}</span>
-                  <span>${templateSettings.website}</span>
+
+              <!-- Partitioned Content -->
+              <div class="flex gap-4" style="height: calc(100vh - 200px);">
+                <!-- Admin Copy -->
+                <div class="flex-1 border-r-2 border-dashed border-gray-400 pr-4 flex flex-col">
+                  <div class="text-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">ADMIN COPY</h3>
+                    <div class="w-full h-px bg-gray-300 mt-2"></div>
+                  </div>
+                  
+                  <div class="flex-1 flex items-center justify-center">
+                    <div class="text-center text-gray-400">
+                      <div class="text-4xl mb-2">🧾</div>
+                      <p class="text-sm font-medium">Admin Copy</p>
+                      <p class="text-xs">Fee details and records</p>
+                    </div>
+                  </div>
+
+                  <div class="text-center mt-auto text-xs text-gray-600 border-t pt-2">
+                    <div class="mb-1">This is a computer generated copy.</div>
+                    <div class="flex items-center justify-center gap-1 mt-1">
+                      <span>Powered by</span>
+                      <strong style="color: #2563eb;">EduLgix</strong>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex items-center text-xs text-gray-500">
-                  <span>Powered by</span>
-                  <div class="ml-2 flex items-center">
-                    <div class="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
-                    <span class="font-semibold">EduLogix</span>
+
+                <!-- Student Copy -->
+                <div class="flex-1 flex flex-col">
+                  <div class="text-center mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">STUDENT COPY</h3>
+                    <div class="w-full h-px bg-gray-300 mt-2"></div>
+                  </div>
+                  
+                  <div class="flex-1 flex items-center justify-center">
+                    <div class="text-center text-gray-400">
+                      <div class="text-4xl mb-2">🧾</div>
+                      <p class="text-sm font-medium">Student Copy</p>
+                      <p class="text-xs">Student details</p>
+                    </div>
+                  </div>
+
+                  <div class="text-center mt-auto text-xs text-gray-600 border-t pt-2">
+                    <div class="mb-1">This is a computer generated copy.</div>
+                    <div class="flex items-center justify-center gap-1 mt-1">
+                      <span>Powered by</span>
+                      <strong style="color: #2563eb;">EduLgix</strong>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div class="no-print fixed bottom-0 left-0 right-0 p-4 text-center bg-white border-t shadow-lg">
-            <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded-lg mr-4 hover:bg-blue-700 transition-colors">Print Template</button>
-            <button onclick="window.close()" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors">Close</button>
-          </div>
-        </body>
-      </html>
-    `;
+          </body>
+        </html>
+      `;
+    } else {
+      // Regular template for other document types
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Template Preview - ${templateData[templateType].title}</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+              @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none !important; }
+              }
+              @page {
+                size: A4;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="w-full bg-white flex flex-col" style="font-family: Arial, sans-serif; min-height: 100vh; padding: 20mm; box-sizing: border-box;">
+              <!-- Header -->
+              <div class="flex justify-between items-start mb-8 pb-4 border-b-2 border-gray-300">
+                <div class="flex items-center space-x-4">
+                  ${templateSettings.logoUrl ?
+          `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" />` :
+          `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+                      <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
+                    </div>`
+        }
+                  <div>
+                    <h1 class="text-2xl font-bold text-gray-800">
+                      ${templateSettings.schoolName}
+                    </h1>
+                    <p class="text-sm text-gray-600">School Code: ${templateSettings.schoolCode}</p>
+                    <p class="text-sm text-gray-600">${templateSettings.address}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <h2 class="text-4xl font-bold text-gray-800">${templateData[templateType].title}</h2>
+                </div>
+              </div>
+              
+              <!-- Empty Content Area -->
+              <div class="flex-1 flex items-center justify-center">
+                <div class="text-center text-gray-400">
+                  <div class="text-6xl mb-4">📄</div>
+                  <p class="text-lg font-medium">Template Preview</p>
+                  <p class="text-sm">Content will appear here when documents are generated</p>
+                </div>
+              </div>
+              
+              <!-- Footer -->
+              <div class="mt-auto bg-gray-50 px-8 py-4 border-t">
+                <div class="flex justify-between items-center text-sm text-gray-600">
+                  <div class="flex items-center space-x-4">
+                    <span>${templateSettings.phone}</span>
+                    <span>${templateSettings.email}</span>
+                    <span>${templateSettings.website}</span>
+                  </div>
+                  <div class="flex items-center text-xs text-gray-500">
+                    <span>Powered by</span>
+                    <div class="ml-2 flex items-center">
+                      <div class="w-4 h-4 bg-blue-600 rounded-sm mr-1"></div>
+                      <span class="font-semibold">EduLgix</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+    }
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
@@ -473,7 +575,7 @@ const UniversalTemplate: React.FC = () => {
             height: '100%'
           }}>
             {/* Header */}
-            <div className="flex flex-col items-center mb-2 pb-1 border-b-2" style={{ borderColor: templateSettings.accentColor }}>
+            <div className="flex flex-col items-center mb-2 pb-1 border-b-2 border-gray-300">
               <div className="flex items-center space-x-1 mb-1">
                 {templateSettings.logoUrl ? (
                   <img src={templateSettings.logoUrl} alt="Logo" className="w-6 h-6 object-contain" />
@@ -483,7 +585,7 @@ const UniversalTemplate: React.FC = () => {
                   </div>
                 )}
                 <div className="text-center">
-                  <h1 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
+                  <h1 className="text-xs font-bold text-gray-800">
                     {templateSettings.schoolName}
                   </h1>
                   <p className="text-xs text-gray-600">{templateSettings.address}</p>
@@ -496,7 +598,7 @@ const UniversalTemplate: React.FC = () => {
             </div>
 
             <div className="text-center mb-2">
-              <h2 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
+              <h2 className="text-xs font-bold text-gray-800">
                 PAYMENT RECEIPT
               </h2>
             </div>
@@ -526,7 +628,7 @@ const UniversalTemplate: React.FC = () => {
             height: '100%'
           }}>
             {/* Header */}
-            <div className="flex flex-col items-center mb-2 pb-1 border-b-2" style={{ borderColor: templateSettings.accentColor }}>
+            <div className="flex flex-col items-center mb-2 pb-1 border-b-2 border-gray-300">
               <div className="flex items-center space-x-1 mb-1">
                 {templateSettings.logoUrl ? (
                   <img src={templateSettings.logoUrl} alt="Logo" className="w-6 h-6 object-contain" />
@@ -536,7 +638,7 @@ const UniversalTemplate: React.FC = () => {
                   </div>
                 )}
                 <div className="text-center">
-                  <h1 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
+                  <h1 className="text-xs font-bold text-gray-800">
                     {templateSettings.schoolName}
                   </h1>
                   <p className="text-xs text-gray-600">{templateSettings.address}</p>
@@ -549,7 +651,7 @@ const UniversalTemplate: React.FC = () => {
             </div>
 
             <div className="text-center mb-2">
-              <h2 className="text-xs font-bold" style={{ color: templateSettings.headerColor }}>
+              <h2 className="text-xs font-bold text-gray-800">
                 PAYMENT RECEIPT
               </h2>
             </div>
@@ -585,7 +687,7 @@ const UniversalTemplate: React.FC = () => {
         boxSizing: 'border-box'
       }}>
         {/* Header */}
-        <div className="flex justify-between items-start mb-6 pb-4 border-b-2" style={{ borderColor: templateSettings.accentColor }}>
+        <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-300">
           <div className="flex items-center space-x-4">
             {templateSettings.logoUrl ? (
               <img src={templateSettings.logoUrl} alt="Logo" className="w-16 h-16 object-contain" />
@@ -595,7 +697,7 @@ const UniversalTemplate: React.FC = () => {
               </div>
             )}
             <div>
-              <h1 className="text-2xl font-bold" style={{ color: templateSettings.headerColor }}>
+              <h1 className="text-2xl font-bold text-gray-800">
                 {templateSettings.schoolName}
               </h1>
               <p className="text-sm text-gray-600">School Code: {templateSettings.schoolCode}</p>
@@ -607,7 +709,7 @@ const UniversalTemplate: React.FC = () => {
 
         {/* Document Title Below Header */}
         <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold" style={{ color: templateSettings.headerColor }}>
+          <h2 className="text-2xl font-bold text-gray-800">
             {data.title}
           </h2>
         </div>
@@ -801,49 +903,6 @@ const UniversalTemplate: React.FC = () => {
         </div>
       </div>
 
-      {/* Design Settings */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h4 className="text-lg font-medium text-gray-900 mb-4">Design Settings</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Header Color</label>
-            <div className="flex space-x-2">
-              <input
-                type="color"
-                value={templateSettings.headerColor}
-                onChange={(e) => setTemplateSettings(prev => ({ ...prev, headerColor: e.target.value }))}
-                className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
-              />
-              <input
-                type="text"
-                value={templateSettings.headerColor}
-                onChange={(e) => setTemplateSettings(prev => ({ ...prev, headerColor: e.target.value }))}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="#1f2937"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Accent Color</label>
-            <div className="flex space-x-2">
-              <input
-                type="color"
-                value={templateSettings.accentColor}
-                onChange={(e) => setTemplateSettings(prev => ({ ...prev, accentColor: e.target.value }))}
-                className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
-              />
-              <input
-                type="text"
-                value={templateSettings.accentColor}
-                onChange={(e) => setTemplateSettings(prev => ({ ...prev, accentColor: e.target.value }))}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="#3b82f6"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div className="mt-8 p-4 bg-gray-50 rounded-lg">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Template Usage</h4>
