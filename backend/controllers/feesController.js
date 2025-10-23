@@ -168,125 +168,44 @@ exports.downloadReceiptPdf = async (req, res) => {
     if (feeRecord.rollNumber) doc.text(`Roll No: ${feeRecord.rollNumber}`);
     doc.moveDown();
 
-    // Table helpers
-    const drawKeyValueTable = (title, rows) => {
-      const marginX = doc.page.margins.left;
-      const maxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-      const col1 = Math.floor(maxWidth * 0.4);
-      const col2 = maxWidth - col1;
-      doc.fontSize(12).text(title, { underline: true });
-      doc.moveDown(0.3);
-      const rowHeight = 20;
-      let y = doc.y;
-      const ensureSpace = () => {
-        if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
-          doc.addPage();
-          y = doc.page.margins.top;
-        }
-      };
-      doc.fontSize(10);
-      // Header
-      ensureSpace();
-      doc.rect(marginX, y, col1, rowHeight).stroke();
-      doc.rect(marginX + col1, y, col2, rowHeight).stroke();
-      doc.text('Field', marginX + 6, y + 6, { width: col1 - 12 });
-      doc.text('Value', marginX + col1 + 6, y + 6, { width: col2 - 12 });
-      y += rowHeight;
-      // Rows
-      rows.forEach(r => {
-        ensureSpace();
-        doc.rect(marginX, y, col1, rowHeight).stroke();
-        doc.rect(marginX + col1, y, col2, rowHeight).stroke();
-        doc.text(String(r[0] ?? ''), marginX + 6, y + 6, { width: col1 - 12 });
-        doc.text(String(r[1] ?? ''), marginX + col1 + 6, y + 6, { width: col2 - 12 });
-        y += rowHeight;
-      });
-      doc.y = y + 10;
-    };
-
-    const drawRowTable = (title, headers, rows, colWidthsPct) => {
-      const marginX = doc.page.margins.left;
-      const maxWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-      const colWidths = colWidthsPct.map(p => Math.floor(maxWidth * p));
-      const rowHeight = 20;
-      doc.fontSize(12).text(title, { underline: true });
-      doc.moveDown(0.3);
-      let y = doc.y;
-      const ensureSpace = () => {
-        if (y + rowHeight > doc.page.height - doc.page.margins.bottom) {
-          doc.addPage();
-          y = doc.page.margins.top;
-        }
-      };
-      doc.fontSize(10);
-      // Header
-      ensureSpace();
-      let x = marginX;
-      headers.forEach((h, i) => {
-        const w = colWidths[i];
-        doc.rect(x, y, w, rowHeight).stroke();
-        doc.text(h, x + 6, y + 6, { width: w - 12 });
-        x += w;
-      });
-      y += rowHeight;
-      // Rows
-      rows.forEach(r => {
-        ensureSpace();
-        let xx = marginX;
-        r.forEach((cell, i) => {
-          const w = colWidths[i];
-          doc.rect(xx, y, w, rowHeight).stroke();
-          doc.text(String(cell ?? ''), xx + 6, y + 6, { width: w - 12 });
-          xx += w;
-        });
-        y += rowHeight;
-      });
-      doc.y = y + 10;
-    };
-
-    // Payment details table
+    // Payment details
     const payDate = payment?.paymentDate ? new Date(payment.paymentDate) : null;
     const dateStr = payDate ? payDate.toLocaleDateString() : '-';
     const dayStr = payDate ? payDate.toLocaleDateString('en-IN', { weekday: 'long' }) : '-';
-    drawKeyValueTable('Payment', [
-      ['Student', feeRecord.studentName || '-'],
-      ['Class/Section', `${feeRecord.studentClass || '-'} / ${feeRecord.studentSection || '-'}`],
-      ['Academic Year', feeRecord.academicYear || '-'],
-      ['Installment', installmentName || '-'],
-      ['Paid on', `${dateStr} (${dayStr})`],
-      ['Amount', formatINR(payment?.amount)],
-      ['Method', payment?.paymentMethod || '-'],
-      ['Reference', payment?.paymentReference || '-'],
-      ['Receipt', payment?.receiptNumber || '-']
-    ]);
+    doc.fontSize(12).text('Payment', { underline: true });
+    doc.fontSize(11).text(`Installment: ${installmentName || '-'}`);
+    doc.text(`Paid on: ${dateStr} (${dayStr})`);
+    doc.text(`Amount: ${formatINR(payment?.amount)}`);
+    doc.text(`Method: ${payment?.paymentMethod || '-'}`);
+    doc.text(`Reference: ${payment?.paymentReference || '-'}`);
+    doc.moveDown(0.8);
 
-    // Installment summary table
-    drawKeyValueTable('Installment Summary', [
-      ['Installment', installmentName || '-'],
-      ['Installment Total', formatINR(instAmount)],
-      ['Paid So Far', formatINR(instPaid)],
-      ['Pending in Installment', formatINR(instPending)]
-    ]);
-
-    // Payments in this installment table
-    const paymentsRows = (instPayments || []).map(p => {
+    // Installment summary with history
+    doc.fontSize(12).text('Installment Summary', { underline: true });
+    doc.fontSize(11).text(`Installment: ${installmentName || '-'}`);
+    doc.text(`Installment Total: ${formatINR(instAmount)}`);
+    doc.text(`Paid So Far: ${formatINR(instPaid)}`);
+    doc.text(`Pending in Installment: ${formatINR(instPending)}`);
+    doc.moveDown(0.5);
+    doc.fontSize(12).text('Payments in this Installment', { underline: true });
+    doc.moveDown(0.3);
+    (instPayments || []).forEach(p => {
       const d = p.paymentDate ? new Date(p.paymentDate) : null;
       const dStr = d ? d.toLocaleDateString() : '-';
       const dyStr = d ? d.toLocaleDateString('en-IN', { weekday: 'long' }) : '-';
-      return [dStr, dyStr, formatINR(p.amount), p.paymentMethod || '-', p.paymentReference || '-', p.receiptNumber || '-'];
+      doc.fontSize(10).text(`- ${dStr} (${dyStr}) | ${formatINR(p.amount)} | ${p.paymentMethod || '-'} | ref: ${p.paymentReference || '-'} | receipt: ${p.receiptNumber || '-'}`);
     });
-    if (paymentsRows.length > 0) {
-      drawRowTable('Payments in this Installment', ['Date', 'Day', 'Amount', 'Method', 'Reference', 'Receipt'], paymentsRows, [0.15, 0.15, 0.15, 0.15, 0.2, 0.2]);
-    } else {
-      drawRowTable('Payments in this Installment', ['Date', 'Day', 'Amount', 'Method', 'Reference', 'Receipt'], [['-', '-', '-', '-', '-', '-']], [0.15, 0.15, 0.15, 0.15, 0.2, 0.2]);
+    if (!instPayments || instPayments.length === 0) {
+      doc.fontSize(10).text('- No payments recorded for this installment');
     }
+    doc.moveDown();
 
-    // Overall summary table
-    drawKeyValueTable('Overall Fees', [
-      ['Total Fees', formatINR(totalAmount)],
-      ['Total Paid', formatINR(totalPaid)],
-      ['Remaining Fees', formatINR(totalPending)]
-    ]);
+    // Overall summary
+    doc.fontSize(12).text('Overall Fees', { underline: true });
+    doc.fontSize(11).text(`Total Fees: ${formatINR(totalAmount)}`);
+    doc.text(`Total Paid: ${formatINR(totalPaid)}`);
+    doc.text(`Remaining Fees: ${formatINR(totalPending)}`);
+    doc.moveDown();
 
     // Signature and stamp section
     doc.moveDown(2);
@@ -729,6 +648,14 @@ exports.recordOfflinePayment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Installment name, amount, and payment method are required'
+      });
+    }
+    
+    // Validate payment date is provided
+    if (!paymentDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment date is required'
       });
     }
     

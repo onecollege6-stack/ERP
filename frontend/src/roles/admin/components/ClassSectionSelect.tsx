@@ -17,7 +17,7 @@ interface ClassSectionSelectProps {
 interface ClassData {
   _id: string;
   className: string;
-  sections: { sectionId: string; sectionName: string }[];
+  sections: string[];
   displayName: string;
 }
 
@@ -55,14 +55,48 @@ const ClassSectionSelect: React.FC<ClassSectionSelectProps> = ({
       setLoading(true);
       setError(null);
       
-      const response = await classesAPI.getSchoolClasses(targetSchoolId);
+      console.log('🔍 Fetching classes for school code:', targetSchoolCode);
+      const response = await classesAPI.getSchoolClasses(targetSchoolCode);
       
-      if (response.data?.success && response.data?.data) {
-        const payload = response.data.data as ClassData[];
+      console.log('📥 Classes API Response:', response);
+      
+      // Handle different response structures
+      let payload: ClassData[] = [];
+      
+      if (response?.data?.success && response.data?.data) {
+        const data = response.data.data;
+        // Check if data has classes array
+        if (data.classes && Array.isArray(data.classes)) {
+          payload = data.classes;
+        } else if (Array.isArray(data)) {
+          payload = data;
+        }
+      } else if (response?.data?.success && response.data?.classes) {
+        payload = response.data.classes;
+      } else if (response?.success && response?.data) {
+        const data = response.data;
+        if (data.classes && Array.isArray(data.classes)) {
+          payload = data.classes;
+        } else if (Array.isArray(data)) {
+          payload = data;
+        }
+      } else if (response?.success && response?.classes) {
+        payload = response.classes;
+      } else if (response?.data?.classes && Array.isArray(response.data.classes)) {
+        payload = response.data.classes;
+      } else if (Array.isArray(response?.data)) {
+        payload = response.data;
+      } else if (Array.isArray(response)) {
+        payload = response;
+      }
+      
+      console.log('📋 Processed payload:', payload);
+      
+      if (payload && Array.isArray(payload) && payload.length > 0) {
         setClasses(payload);
         
         // If current selections are invalid, reset them
-        const validClasses = normalized.map((c: ClassData) => c.className);
+        const validClasses = payload.map((c: ClassData) => c.className);
         if (valueClass !== 'ALL' && !validClasses.includes(valueClass)) {
           onClassChange('ALL');
           onSectionChange('ALL');

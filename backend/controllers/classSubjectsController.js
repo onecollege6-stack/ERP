@@ -86,6 +86,7 @@ const addSubjectToClass = async (req, res) => {
             classSubjects = await SchoolClassSubjects.findOne({
               schoolCode,
               className,
+              section,
               academicYear: '2024-25',
               isActive: true
             });

@@ -224,12 +224,40 @@ function SchoolDetailsContent() {
       try {
         console.log('Making API calls for school data...');
         // First get school information to get the school code
-        const schoolRes = await api.get(`/schools/${selectedSchoolId}`);
+        let schoolRes;
+        let schoolInfo;
+        let currentSchoolCode;
+
+        try {
+          // Try the new school info endpoint first
+          schoolRes = await api.get(`/schools/${selectedSchoolId}/info`);
+          schoolInfo = schoolRes.data?.data || schoolRes.data || {};
+          currentSchoolCode = schoolInfo.code;
+        } catch (infoError) {
+          console.log('School info endpoint failed, trying regular endpoint...');
+          try {
+            // Fallback to regular endpoint
+            schoolRes = await api.get(`/schools/${selectedSchoolId}`);
+            schoolInfo = schoolRes.data?.school || schoolRes.data || {};
+            currentSchoolCode = schoolInfo.code;
+          } catch (regularError) {
+            console.log('Regular endpoint failed, trying to find school by ID from context...');
+            // Last resort: find school from context
+            const school = schools.find(s => s.id === selectedSchoolId);
+            if (school) {
+              currentSchoolCode = school.code;
+              schoolInfo = {
+                code: school.code,
+                name: school.name,
+                _id: school.id
+              };
+            } else {
+              throw new Error('School not found in any source');
+            }
+          }
+        }
 
         if (!isMounted) return;
-
-        const schoolInfo = schoolRes.data?.school || schoolRes.data || {};
-        const currentSchoolCode = schoolInfo.code; // Get school code
 
         if (!currentSchoolCode) {
           throw new Error('School code not found');

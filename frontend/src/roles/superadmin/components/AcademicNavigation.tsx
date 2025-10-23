@@ -211,9 +211,25 @@ const AcademicNavigation: React.FC = () => {
     }
   };
 
-  // Remove section from class
+  // Remove section from class with cascading delete for section-specific tests
   const removeSection = async (classId: string, section: string) => {
-    if (!confirm(`Remove section ${section}?`)) return;
+    // Find the class name for this classId
+    const classData = classes.find(cls => cls._id === classId);
+    if (!classData) {
+      toast.error('Class not found');
+      return;
+    }
+
+    // Find tests that might be affected by removing this section
+    // Note: This is a simplified check - in a real system, you'd need to track which sections each test applies to
+    const className = classData.className;
+    const relatedTests = tests.filter(test => test.className === className);
+    
+    const confirmMessage = relatedTests.length > 0 
+      ? `Remove section ${section} from Class ${className}? Note: This may affect ${relatedTests.length} test(s) for this class: ${relatedTests.map(t => t.name).join(', ')}`
+      : `Remove section ${section} from Class ${className}?`;
+    
+    if (!confirm(confirmMessage)) return;
 
     try {
       const response = await classAPI.removeSectionFromClass(selectedSchoolId, classId, section);
@@ -221,6 +237,8 @@ const AcademicNavigation: React.FC = () => {
       if (response.success) {
         toast.success(`Section ${section} removed successfully`);
         await fetchClasses();
+        // Refresh tests in case any were affected
+        await fetchTests();
       } else {
         throw new Error(response.message || 'Failed to remove section');
       }
@@ -230,16 +248,49 @@ const AcademicNavigation: React.FC = () => {
     }
   };
 
-  // Delete class
+  // Delete class with cascading delete for tests
   const deleteClass = async (classId: string, className: string) => {
-    if (!confirm(`Delete class ${className}? This will also remove all sections.`)) return;
+    // Find all tests related to this class
+    const relatedTests = tests.filter(test => test.className === className);
+    const testCount = relatedTests.length;
+    
+    const confirmMessage = testCount > 0 
+      ? `Delete class ${className}? This will also remove all sections and ${testCount} related test(s): ${relatedTests.map(t => t.name).join(', ')}`
+      : `Delete class ${className}? This will also remove all sections.`;
+    
+    if (!confirm(confirmMessage)) return;
 
     try {
+      // First delete all related tests
+      if (relatedTests.length > 0) {
+        console.log(`Deleting ${relatedTests.length} tests related to class ${className}:`, relatedTests.map(t => t.name));
+        
+        for (const test of relatedTests) {
+          try {
+            console.log(`Deleting test: ${test.name} (${test._id})`);
+            const testDeleteResponse = await testAPI.deleteTest(selectedSchoolId, test._id);
+            if (!testDeleteResponse.success) {
+              console.warn(`Failed to delete test ${test.name}:`, testDeleteResponse.message);
+            }
+          } catch (testError: any) {
+            console.warn(`Error deleting test ${test.name}:`, testError.message);
+            // Continue with other tests even if one fails
+          }
+        }
+      }
+
+      // Then delete the class (which will also remove sections)
       const response = await classAPI.deleteClass(selectedSchoolId, classId);
 
       if (response.success) {
-        toast.success(`Class ${className} deleted successfully`);
+        const successMessage = testCount > 0 
+          ? `Class ${className} and ${testCount} related test(s) deleted successfully`
+          : `Class ${className} deleted successfully`;
+        toast.success(successMessage);
+        
+        // Refresh both classes and tests data
         await fetchClasses();
+        await fetchTests();
       } else {
         throw new Error(response.message || 'Failed to delete class');
       }
@@ -317,9 +368,9 @@ const AcademicNavigation: React.FC = () => {
     }
   };
 
-  // Delete test
+  // Delete test (no reverse cascade - classes and sections remain unaffected)
   const deleteTest = async (testId: string, testName: string) => {
-    if (!confirm(`Delete test "${testName}"?`)) return;
+    if (!confirm(`Delete test "${testName}"? Note: This will only delete the test - classes and sections will remain unaffected.`)) return;
 
     try {
       console.log('Deleting test:', { testId, testName, selectedSchoolId });

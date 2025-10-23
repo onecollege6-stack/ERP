@@ -1451,76 +1451,152 @@ exports.getAllSchools = async (req, res) => {
 exports.getSchoolById = async (req, res) => {
   try {
     const { schoolId } = req.params;
+    console.log(`[getSchoolById] Request for school: ${schoolId} from user: ${req.user?._id || 'unknown'}`);
+
+    // Input validation
+    if (!schoolId) {
+      console.log('[getSchoolById] No school ID provided');
+      return res.status(400).json({
+        success: false,
+        message: 'School ID is required',
+        code: 'MISSING_SCHOOL_ID'
+      });
+    }
 
     // Check if user has access to this school
-    if (req.user.role === 'superadmin' || req.user.schoolId?.toString() === schoolId) {
-      
+    if (req.user.role !== 'superadmin' && req.user.schoolId?.toString() !== schoolId) {
+      console.log(`[getSchoolById] Access denied for user ${req.user?._id} to school ${schoolId}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: You do not have permission to access this school',
+        code: 'ACCESS_DENIED'
+      });
+    }
+    
+    try {
       let school = null;
+      const mongoose = require('mongoose');
       
-      // FIX: Check if schoolId is a valid ObjectId before attempting findById 
-      const mongoose = require('mongoose'); 
+      // Try to find by ID first if it's a valid ObjectId
       if (mongoose.Types.ObjectId.isValid(schoolId)) {
-        console.log(`[getSchoolById] Attempting find by ID: ${schoolId}`);
+        console.log(`[getSchoolById] Looking up by ID: ${schoolId}`);
         school = await School.findById(schoolId);
       }
 
-      // Fallback: Try to find by school code (case-insensitive) if not found by ID or if ID format was invalid
+      // If not found by ID, try by code (case-insensitive)
       if (!school) {
-        console.log(`[getSchoolById] Attempting find by code: ${schoolId}`);
+        console.log(`[getSchoolById] Looking up by code: ${schoolId}`);
         school = await School.findOne({ code: new RegExp(`^${schoolId}$`, 'i') });
       }
 
+      // If still not found, return 404
       if (!school) {
-        return res.status(404).json({ message: 'School not found' });
+        console.log(`[getSchoolById] School not found: ${schoolId}`);
+        return res.status(404).json({
+          success: false,
+          message: 'School not found',
+          details: `No school found with ID or code: ${schoolId}`,
+          code: 'SCHOOL_NOT_FOUND'
+        });
       }
 
-      // If user is accessing their own school (not superadmin), try to get school info from school-specific database
-      if (req.user.role !== 'superadmin' && req.user.schoolCode) {
-        try {
-          const schoolConnection = await SchoolDatabaseManager.getSchoolConnection(req.user.schoolCode);
-          const schoolInfoCollection = schoolConnection.collection('school_info');
-          const schoolInfo = await schoolInfoCollection.findOne({});
-
-          if (schoolInfo) {
-            // Return the school info from the school-specific database
-            return res.json({
-              _id: school._id,
-              name: schoolInfo.name,
-              code: schoolInfo.code,
-              address: schoolInfo.address,
-              contact: schoolInfo.contact,
-              principalName: schoolInfo.principalName,
-              principalEmail: schoolInfo.principalEmail,
-              bankDetails: schoolInfo.bankDetails,
-              accessMatrix: schoolInfo.accessMatrix,
-              settings: schoolInfo.settings,
-              schoolType: schoolInfo.schoolType,
-              establishedYear: schoolInfo.establishedYear,
-              affiliationBoard: schoolInfo.affiliationBoard,
-              website: schoolInfo.website,
-              secondaryContact: schoolInfo.secondaryContact,
-              logoUrl: schoolInfo.logoUrl,
-              databaseName: school.databaseName,
-              databaseCreated: school.databaseCreated,
-              isActive: school.isActive,
-              createdAt: school.createdAt,
-              updatedAt: school.updatedAt
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching school info from school database:', error);
-          // Fall back to main database info
-        }
-      }
-
-      // Return school info from main database (for superadmin or if school-specific fetch failed)
-      res.json(school);
-    } else {
-      res.status(403).json({ message: 'Access denied' });
+      console.log(`[getSchoolById] Found school: ${school.name} (${school.code})`);
+      
+      // Return the school data from main database
+      return res.json({
+        success: true,
+        data: school
+      });
+      
+    } catch (dbError) {
+      console.error('[getSchoolById] Database error:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Database error while fetching school',
+        error: dbError.message,
+        code: 'DATABASE_ERROR'
+      });
     }
+    
   } catch (error) {
-    console.error('Error fetching school:', error);
-    res.status(500).json({ message: 'Error fetching school', error: error.message });
+    console.error('[getSchoolById] Unexpected error:', error);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'An unexpected error occurred',
+      error: error.message,
+      code: 'INTERNAL_SERVER_ERROR'
+    });
+  }
+};
+
+// Get school info directly from main database (no school-specific database lookup)
+exports.getSchoolInfo = async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    console.log(`[getSchoolInfo] Fetching school info for: ${schoolId}`);
+
+    let school = null;
+    
+    // Check if schoolId is a valid ObjectId before attempting findById 
+    const mongoose = require('mongoose'); 
+    if (mongoose.Types.ObjectId.isValid(schoolId)) {
+      console.log(`[getSchoolInfo] Attempting find by ID: ${schoolId}`);
+      school = await School.findById(schoolId);
+    }
+
+    // Fallback: Try to find by school code (case-insensitive) if not found by ID or if ID format was invalid
+    if (!school) {
+      console.log(`[getSchoolInfo] Attempting find by code: ${schoolId}`);
+      school = await School.findOne({ code: new RegExp(`^${schoolId}$`, 'i') });
+    }
+
+    if (!school) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'School not found' 
+      });
+    }
+
+    console.log(`[getSchoolInfo] Found school: ${school.name} (${school.code})`);
+    
+    // Return school info directly from main database
+    res.json({
+      success: true,
+      data: {
+        _id: school._id,
+        name: school.name,
+        code: school.code,
+        address: school.address,
+        contact: school.contact,
+        principalName: school.principalName,
+        principalEmail: school.principalEmail,
+        mobile: school.mobile,
+        bankDetails: school.bankDetails,
+        accessMatrix: school.accessMatrix,
+        settings: school.settings,
+        features: school.features,
+        stats: school.stats,
+        schoolType: school.schoolType,
+        establishedYear: school.establishedYear,
+        affiliationBoard: school.affiliationBoard,
+        website: school.website,
+        secondaryContact: school.secondaryContact,
+        logoUrl: school.logoUrl,
+        isActive: school.isActive,
+        createdAt: school.createdAt,
+        updatedAt: school.updatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching school info:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching school info', 
+      error: error.message 
+    });
   }
 };
 

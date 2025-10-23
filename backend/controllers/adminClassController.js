@@ -67,16 +67,17 @@ exports.getSchoolClassesAndSections = async (req, res) => {
           section: section
         }));
       } else {
+        sectionsByClass[cls.className] = [];
         // If no sections defined, provide default sections
-        sectionsByClass[cls.className] = [
-          { value: 'A', label: 'Section A', section: 'A' }
-        ];
+        // sectionsByClass[cls.className] = [
+        //   { value: 'A', label: 'Section A', section: 'A' }
+        // ];
       }
     });
 
     // Also create a flat list of all available sections
     const allSections = [...new Set(
-      formattedClasses.flatMap(cls => cls.sections || ['A'])
+      formattedClasses.flatMap(cls => cls.sections || [])
     )].sort().map(section => ({
       value: section,
       label: `Section ${section}`,
