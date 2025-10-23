@@ -2,12 +2,49 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const schoolController = require('../controllers/schoolController');
 const exportImportController = require('../controllers/exportImportController');
 const authMiddleware = require('../middleware/auth');
 const { setSchoolContext, validateSchoolAccess, requireSuperAdmin, setMainDbContext } = require('../middleware/schoolContext');
 
-// Upload config
+// Ensure temp directory exists
+const tempDir = path.join(__dirname, '..', 'uploads', 'temp');
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Upload config for logos - store in temp for compression
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, tempDir);
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `logo-temp-${unique}${ext}`);
+  }
+});
+
+const logoUpload = multer({
+  storage: logoStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit (before compression)
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed!'));
+    }
+  }
+});
+
+// Upload config for other files (Excel imports, etc.)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, '..', 'uploads'));
@@ -15,7 +52,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
-    cb(null, `school-logo-${unique}${ext}`);
+    cb(null, `upload-${unique}${ext}`);
   }
 });
 const upload = multer({ storage });
@@ -24,7 +61,7 @@ const upload = multer({ storage });
 router.use(authMiddleware.auth);
 
 // Super Admin routes (work with main database)
-router.post('/', setMainDbContext, requireSuperAdmin, upload.single('logo'), async (req, res) => {
+router.post('/', setMainDbContext, requireSuperAdmin, logoUpload.single('logo'), async (req, res) => {
   try {
     console.log('Creating school with data:', req.body);
     console.log('Uploaded file:', req.file);

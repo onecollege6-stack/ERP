@@ -7,6 +7,7 @@ const DatabaseManager = require('./utils/databaseManager');
 require('dotenv').config();
 const path = require('path'); // Import path module
 const multer = require('multer'); // <-- Import multer
+const fs = require('fs'); // Import fs module for file operations
 
 // Import your controller
 const exportImportController = require('./controllers/exportImportController'); // <-- Import exportImportController
@@ -248,6 +249,9 @@ mongoose.connect(MONGODB_URI, {
     app.listen(PORT, () => {
       console.log(`🌐 Server running on port ${PORT}`);
       console.log(`🏫 Multi-tenant school ERP system ready`);
+      
+      // Start temp folder cleanup task (runs every 30 seconds)
+      startTempFolderCleanup();
     });
   })
   .catch((error) => {
@@ -255,6 +259,87 @@ mongoose.connect(MONGODB_URI, {
     process.exit(1); // Exit if DB connection fails
   });
 
+
+// Temp folder cleanup function
+function cleanupTempFolder() {
+  const tempDir = path.join(__dirname, 'uploads', 'temp');
+  
+  // Check if temp directory exists
+  if (!fs.existsSync(tempDir)) {
+    console.log('ℹ️ Temp directory does not exist, skipping cleanup');
+    return;
+  }
+  
+  try {
+    const files = fs.readdirSync(tempDir);
+    
+    if (files.length === 0) {
+      // console.log('✅ Temp folder is already clean (0 files)');
+      return;
+    }
+    
+    let deletedCount = 0;
+    let errorCount = 0;
+    let skippedCount = 0;
+    const now = Date.now();
+    const fiveMinutesAgo = now - (5 * 60 * 1000); // 5 minutes in milliseconds
+    
+    files.forEach(file => {
+      const filePath = path.join(tempDir, file);
+      
+      try {
+        const stats = fs.statSync(filePath);
+        
+        // Only delete files, not directories
+        if (stats.isFile()) {
+          // Only delete files older than 5 minutes to avoid EPERM errors
+          const fileAge = stats.mtimeMs;
+          if (fileAge < fiveMinutesAgo) {
+            try {
+              // Try to release file handle before deletion (Windows compatibility)
+              fs.closeSync(fs.openSync(filePath, 'r'));
+            } catch (e) {
+              // Ignore if file handle release fails
+            }
+            
+            fs.unlinkSync(filePath);
+            deletedCount++;
+          } else {
+            skippedCount++;
+          }
+        }
+      } catch (err) {
+        // Only log EPERM errors as warnings, not errors
+        if (err.code === 'EPERM') {
+          // File is still in use, skip it silently
+          skippedCount++;
+        } else {
+          console.error(`❌ Error deleting ${file}:`, err.message);
+          errorCount++;
+        }
+      }
+    });
+    
+    if (deletedCount > 0 || errorCount > 0) {
+      console.log(`🗑️ Temp cleanup: Deleted ${deletedCount} file(s), Skipped ${skippedCount} file(s), ${errorCount} error(s)`);
+    }
+  } catch (err) {
+    console.error('❌ Error reading temp directory:', err.message);
+  }
+}
+
+// Start periodic temp folder cleanup
+function startTempFolderCleanup() {
+  console.log('🗑️ Starting temp folder cleanup task (runs every 60 seconds)...');
+  
+  // Run immediately on startup
+  cleanupTempFolder();
+  
+  //Then run every 60 seconds (less aggressive for Windows)
+  setInterval(() => {
+    cleanupTempFolder();
+  }, 1000); // 60 seconds
+}
 
 // Graceful shutdown handling
 process.on('SIGINT', async () => {

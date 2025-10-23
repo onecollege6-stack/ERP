@@ -5,6 +5,9 @@ const School = require('../models/School');
 const { generateSequentialUserId } = require('./userController');
 const { generateRandomPassword, generateStudentPasswordFromDOB } = require('../utils/passwordGenerator');
 const SchoolDatabaseManager = require('../utils/databaseManager');
+const path = require('path');
+const fs = require('fs');
+const sharp = require('sharp');
 
 // Get all users for a school with standardized format
 exports.getAllUsers = async (req, res) => {
@@ -86,6 +89,9 @@ exports.getAllUsers = async (req, res) => {
               whatsappNumber: user.contact?.whatsappNumber || '',
               emergencyContact: user.contact?.emergencyContact
             },
+            
+            // 💡 FIX: Include profileImage here
+            profileImage: user.profileImage || null, 
 
             // --- Conditionally add temporaryPassword for teachers ---
             ...((user.role === 'teacher' || collection === 'teachers') ? // Check both user.role and collection name
@@ -463,6 +469,87 @@ exports.updateUser = async (req, res) => { /* ... Keep code from previous correc
       changesMade = true;
     }
 
+    // Handle profile image upload with Sharp compression
+    if (req.file) {
+      try {
+        console.log(`📸 Original image: ${req.file.originalname}, Size: ${(req.file.size / 1024).toFixed(2)}KB`);
+        
+        // Create uploads directory structure: uploads/profiles/schoolCode/
+        const uploadsDir = path.join(__dirname, '..', 'uploads', 'profiles', upperSchoolCode);
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+
+        // Generate unique filename with .jpg extension (Sharp will convert to JPEG)
+        const timestamp = Date.now();
+        const filename = `${user.userId}_${timestamp}.jpg`;
+        const destPath = path.join(uploadsDir, filename);
+
+        // Compress image using Sharp to ~30KB
+        console.log('🔄 Compressing image with Sharp...');
+        const sharpInstance = sharp(req.file.path);
+        await sharpInstance
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 60 })
+          .toFile(destPath);
+        
+        // Release Sharp resources
+        sharpInstance.destroy();
+        
+        // Check file size and re-compress if needed
+        let stats = fs.statSync(destPath);
+        let quality = 60;
+        
+        while (stats.size > 30 * 1024 && quality > 20) {
+          quality -= 10;
+          console.log(`🔄 Re-compressing with quality ${quality}...`);
+          const recompressInstance = sharp(req.file.path);
+          await recompressInstance
+            .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality })
+            .toFile(destPath);
+          recompressInstance.destroy();
+          stats = fs.statSync(destPath);
+        }
+        
+        console.log(`✅ Compressed image: ${(stats.size / 1024).toFixed(2)}KB (quality: ${quality})`);
+        
+        const newImagePath = `/uploads/profiles/${upperSchoolCode}/${filename}`;
+        
+        // Store old image path for deletion AFTER database update
+        const oldImagePath = user.profileImage ? path.join(__dirname, '..', user.profileImage) : null;
+        
+        // CRITICAL: Set profileImage directly and mark changes as made
+        console.log(`🔍 DEBUG: Before setting profileImage - updateFields:`, JSON.stringify(updateFields));
+        console.log(`🔍 DEBUG: changesMade before:`, changesMade);
+        
+        updateFields['profileImage'] = newImagePath;
+        changesMade = true;
+        
+        console.log(`🔍 DEBUG: After setting profileImage - updateFields:`, JSON.stringify(updateFields));
+        console.log(`🔍 DEBUG: changesMade after:`, changesMade);
+        console.log(`✅ Profile image will be saved to DB: ${newImagePath}`);
+        console.log(`📝 Old image path (will delete after DB update): ${oldImagePath || 'None'}`);
+        
+        // Store cleanup paths for deletion AFTER successful database update
+        req.imageCleanup = {
+          oldImagePath: oldImagePath,
+          tempFilePath: req.file.path
+        };
+      } catch (error) {
+        console.error('❌ Error handling profile image upload:', error);
+        // Clean up temp file immediately on error
+        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+          try {
+            fs.unlinkSync(req.file.path);
+            console.log(`🗑️ Cleaned up temp file after error`);
+          } catch (err) {
+            console.warn(`⚠️ Could not clean up temp file: ${err.message}`);
+          }
+        }
+      }
+    }
+    
     // --- Update Role-Specific Details using setField ---
     const rolePrefix = `${user.role}Details`;
     if (user.role === 'student') {
@@ -472,7 +559,6 @@ exports.updateUser = async (req, res) => { /* ... Keep code from previous correc
       if (updateData.admissionNumber !== undefined) setField(`${rolePrefix}.admissionNumber`, updateData.admissionNumber);
       if (updateData.fatherName !== undefined) setField(`${rolePrefix}.fatherName`, updateData.fatherName);
       if (updateData.motherName !== undefined) setField(`${rolePrefix}.motherName`, updateData.motherName);
-      // ... Add setField for ALL other updatable studentDetails fields ...
     } else if (user.role === 'teacher') {
       if (updateData.qualification !== undefined) setField(`${rolePrefix}.qualification`, updateData.qualification);
       if (updateData.experience !== undefined) setField(`${rolePrefix}.experience`, updateData.experience);
@@ -483,14 +569,16 @@ exports.updateUser = async (req, res) => { /* ... Keep code from previous correc
           changesMade = true;
         }
       }
-      // ... Add setField for ALL other updatable teacherDetails fields ...
     } else if (user.role === 'admin') {
       if (updateData.designation !== undefined) setField(`${rolePrefix}.designation`, updateData.designation);
       if (updateData.qualification !== undefined) setField(`${rolePrefix}.qualification`, updateData.qualification);
-      // ... Add setField for ALL other updatable adminDetails fields ...
     }
 
+    console.log(`🔍 DEBUG: Before changesMade check - changesMade:`, changesMade);
+    console.log(`🔍 DEBUG: Before changesMade check - updateFields:`, JSON.stringify(updateFields));
+    
     if (!changesMade) {
+      console.log(`⚠️ WARNING: No changes detected, returning early`);
       return res.status(200).json({ success: true, message: 'No changes detected to update.' });
     }
 
@@ -500,13 +588,51 @@ exports.updateUser = async (req, res) => { /* ... Keep code from previous correc
       updateFields['auditTrail.lastModifiedAt'] = updateFields.updatedAt;
     }
 
-    const result = await db.collection(collectionName).updateOne({ _id: user._id }, { $set: updateFields });
+    console.log(`📊 Updating database with fields:`, Object.keys(updateFields));
+    console.log(`🔍 DEBUG: Full updateFields object:`, JSON.stringify(updateFields));
+    try {
+      const result = await db.collection(collectionName).updateOne({ _id: user._id }, { $set: updateFields });
 
-    if (result.matchedCount === 0) { return res.status(404).json({ success: false, message: 'User not found during update operation.' }); }
+      if (result.matchedCount === 0) { return res.status(404).json({ success: false, message: 'User not found during update operation.' }); }
 
-    console.log(`✅ User ${user.userId} update attempted in ${collectionName}. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
-    res.json({ success: true, message: 'User updated successfully' });
+      console.log(`✅ User ${user.userId} updated in ${collectionName}. Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+      
+      // Verify profileImage was saved if it was in updateFields
+      if (updateFields['profileImage']) {
+        console.log(`✅ Profile image URL saved to database: ${updateFields['profileImage']}`);
+      }
+      
+      // NOW delete old image and temp file AFTER successful DB update
+      if (req.imageCleanup) {
+        const { oldImagePath, tempFilePath } = req.imageCleanup;
+        
+        // Delete old profile image immediately
+        if (oldImagePath && fs.existsSync(oldImagePath)) {
+          try {
+            fs.unlinkSync(oldImagePath);
+            console.log(`🗑️ Deleted old profile image: ${path.basename(oldImagePath)}`);
+          } catch (err) {
+            console.warn(`⚠️ Failed to delete old image: ${err.message}`);
+          }
+        }
+        
+        // Delete temp file immediately
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+          try {
+            fs.unlinkSync(tempFilePath);
+            console.log(`🗑️ Deleted temp file: ${path.basename(tempFilePath)}`);
+          } catch (err) {
+            console.warn(`⚠️ Could not delete temp file: ${err.message}`);
+          }
+        }
+      }
+      
+      res.json({ success: true, message: 'User updated successfully' });
 
+    } catch (error) {
+      console.error(`Error updating user ${req.params.userId}:`, error);
+      res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
+    }
   } catch (error) {
     console.error(`Error updating user ${req.params.userId}:`, error);
     res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
@@ -514,7 +640,8 @@ exports.updateUser = async (req, res) => { /* ... Keep code from previous correc
 };
 
 // Delete user (Logical Deactivate)
-exports.deleteUser = async (req, res) => { /* ... Keep code from previous correct version ... */
+// Delete user (Logical Deactivate)
+exports.deleteUser = async (req, res) => {
   try {
     const { schoolCode, userId: userIdToDelete } = req.params;
     const deletingUserId = req.user?._id;
@@ -550,6 +677,9 @@ exports.deleteUser = async (req, res) => { /* ... Keep code from previous correc
       return res.status(400).json({ success: false, message: 'Cannot deactivate your own account.' });
     }
 
+    // Store image path for deletion AFTER successful DB update
+    const imagePathToDelete = user.profileImage ? path.join(__dirname, '..', user.profileImage) : null;
+
     const updateResult = await db.collection(collectionName).updateOne(
       { _id: user._id },
       {
@@ -569,6 +699,22 @@ exports.deleteUser = async (req, res) => { /* ... Keep code from previous correc
     }
 
     console.log(`✅ User ${user.userId} deactivated successfully in ${collectionName}.`);
+    
+    // NOW delete profile image AFTER successful database update
+    if (imagePathToDelete) {
+      console.log(`🗑️ Attempting to delete profile image: ${imagePathToDelete}`);
+      if (fs.existsSync(imagePathToDelete)) {
+        try {
+          fs.unlinkSync(imagePathToDelete);
+          console.log(`✅ Successfully deleted profile image: ${path.basename(imagePathToDelete)}`);
+        } catch (err) {
+          console.warn(`⚠️ Failed to delete profile image: ${err.message}`);
+        }
+      } else {
+        console.log(`ℹ️ Profile image not found at: ${imagePathToDelete}`);
+      }
+    }
+    
     res.json({ success: true, message: 'User deactivated successfully' });
 
   } catch (error) {

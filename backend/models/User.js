@@ -116,6 +116,7 @@ const userSchema = new mongoose.Schema({
   },
   
   profilePicture: { type: String },
+  profileImage: { type: String }, // Alias for profilePicture
   documents: [{
     type: { type: String, enum: ['photo', 'aadhar', 'birth_certificate', 'academic_certificates', 'pan', 'experience'] },
     filename: { type: String },

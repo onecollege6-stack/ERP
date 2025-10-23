@@ -26,7 +26,7 @@ export function Dashboard() {
   const handleDelete = async (schoolId: string, name: string) => {
     // First confirmation dialog
     const confirmMessage = `⚠️  PERMANENT DELETION WARNING  ⚠️\n\nYou are about to delete school: "${name}"\n\nThis action will PERMANENTLY DELETE:\n✗ School record and all settings\n✗ All users (admins, teachers, students, parents)\n✗ All classes, sections, and subjects\n✗ All test records and results\n✗ All attendance data\n✗ School database and all data\n\n❌ THIS ACTION CANNOT BE UNDONE ❌\n\nAre you sure you want to proceed?`;
-    
+
     if (!window.confirm(confirmMessage)) {
       console.log(`User cancelled deletion of school: ${name}`);
       return;
@@ -34,9 +34,9 @@ export function Dashboard() {
 
     // Second confirmation dialog
     const secondConfirmMessage = `🚨 FINAL CONFIRMATION 🚨\n\nType the school name "${name}" to confirm deletion:\n\nNote: This will delete ALL data permanently.`;
-    
+
     const userInput = window.prompt(secondConfirmMessage);
-    
+
     if (userInput !== name) {
       if (userInput !== null) { // null means user clicked cancel
         alert(`❌ School name does not match. Deletion cancelled.\n\nYou entered: "${userInput}"\nRequired: "${name}"`);
@@ -48,7 +48,7 @@ export function Dashboard() {
     // Proceed with deletion
     try {
       console.log(`User confirmed deletion of school: ${name} (${schoolId})`);
-      
+
       // Show loading state
       if (window.confirm(`🔄 Processing deletion of "${name}"...\n\nThis may take a few moments. Click OK to proceed.`)) {
         await deleteSchool(schoolId);
@@ -66,6 +66,7 @@ export function Dashboard() {
     { title: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { title: 'Last Login', value: stats.lastLogin, icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50' },
   ];
+
 
   return (
     <div className="p-6 space-y-6">
@@ -112,7 +113,7 @@ export function Dashboard() {
                 <div className="flex items-start space-x-4">
                   <img
                     src={school.logo}
-                    alt={`${school.name} logo`}
+                    alt={`${school.logo} logo`}
                     className="w-16 h-16 rounded-lg object-cover border border-gray-200"
                   />
                   <div className="flex-1 min-w-0">
@@ -126,7 +127,7 @@ export function Dashboard() {
                     <p className="text-sm text-gray-600">PIN: {school.pinCode}</p>
                   </div>
                 </div>
-                
+
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-medium text-gray-700">Principal:</span>
