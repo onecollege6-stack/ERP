@@ -92,7 +92,15 @@ export const authAPI = {
 
 // School Management APIs
 export const schoolAPI = {
-  createSchool: (schoolData) => api.post('/schools', schoolData),
+  createSchool: (schoolData) => {
+    // If schoolData is FormData (for file uploads), let browser set Content-Type with boundary
+    const config = schoolData instanceof FormData ? {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    } : {};
+    return api.post('/schools', schoolData, config);
+  },
   getAllSchools: () => api.get('/schools'),
   getSchoolById: (schoolId) => api.get(`/schools/${schoolId}`),
   updateSchool: (schoolId, updateData) => api.put(`/schools/${schoolId}`, updateData),

@@ -37,6 +37,8 @@ export function AddSchoolForm() {
     affiliationBoard: '',
     secondaryContact: ''
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -137,6 +139,34 @@ export function AddSchoolForm() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setValidationErrors(prev => ({ ...prev, logo: 'Only image files (JPEG, PNG, GIF, WebP) are allowed' }));
+        return;
+      }
+      
+      // Validate file size (max 10MB before compression)
+      if (file.size > 10 * 1024 * 1024) {
+        setValidationErrors(prev => ({ ...prev, logo: 'File size must be less than 10MB' }));
+        return;
+      }
+      
+      setLogoFile(file);
+      setValidationErrors(prev => ({ ...prev, logo: '' }));
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccess(null);
@@ -155,6 +185,7 @@ export function AddSchoolForm() {
         mobile: formData.mobile.trim(),
         principalName: formData.principalName.trim(),
         principalEmail: formData.principalEmail.trim(),
+        logoFile: logoFile || undefined,
         address: {
           street: formData.street.trim(),
           area: formData.area.trim(),
@@ -198,6 +229,8 @@ export function AddSchoolForm() {
     } catch (err: any) {
       setError(err?.message || 'Failed to create school');
     }
+    setLogoFile(null);
+    setLogoPreview(null);
   };
 
   const handleClear = () => {
@@ -230,6 +263,8 @@ export function AddSchoolForm() {
       affiliationBoard: '',
       secondaryContact: ''
     });
+    setLogoFile(null);
+    setLogoPreview(null);
     setValidationErrors({});
     setError(null);
     setSuccess(null);
@@ -358,6 +393,42 @@ export function AddSchoolForm() {
                 />
                 <p className="text-xs text-gray-500 mt-1">This code will be used for admin and teacher panel identification. Must be unique across all schools.</p>
                 {renderFieldError('code')}
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">School Logo</label>
+                <div className="flex items-start space-x-4">
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleLogoChange}
+                      className={`w-full px-3 py-2 border ${validationErrors.logo ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Upload school logo (JPEG, PNG, GIF, WebP). Max size: 10MB. Image will be compressed automatically.</p>
+                    {renderFieldError('logo')}
+                  </div>
+                  {logoPreview && (
+                    <div className="flex-shrink-0">
+                      <div className="relative w-24 h-24 border-2 border-gray-300 rounded-lg overflow-hidden">
+                        <img
+                          src={logoPreview}
+                          alt="Logo preview"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogoFile(null);
+                            setLogoPreview(null);
+                          }}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>

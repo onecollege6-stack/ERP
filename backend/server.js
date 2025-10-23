@@ -338,7 +338,7 @@ function startTempFolderCleanup() {
   //Then run every 60 seconds (less aggressive for Windows)
   setInterval(() => {
     cleanupTempFolder();
-  }, 100); // 60 seconds
+  }, 1000); // 60 seconds
 }
 
 // Graceful shutdown handling
