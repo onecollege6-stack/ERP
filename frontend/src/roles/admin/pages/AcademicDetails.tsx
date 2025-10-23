@@ -86,6 +86,16 @@ const AcademicDetails: React.FC = () => {
   const [hallTicketClass, setHallTicketClass] = useState<string>('');
   const [hallTicketSection, setHallTicketSection] = useState<string>('');
   const [selectedTest, setSelectedTest] = useState<string>('');
+  const [enableRoomNumbers, setEnableRoomNumbers] = useState<boolean>(false);
+  const [customInstructions, setCustomInstructions] = useState<string[]>([
+    'Bring this admit card to the examination hall',
+    'Report 30 minutes before the exam',
+    'Carry valid ID proof with this admit card',
+    'Mobile phones strictly prohibited',
+    'Follow all examination rules',
+    'Malpractice leads to disqualification'
+  ]);
+  const [newInstruction, setNewInstruction] = useState<string>('');
   const [availableTests, setAvailableTests] = useState<Test[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjectExams, setSubjectExams] = useState<SubjectExam[]>([]);
@@ -738,15 +748,76 @@ const AcademicDetails: React.FC = () => {
     }));
   };
 
+  // Functions to manage instructions
+  const addInstruction = () => {
+    if (newInstruction.trim() && !customInstructions.includes(newInstruction.trim())) {
+      setCustomInstructions(prev => [...prev, newInstruction.trim()]);
+      setNewInstruction('');
+      toast.success('Instruction added successfully');
+    } else if (customInstructions.includes(newInstruction.trim())) {
+      toast.error('This instruction already exists');
+    }
+  };
+
+  const removeInstruction = (index: number) => {
+    setCustomInstructions(prev => prev.filter((_, i) => i !== index));
+    toast.success('Instruction removed successfully');
+  };
+
+  const resetToDefaultInstructions = () => {
+    setCustomInstructions([
+      'Bring this admit card to the examination hall',
+      'Report 30 minutes before the exam',
+      'Carry valid ID proof with this admit card',
+      'Mobile phones strictly prohibited',
+      'Follow all examination rules',
+      'Malpractice leads to disqualification'
+    ]);
+    toast.success('Instructions reset to default');
+  };
+
+  // Function to convert image to base64 for better print compatibility
+  const convertImageToBase64 = (url: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx?.drawImage(img, 0, 0);
+        try {
+          const base64 = canvas.toDataURL('image/png');
+          resolve(base64);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = url;
+    });
+  };
+
   const generateHallTickets = async () => {
-    const completedSubjects = subjectExams.filter(subject => 
-      hallTicketData[subject.id]?.examDate && 
-      hallTicketData[subject.id]?.examTime && 
-      hallTicketData[subject.id]?.roomNumber
-    );
+    const completedSubjects = subjectExams.filter(subject => {
+      const examData = hallTicketData[subject.id];
+      const hasRequiredFields = examData?.examDate && examData?.examTime;
+      
+      // If room numbers are enabled, require room number as well
+      if (enableRoomNumbers) {
+        return hasRequiredFields && examData?.roomNumber;
+      }
+      
+      // If room numbers are disabled, only require date and time
+      return hasRequiredFields;
+    });
 
     if (completedSubjects.length === 0) {
-      toast.error('Please fill exam date, time, and room number for at least one subject');
+      const requiredFields = enableRoomNumbers 
+        ? 'exam date, time, and room number' 
+        : 'exam date and time';
+      toast.error(`Please fill ${requiredFields} for at least one subject`);
       return;
     }
 
@@ -757,6 +828,8 @@ const AcademicDetails: React.FC = () => {
 
     // Show loading toast
     const loadingToast = toast.loading('Preparing admit cards with school information...');
+
+    // We'll handle logo conversion after getting the template settings
 
     try {
       // Get test name
@@ -926,6 +999,19 @@ const AcademicDetails: React.FC = () => {
       console.log('🏫 Final templateSettings for admit cards:', templateSettings);
       console.log('🖼️ Logo URL being used:', templateSettings.logoUrl || 'No logo URL found');
 
+      // Convert logo to base64 for better print compatibility
+      let logoBase64 = '';
+      if (templateSettings.logoUrl) {
+        try {
+          console.log('🖼️ Converting logo to base64 for print compatibility...');
+          logoBase64 = await convertImageToBase64(templateSettings.logoUrl);
+          console.log('✅ Logo converted to base64 successfully');
+        } catch (error) {
+          console.log('❌ Failed to convert logo to base64:', error);
+          console.log('📝 Will use original URL as fallback');
+        }
+      }
+
       // Dismiss loading toast
       toast.dismiss(loadingToast);
 
@@ -951,7 +1037,8 @@ const AcademicDetails: React.FC = () => {
               <td class="px-2 py-2 border border-gray-300 text-xs">${subject.name}</td>
               <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examDate}</td>
               <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examTime}</td>
-              <td class="px-2 py-2 border border-gray-300 text-xs">${examData.roomNumber}</td>
+              ${enableRoomNumbers ? `<td class="px-2 py-2 border border-gray-300 text-xs">${examData.roomNumber || 'N/A'}</td>` : ''}
+              <td class="px-2 py-2 border border-gray-300 text-xs" style="height: 30px; min-height: 30px;"></td>
             </tr>
           `;
         }).join('');
@@ -962,8 +1049,14 @@ const AcademicDetails: React.FC = () => {
               <!-- Header - EXACT UniversalTemplate Structure -->
               <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-300">
                 <div class="flex items-center space-x-4">
-                  ${templateSettings.logoUrl ? 
-                    `<img src="${templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" onerror="console.log('Logo failed to load: ${templateSettings.logoUrl}')" />` :
+                  ${(logoBase64 || templateSettings.logoUrl) ? 
+                    `<img src="${logoBase64 || templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" 
+                         style="max-width: 64px; max-height: 64px; display: block; print-color-adjust: exact;" 
+                         onload="console.log('Logo loaded successfully')" 
+                         onerror="console.log('Logo failed to load'); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                     <div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center" style="display: none;">
+                       <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
+                     </div>` :
                     `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
                       <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
                     </div>`
@@ -1044,7 +1137,8 @@ const AcademicDetails: React.FC = () => {
                         <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Subject</th>
                         <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Date</th>
                         <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Time</th>
-                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Room No.</th>
+                        ${enableRoomNumbers ? '<th class="px-2 py-2 border border-gray-300 text-left font-semibold">Room No.</th>' : ''}
+                        <th class="px-2 py-2 border border-gray-300 text-left font-semibold">Invigilator Sign</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1053,38 +1147,44 @@ const AcademicDetails: React.FC = () => {
                   </table>
                 </div>
 
-                <!-- Instructions - Compact -->
-                <div class="mb-3">
+                <!-- Instructions - Dynamic -->
+                <div class="mb-4">
                   <h4 class="text-base font-semibold text-gray-800 mb-2 border-b border-gray-300 pb-1">INSTRUCTIONS:</h4>
                   <div class="grid grid-cols-2 gap-3 text-xs text-gray-700">
-                    <ul class="space-y-1">
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Bring this admit card to the examination hall</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Report 30 minutes before the exam</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Carry valid ID proof with this admit card</span>
-                      </li>
-                    </ul>
-                    <ul class="space-y-1">
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Mobile phones strictly prohibited</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Follow all examination rules</span>
-                      </li>
-                      <li class="flex items-start">
-                        <span class="text-blue-600 mr-1 text-xs">•</span>
-                        <span>Malpractice leads to disqualification</span>
-                      </li>
-                    </ul>
+                    ${(() => {
+                      const halfLength = Math.ceil(customInstructions.length / 2);
+                      const firstHalf = customInstructions.slice(0, halfLength);
+                      const secondHalf = customInstructions.slice(halfLength);
+                      
+                      return `
+                        <ul class="space-y-1">
+                          ${firstHalf.map(instruction => `
+                            <li class="flex items-start">
+                              <span class="text-blue-600 mr-1 text-xs">•</span>
+                              <span>${instruction}</span>
+                            </li>
+                          `).join('')}
+                        </ul>
+                        <ul class="space-y-1">
+                          ${secondHalf.map(instruction => `
+                            <li class="flex items-start">
+                              <span class="text-blue-600 mr-1 text-xs">•</span>
+                              <span>${instruction}</span>
+                            </li>
+                          `).join('')}
+                        </ul>
+                      `;
+                    })()}
+                  </div>
+                </div>
+
+                <!-- Principal Signature Section -->
+                <div class="mb-4">
+                  <div class="flex justify-end">
+                    <div class="text-center">
+                      <div class="w-32 h-16 border-b border-gray-400 mb-2"></div>
+                      <p class="text-xs text-gray-600 font-medium">Principal Signature</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1132,6 +1232,12 @@ const AcademicDetails: React.FC = () => {
                   overflow: hidden;
                 }
                 .hall-ticket:last-child { page-break-after: avoid; }
+                img { 
+                  print-color-adjust: exact; 
+                  -webkit-print-color-adjust: exact;
+                  max-width: 100% !important;
+                  height: auto !important;
+                }
               }
               @page {
                 size: A4;
@@ -1544,7 +1650,79 @@ const AcademicDetails: React.FC = () => {
                     ))}
                   </select>
                 </div>
+              </div>
 
+              {/* Room Number Toggle */}
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="enableRoomNumbers"
+                    checked={enableRoomNumbers}
+                    onChange={(e) => setEnableRoomNumbers(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="enableRoomNumbers" className="text-sm font-medium text-gray-700">
+                    Include Room Numbers in Hall Tickets
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 ml-7">
+                  {enableRoomNumbers 
+                    ? "Room numbers will be required and displayed in the hall tickets" 
+                    : "Room numbers will be optional and not displayed in the hall tickets"
+                  }
+                </p>
+              </div>
+
+              {/* Instructions Management */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Manage Hall Ticket Instructions</h3>
+                
+                {/* Add New Instruction */}
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={newInstruction}
+                    onChange={(e) => setNewInstruction(e.target.value)}
+                    placeholder="Enter new instruction..."
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyPress={(e) => e.key === 'Enter' && addInstruction()}
+                  />
+                  <button
+                    onClick={addInstruction}
+                    disabled={!newInstruction.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {/* Current Instructions */}
+                <div className="space-y-2 mb-3">
+                  <p className="text-xs text-gray-600 font-medium">Current Instructions:</p>
+                  {customInstructions.map((instruction, index) => (
+                    <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                      <span className="text-xs text-gray-700 flex-1">{instruction}</span>
+                      <button
+                        onClick={() => removeInstruction(index)}
+                        className="ml-2 px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Reset Button */}
+                <button
+                  onClick={resetToDefaultInstructions}
+                  className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700"
+                >
+                  Reset to Default Instructions
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
                 {/* Search Button */}
                 <div className="flex items-end">
                   <button
@@ -1597,9 +1775,11 @@ const AcademicDetails: React.FC = () => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Exam Time
                             </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Room Number
-                            </th>
+                            {enableRoomNumbers && (
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Room Number
+                              </th>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -1627,18 +1807,20 @@ const AcademicDetails: React.FC = () => {
                                   className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="h-4 w-4 text-gray-400" />
-                                  <input
-                                    type="text"
-                                    value={hallTicketData[subject.id]?.roomNumber || ''}
-                                    onChange={(e) => updateHallTicketData(subject.id, 'roomNumber', e.target.value)}
-                                    placeholder="Room No."
-                                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  />
-                                </div>
-                              </td>
+                              {enableRoomNumbers && (
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-gray-400" />
+                                    <input
+                                      type="text"
+                                      value={hallTicketData[subject.id]?.roomNumber || ''}
+                                      onChange={(e) => updateHallTicketData(subject.id, 'roomNumber', e.target.value)}
+                                      placeholder="Room No."
+                                      className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
