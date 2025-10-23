@@ -47,20 +47,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const schoolsRes = await schoolAPI.getAllSchools();
         console.log('Schools response:', schoolsRes.data);
         
-        const mapped = (schoolsRes.data || []).map((created: any) => ({
-          id: created._id || created.id,
-          name: created.name,
-          code: created.code || '',
-          logo: created.logoUrl ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${import.meta.env.VITE_API_BASE_URL || ''}${created.logoUrl}`) : '/default-school-logo.svg',
-          area: created.address?.area || created.address?.street || '',
-          district: created.address?.district || created.address?.city || '',
-          pinCode: created.address?.pinCode || created.address?.zipCode || '',
-          mobile: created.mobile || created.contact?.phone || '',
-          principalName: created.principalName || '',
-          principalEmail: created.principalEmail || created.contact?.email || '',
-          bankDetails: created.bankDetails || {},
-          accessMatrix: created.accessMatrix || {}
-        }));
+        const mapped = (schoolsRes.data || []).map((created: any) => {
+          // Construct logo URL: remove '/api' from base URL for static files
+          const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace('/api', '');
+          const logoUrl = created.logoUrl 
+            ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${baseUrl}${created.logoUrl}`) 
+            : '/default-school-logo.svg';
+          
+          return {
+            id: created._id || created.id,
+            name: created.name,
+            code: created.code || '',
+            logo: logoUrl,
+            area: created.address?.area || created.address?.street || '',
+            district: created.address?.district || created.address?.city || '',
+            pinCode: created.address?.pinCode || created.address?.zipCode || '',
+            mobile: created.mobile || created.contact?.phone || '',
+            principalName: created.principalName || '',
+            principalEmail: created.principalEmail || created.contact?.email || '',
+            bankDetails: created.bankDetails || {},
+            accessMatrix: created.accessMatrix || {}
+          };
+        });
         
         console.log('Mapped schools:', mapped);
         setSchools(mapped);
@@ -220,11 +228,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const res = await schoolAPI.createSchool(form);
       const created = res.data?.school || res.data;
       if (created) {
+        // Construct logo URL: remove '/api' from base URL for static files
+        const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace('/api', '');
+        const logoUrl = created.logoUrl 
+          ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${baseUrl}${created.logoUrl}`) 
+          : '';
+        
         setSchools(prev => [...prev, {
           id: created._id || created.id,
           name: created.name,
           code: created.code || '',
-          logo: created.logoUrl ? (created.logoUrl.startsWith('http') ? created.logoUrl : `${import.meta.env.VITE_API_BASE_URL || ''}${created.logoUrl}`) : '',
+          logo: logoUrl,
           area: created.address?.street || '',
           district: created.address?.city || '',
           pinCode: created.address?.zipCode || '',

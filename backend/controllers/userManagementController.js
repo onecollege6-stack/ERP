@@ -89,6 +89,9 @@ exports.getAllUsers = async (req, res) => {
               whatsappNumber: user.contact?.whatsappNumber || '',
               emergencyContact: user.contact?.emergencyContact
             },
+            
+            // 💡 FIX: Include profileImage here
+            profileImage: user.profileImage || null, 
 
             // --- Conditionally add temporaryPassword for teachers ---
             ...((user.role === 'teacher' || collection === 'teachers') ? // Check both user.role and collection name

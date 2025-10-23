@@ -182,6 +182,10 @@ export interface User {
   address: UserAddress;
   identity?: UserIdentity;
   
+  // Profile Image
+  profileImage?: string;
+  profilePicture?: string;
+  
   // Role-specific details
   studentDetails?: StudentDetails;
   teacherDetails?: TeacherDetails;

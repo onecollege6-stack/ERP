@@ -32,6 +32,7 @@ interface DisplayUser extends ApiUser {
   studentDetails?: { currentClass?: string | null; currentSection?: string | null; rollNumber?: string | null; };
   teacherDetails?: { subjects?: string[]; };
   adminDetails?: { designation?: string; };
+  profileImage?: string | null; // 💡 FIX 1: Add the missing profileImage field to the DisplayUser interface
 }
 // User interface now imported from standardized types
 
@@ -1921,6 +1922,7 @@ const ManageUsers: React.FC = () => {
               address: userData.address?.permanent?.street || userData.address?.street || userData.address,
               isActive: userData.isActive !== false,
               createdAt: userData.createdAt || new Date().toISOString(),
+              profileImage: userData.profileImage || userData.profilePicture || null, // 💡 FIX 2a: Map profileImage here
               // Initialize studentDetails as an empty object or undefined
               studentDetails: userData.role === 'student' ? {} : undefined
             };
@@ -1973,6 +1975,7 @@ const ManageUsers: React.FC = () => {
                   phone: userData.contact?.primaryPhone || userData.contact?.phone || userData.phone,
                   temporaryPassword: userData.temporaryPassword || userData.tempPassword || null,
                   address: userData.address?.permanent?.street || userData.address?.street || userData.address,
+                  profileImage: userData.profileImage || userData.profilePicture || null, // 💡 FIX 2b: Map profileImage here (grouped response)
                   isActive: userData.isActive !== false,
                   createdAt: userData.createdAt || new Date().toISOString()
                 };
@@ -5556,6 +5559,7 @@ const ManageUsers: React.FC = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                     {activeTab === 'student' && (
@@ -5594,154 +5598,196 @@ const ManageUsers: React.FC = () => {
                       <td colSpan={activeTab === 'student' ? 8 : activeTab === 'teacher' ? 8 : 8} className="px-6 py-4 text-center text-gray-500">No users found</td>
                     </tr>
                   ) : (
-                    filteredUsers.map((user) => (
-                      <tr key={user._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {(user as any).name?.displayName ||
-                                ((user as any).name?.firstName && (user as any).name?.lastName
-                                  ? `${(user as any).name.firstName} ${(user as any).name.lastName}`
-                                  : (user as any).name?.firstName || user.name || 'No name')}
+                    filteredUsers.map((user) => {
+                      // Construct photo URL (robust): remove trailing '/api' from API base or fallback to current origin
+                      const envBase = (import.meta.env.VITE_API_BASE_URL as string) || '';
+                      const originBase = envBase ? envBase.replace(/\/api\/?$/, '') : (typeof window !== 'undefined' ? window.location.origin : '');
+                      const photoUrl = (user as any).profileImage || (user as any).profilePicture;
+                      const fullPhotoUrl = photoUrl
+                        ? (photoUrl.startsWith('http') ? photoUrl : `${originBase}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`)
+                        : null;
+
+                      // Get user initials for fallback
+                      const firstName = (user as any).name?.firstName || '';
+                      const lastName = (user as any).name?.lastName || '';
+                      const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'U';
+
+                      return (
+                        <tr key={user._id} className="hover:bg-gray-50">
+                          {/* Photo Column */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              {fullPhotoUrl ? (
+                                <img
+                                  src={fullPhotoUrl}
+                                  // alt={`${(user as any).name?.displayName || 'User'} photo`}
+                                  alt={`${fullPhotoUrl}`}
+                                  className="h-10 w-10 rounded-full object-cover border border-gray-200"
+                                  onError={(e) => {
+                                    // Fallback to initials if image fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const parent = target.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = `<div class="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center"><span class="text-sm font-medium text-blue-700">${initials}</span></div>`;
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-blue-700">{initials}</span>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div>
-                            <div>{user.email}</div>
-                            <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
-                          </div>
-                        </td>
-                        {activeTab === 'student' && (
-                          <>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {/* Reads from the processed studentDetails object */}
-                              {user.studentDetails?.class || 'Not assigned'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {/* Reads from the processed studentDetails object */}
-                              {user.studentDetails?.section || 'Not assigned'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {(user as any).userId || user._id || 'Not assigned'}
-                            </td>
-                          </>
-                        )}
-                        {activeTab === 'teacher' && (
-                          <>
-                            {/* Employee ID Column - Access via user.teacherDetails */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {user.teacherDetails?.employeeId || 'N/A'}
-                            </td>
-
-                            {/* Password Column - Access user.temporaryPassword directly */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              <div className="flex items-center space-x-1">
-                                {(user as any).temporaryPassword ? (
-                                  <>
-                                    {/* Display Password with Show/Hide */}
-                                    <span className="flex-grow font-mono text-xs text-gray-700">
-                                      {passwordVisibility[user.userId]
-                                        ? (user as any).temporaryPassword
-                                        : '********'
-                                      }
-                                    </span>
-                                    {/* Show/Hide Button */}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        togglePasswordVisibility(user.userId, (user as any).name?.displayName || 'this user');
-                                      }}
-                                      className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
-                                      title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires admin password)"}
-                                      type="button"
-                                    >
-                                      {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span className="text-xs text-gray-400 italic">Not Available</span>
-                                )}
+                          </td>
+                          {/* User Column */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {(user as any).name?.displayName ||
+                                  ((user as any).name?.firstName && (user as any).name?.lastName
+                                    ? `${(user as any).name.firstName} ${(user as any).name.lastName}`
+                                    : (user as any).name?.firstName || user.name || 'No name')}
                               </div>
-                            </td>
+                              <div className="text-sm text-gray-500">{(user as any).userId || user._id}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div>
+                              <div>{user.email}</div>
+                              <div className="text-xs text-gray-400">{(user as any).contact?.primaryPhone || user.phone || 'No phone'}</div>
+                            </div>
+                          </td>
+                          {activeTab === 'student' && (
+                            <>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {/* Reads from the processed studentDetails object */}
+                                {user.studentDetails?.class || 'Not assigned'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {/* Reads from the processed studentDetails object */}
+                                {user.studentDetails?.section || 'Not assigned'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {(user as any).userId || user._id || 'Not assigned'}
+                              </td>
+                            </>
+                          )}
+                          {activeTab === 'teacher' && (
+                            <>
+                              {/* Employee ID Column - Access via user.teacherDetails */}
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {user.teacherDetails?.employeeId || 'N/A'}
+                              </td>
 
-                            {/* Experience Column - Access via user.teacherDetails */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {/* Check if experience is defined and not null */}
-                              {user.teacherDetails?.experience !== undefined && user.teacherDetails?.experience !== null
-                                ? `${user.teacherDetails.experience} years`
-                                : 'N/A'}
-                            </td>
-                          </>
-                        )}
-                        {activeTab === 'admin' && (
-                          <>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              Employee ID
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              Administration
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              Full Access
-                            </td>
-                          </>
-                        )}
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {user.isActive ? (
-                              <UserCheck className="h-4 w-4 text-green-500 mr-1" />
-                            ) : (
-                              <UserX className="h-4 w-4 text-red-500 mr-1" />
-                            )}
-                            <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
-                              {user.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(user.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleEditClick(user)}
-                              className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                              title="Edit User"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            {/* Change Password only for teachers */}
-                            {activeTab === 'teacher' && (
+                              {/* Password Column - Access user.temporaryPassword directly */}
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="flex items-center space-x-1">
+                                  {(user as any).temporaryPassword ? (
+                                    <>
+                                      {/* Display Password with Show/Hide */}
+                                      <span className="flex-grow font-mono text-xs text-gray-700">
+                                        {passwordVisibility[user.userId]
+                                          ? (user as any).temporaryPassword
+                                          : '********'
+                                        }
+                                      </span>
+                                      {/* Show/Hide Button */}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          togglePasswordVisibility(user.userId, (user as any).name?.displayName || 'this user');
+                                        }}
+                                        className="text-gray-400 hover:text-gray-600 p-0.5 rounded hover:bg-gray-100 flex-shrink-0"
+                                        title={passwordVisibility[user.userId] ? "Hide password" : "Show password (requires admin password)"}
+                                        type="button"
+                                      >
+                                        {passwordVisibility[user.userId] ? <EyeOff size={14} /> : <Eye size={14} />}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs text-gray-400 italic">Not Available</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Experience Column - Access via user.teacherDetails */}
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {/* Check if experience is defined and not null */}
+                                {user.teacherDetails?.experience !== undefined && user.teacherDetails?.experience !== null
+                                  ? `${user.teacherDetails.experience} years`
+                                  : 'N/A'}
+                              </td>
+                            </>
+                          )}
+                          {activeTab === 'admin' && (
+                            <>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                Employee ID
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                Administration
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                Full Access
+                              </td>
+                            </>
+                          )}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {user.isActive ? (
+                                <UserCheck className="h-4 w-4 text-green-500 mr-1" />
+                              ) : (
+                                <UserX className="h-4 w-4 text-red-500 mr-1" />
+                              )}
+                              <span className={`text-sm ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(user.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex space-x-2">
                               <button
-                                onClick={() => {
-                                  console.log('Change password clicked for:', user.userId, user.email);
-                                  handleOpenChangePassword(
-                                    user.userId || user._id,
-                                    (user as any).name?.displayName || (user as any).name || 'User',
-                                    user.email
-                                  );
-                                }}
-                                className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
-                                title="Change Password (Set New Password)"
+                                onClick={() => handleEditClick(user)}
+                                className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                                title="Edit User"
                               >
-                                <KeyRound className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </button>
-                            )}
-                            {/* Delete button - prevent self-deletion */}
-                            <button
-                              onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
-                              className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Delete User"
-                              disabled={false} // Temporarily allow all deletions for testing
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                              {/* Change Password only for teachers */}
+                              {activeTab === 'teacher' && (
+                                <button
+                                  onClick={() => {
+                                    console.log('Change password clicked for:', user.userId, user.email);
+                                    handleOpenChangePassword(
+                                      user.userId || user._id,
+                                      (user as any).name?.displayName || (user as any).name || 'User',
+                                      user.email
+                                    );
+                                  }}
+                                  className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
+                                  title="Change Password (Set New Password)"
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                </button>
+                              )}
+                              {/* Delete button - prevent self-deletion */}
+                              <button
+                                onClick={() => handleDeleteUser(user._id, user.name || `User ${user._id}`)}
+                                className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete User"
+                                disabled={false} // Temporarily allow all deletions for testing
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
