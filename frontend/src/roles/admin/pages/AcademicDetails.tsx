@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, Trash2, BookOpen, ChevronDown, ChevronRight, FileText, Search, Calendar, MapPin
+  Plus, Trash2, BookOpen, ChevronDown, ChevronRight, FileText, Search, Calendar, MapPin, CreditCard
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../auth/AuthContext';
@@ -39,12 +39,23 @@ interface Student {
   sequenceId?: string;
   className: string;
   section: string;
+  profileImage?: string;
+  // Additional fields for ID cards
+  fatherName?: string;
+  motherName?: string;
+  dateOfBirth?: string;
+  bloodGroup?: string;
+  address?: string;
+  phone?: string;
 }
 
 interface HallTicketData {
   subjectId: string;
   examDate: string;
   examTime: string;
+  examHour: string;
+  examMinute: string;
+  examAmPm: string;
   roomNumber: string;
 }
 
@@ -70,7 +81,7 @@ const AcademicDetails: React.FC = () => {
   } = useSchoolClasses();
 
   // Tab management
-  const [activeTab, setActiveTab] = useState<'subjects' | 'hallticket'>('subjects');
+  const [activeTab, setActiveTab] = useState('subjects');
 
   // State management for Class Subjects
   const [classSubjects, setClassSubjects] = useState<ClassSubjects[]>([]);
@@ -96,10 +107,45 @@ const AcademicDetails: React.FC = () => {
     'Malpractice leads to disqualification'
   ]);
   const [newInstruction, setNewInstruction] = useState<string>('');
+
+  // ID Card Generation State
+  const [idCardClass, setIdCardClass] = useState('');
+  const [idCardSection, setIdCardSection] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [idCardStudents, setIdCardStudents] = useState<Student[]>([]);
+
+  // ID Card Template Options
+  const idCardTemplates = [
+    {
+      id: 'template1',
+      name: 'Classic Blue Template',
+      description: 'Traditional blue design with school logo and student photo',
+      preview: 'Blue header with white body, professional layout'
+    },
+    {
+      id: 'template2', 
+      name: 'Modern Green Template',
+      description: 'Contemporary green design with rounded corners',
+      preview: 'Green gradient header, modern typography'
+    },
+    {
+      id: 'template3',
+      name: 'Elegant Purple Template', 
+      description: 'Sophisticated purple theme with elegant borders',
+      preview: 'Purple accents, elegant border design'
+    },
+    {
+      id: 'template4',
+      name: 'Vibrant Orange Template',
+      description: 'Energetic orange design with dynamic layout',
+      preview: 'Orange header, vibrant and youthful design'
+    }
+  ];
+
   const [availableTests, setAvailableTests] = useState<Test[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [subjectExams, setSubjectExams] = useState<SubjectExam[]>([]);
-  const [hallTicketData, setHallTicketData] = useState<{[key: string]: HallTicketData}>({});
+  const [hallTicketData, setHallTicketData] = useState<{ [key: string]: HallTicketData }>({});
   const [hallTicketSections, setHallTicketSections] = useState<any[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
 
@@ -151,16 +197,16 @@ const AcademicDetails: React.FC = () => {
     // Convert to numbers for proper numeric sorting
     const numA = parseInt(a);
     const numB = parseInt(b);
-    
+
     // If both are numbers, sort numerically
     if (!isNaN(numA) && !isNaN(numB)) {
       return numA - numB;
     }
-    
+
     // If one or both are not numbers, sort alphabetically
     return a.localeCompare(b);
   });
-  
+
   // Debug log to verify sorting
   console.log('📚 Classes sorted in ascending order:', classList);
 
@@ -393,31 +439,31 @@ const AcademicDetails: React.FC = () => {
       console.log('📊 Available tests data:', classesData.tests);
       console.log('📊 Tests by class:', classesData.testsByClass);
       console.log('🎯 Looking for tests in class:', hallTicketClass);
-      
+
       // Get tests for the selected class from the hook data
       let classTests = classesData.testsByClass[hallTicketClass] || [];
       console.log('🔍 Raw class tests for class', hallTicketClass, ':', classTests);
       console.log('🔍 Available class keys:', Object.keys(classesData.testsByClass));
-      
+
       // If no tests found, try alternative class formats
       if (classTests.length === 0) {
         // Try with string conversion
         const altKey = String(hallTicketClass);
         classTests = classesData.testsByClass[altKey] || [];
         console.log('🔄 Trying alternative key format:', altKey, 'Result:', classTests);
-        
+
         // If still no tests, try to find by matching className in all tests
         if (classTests.length === 0) {
           const allTests = classesData.tests || [];
-          classTests = allTests.filter((test: any) => 
-            test.className === hallTicketClass || 
+          classTests = allTests.filter((test: any) =>
+            test.className === hallTicketClass ||
             test.className === String(hallTicketClass) ||
             String(test.className) === String(hallTicketClass)
           );
           console.log('🔄 Trying direct filter from all tests:', classTests);
         }
       }
-      
+
       // Transform to our Test interface
       const transformedTests: Test[] = classTests.map((test: any) => ({
         id: test._id || test.testId,
@@ -426,22 +472,22 @@ const AcademicDetails: React.FC = () => {
         section: hallTicketSection,
         subjects: [] // Will be populated when we fetch subjects
       }));
-      
+
       setAvailableTests(transformedTests);
       console.log('✅ Fetched tests for class from hook:', transformedTests);
       console.log('📊 Transformed tests count:', transformedTests.length);
-      
+
       if (transformedTests.length === 0) {
         console.log(`ℹ️ No tests configured for Class ${hallTicketClass}`);
         toast.success(`No tests configured for Class ${hallTicketClass}. Please configure tests in the scoring system first.`);
       } else {
         toast.success(`Found ${transformedTests.length} test(s) for Class ${hallTicketClass}`);
       }
-      
+
     } catch (error: any) {
       console.error('Error fetching tests:', error);
       toast.error('Failed to fetch available tests');
-      
+
       // Fallback to mock data for development
       const mockTests: Test[] = [
         {
@@ -472,7 +518,7 @@ const AcademicDetails: React.FC = () => {
     setLoadingSubjects(true);
     try {
       const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
-      
+
       // Fetch actual subjects from the class-subjects API
       try {
         const response = await fetch(`/api/class-subjects/classes`, {
@@ -487,18 +533,18 @@ const AcademicDetails: React.FC = () => {
           console.log('📥 Subjects API Response:', data);
           console.log('🔍 Looking for class:', hallTicketClass, 'section:', hallTicketSection);
           console.log('🔍 Available classes in response:', data.data.classes?.map((c: any) => `${c.className}-${c.section}`));
-          
-          const classData = data.data.classes.find((cls: any) => 
+
+          const classData = data.data.classes.find((cls: any) =>
             cls.className === hallTicketClass && cls.section === hallTicketSection
           );
-          
+
           console.log('🎯 Found class data:', classData);
-          
+
           if (classData && classData.subjects) {
             // Filter only active subjects
             const activeSubjects = classData.subjects.filter((subject: any) => subject.isActive !== false);
             console.log('🔍 Total subjects:', classData.subjects.length, 'Active subjects:', activeSubjects.length);
-            
+
             const subjectExamsList: SubjectExam[] = activeSubjects.map((subject: any, index: number) => ({
               id: `${hallTicketClass}-${hallTicketSection}-${subject.name}-${selectedTest}`,
               name: subject.name,
@@ -506,24 +552,27 @@ const AcademicDetails: React.FC = () => {
               section: hallTicketSection,
               testName: availableTests.find(test => test.id === selectedTest)?.name || 'Test'
             }));
-            
+
             setSubjectExams(subjectExamsList);
-            
+
             // Initialize hall ticket data for each subject
-            const initialData: {[key: string]: HallTicketData} = {};
+            const initialData: { [key: string]: HallTicketData } = {};
             subjectExamsList.forEach(subject => {
               initialData[subject.id] = {
                 subjectId: subject.id,
                 examDate: '',
                 examTime: '',
+                examHour: '00',
+                examMinute: '00',
+                examAmPm: 'AM',
                 roomNumber: ''
               };
             });
             setHallTicketData(initialData);
-            
+
             // Also fetch students for this class and section
             await fetchStudentsForClass();
-            
+
             toast.success(`Found ${subjectExamsList.length} subjects`);
           } else {
             console.log('❌ No subjects found for class-section combination');
@@ -553,24 +602,27 @@ const AcademicDetails: React.FC = () => {
               section: hallTicketSection,
               testName: availableTests.find(test => test.id === selectedTest)?.name || 'Test'
             }));
-            
+
             setSubjectExams(subjectExamsList);
-            
+
             // Initialize hall ticket data for each subject
-            const initialData: {[key: string]: HallTicketData} = {};
+            const initialData: { [key: string]: HallTicketData } = {};
             subjectExamsList.forEach(subject => {
               initialData[subject.id] = {
                 subjectId: subject.id,
                 examDate: '',
                 examTime: '',
+                examHour: '00',
+                examMinute: '00',
+                examAmPm: 'AM',
                 roomNumber: ''
               };
             });
             setHallTicketData(initialData);
-            
+
             // Also fetch students for this class and section
             await fetchStudentsForClass();
-            
+
             toast.success(`Found ${subjectExamsList.length} subjects`);
           }
         } else {
@@ -588,14 +640,14 @@ const AcademicDetails: React.FC = () => {
   const fetchStudentsForClass = async () => {
     try {
       const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
-      
+
       if (!schoolCode || !token) {
         toast.error('Authentication error. Please login again.');
         return;
       }
 
       console.log(`📡 Fetching students for Class ${hallTicketClass} Section ${hallTicketSection}`);
-      
+
       // Try to fetch real students using the working pattern
       try {
         // Use the same pattern as other working APIs
@@ -612,37 +664,39 @@ const AcademicDetails: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           console.log('📥 Students API Response:', data);
-          
+
           if (data.success && data.data && data.data.length > 0) {
             // Debug: Show sample student structure
             console.log('📋 Sample student structure:', data.data[0]);
             console.log('📋 Available student fields:', Object.keys(data.data[0]));
-            
+
             // Filter students by class and section
             const filteredStudents = data.data.filter((student: any) => {
               const studentClass = student.studentDetails?.currentClass || student.currentclass || student.class || student.className;
               const studentSection = student.studentDetails?.currentSection || student.currentsection || student.section;
               const studentName = `${student.name?.firstName || student.firstname || ''} ${student.name?.lastName || student.lastname || ''}`.trim();
-              
+
               console.log(`🔍 Student: ${studentName}, Class: ${studentClass}, Section: ${studentSection}`);
-              
-              return String(studentClass) === String(hallTicketClass) && 
-                     String(studentSection).toUpperCase() === String(hallTicketSection).toUpperCase();
+
+              return String(studentClass) === String(hallTicketClass) &&
+                String(studentSection).toUpperCase() === String(hallTicketSection).toUpperCase();
             });
-            
+
             console.log(`🔍 Filtered students for Class ${hallTicketClass} Section ${hallTicketSection}:`, filteredStudents);
-            
+
             if (filteredStudents.length > 0) {
-              // Transform real students to include sequence IDs
+              // Transform real students to include sequence IDs and profile images
               const studentsWithSeqId = filteredStudents.map((student: any, index: number) => ({
                 id: student._id || student.id,
                 name: student.name?.displayName || `${student.name?.firstName || ''} ${student.name?.lastName || ''}`.trim() || student.firstname + ' ' + student.lastname || 'Unknown Student',
                 rollNumber: student.studentDetails?.rollNumber || student.rollNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
                 sequenceId: student.userId || student.studentDetails?.admissionNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
                 className: hallTicketClass,
-                section: hallTicketSection
+                section: hallTicketSection,
+                // Include profile image from database - this is the key fix!
+                profileImage: student.profileImage || student.profilePicture || null
               }));
-              
+
               setStudents(studentsWithSeqId);
               toast.success(`Loaded ${studentsWithSeqId.length} real students for Class ${hallTicketClass} Section ${hallTicketSection}`);
               console.log('✅ Real students loaded:', studentsWithSeqId);
@@ -655,11 +709,11 @@ const AcademicDetails: React.FC = () => {
       } catch (apiError) {
         console.log('❌ Students API failed:', apiError);
       }
-      
+
       // Try school-users endpoint pattern as fallback
       try {
         console.log('🔄 Trying school-users endpoint pattern...');
-        
+
         const altResponse = await fetch(`http://localhost:5050/api/school-users/${schoolCode}/users`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -670,7 +724,7 @@ const AcademicDetails: React.FC = () => {
         if (altResponse.ok) {
           const altData = await altResponse.json();
           console.log('📥 School-users API Response:', altData);
-          
+
           if (altData.success && altData.data && altData.data.length > 0) {
             // Filter for students in the specific class and section
             const filteredStudents = altData.data.filter((user: any) => {
@@ -678,16 +732,16 @@ const AcademicDetails: React.FC = () => {
               const userClass = user.studentDetails?.currentClass || user.currentclass || user.class || user.className;
               const userSection = user.studentDetails?.currentSection || user.currentsection || user.section;
               const userName = `${user.name?.firstName || user.firstname || ''} ${user.name?.lastName || user.lastname || ''}`.trim();
-              
+
               console.log(`🔍 School-user: ${userName}, Role: ${user.role}, Class: ${userClass}, Section: ${userSection}`);
-              
-              return isStudent && 
-                     String(userClass) === String(hallTicketClass) && 
-                     String(userSection).toUpperCase() === String(hallTicketSection).toUpperCase();
+
+              return isStudent &&
+                String(userClass) === String(hallTicketClass) &&
+                String(userSection).toUpperCase() === String(hallTicketSection).toUpperCase();
             });
-            
+
             console.log(`🔍 Filtered students from school-users for Class ${hallTicketClass} Section ${hallTicketSection}:`, filteredStudents);
-            
+
             if (filteredStudents.length > 0) {
               const studentsWithSeqId = filteredStudents.map((student: any, index: number) => ({
                 id: student._id || student.id,
@@ -695,9 +749,11 @@ const AcademicDetails: React.FC = () => {
                 rollNumber: student.studentDetails?.rollNumber || student.rollNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
                 sequenceId: student.userId || student.studentDetails?.admissionNumber || student.sequenceId || `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
                 className: hallTicketClass,
-                section: hallTicketSection
+                section: hallTicketSection,
+                // Include profile image from database - this is the key fix for fallback endpoint too!
+                profileImage: student.profileImage || student.profilePicture || null
               }));
-              
+
               setStudents(studentsWithSeqId);
               toast.success(`Loaded ${studentsWithSeqId.length} real students for Class ${hallTicketClass} Section ${hallTicketSection}`);
               console.log('✅ Real students loaded from school-users endpoint:', studentsWithSeqId);
@@ -708,7 +764,7 @@ const AcademicDetails: React.FC = () => {
       } catch (altApiError) {
         console.log('❌ School-users API also failed:', altApiError);
       }
-      
+
       // Fallback to mock data if all APIs fail or return no students
       console.log('🔄 Using mock data for students...');
       toast.success(`No students API available. Using sample data for Class ${hallTicketClass} Section ${hallTicketSection}.`);
@@ -719,33 +775,152 @@ const AcademicDetails: React.FC = () => {
         'Ananya Agarwal', 'Diya Mehta', 'Aadhya Nair', 'Kavya Iyer', 'Arya Desai',
         'Myra Shah', 'Anika Malhotra', 'Navya Kapoor', 'Kiara Jain', 'Saanvi Bansal'
       ];
-      
+
       const mockStudents: Student[] = studentNames.slice(0, 15).map((name, index) => ({
         id: String(index + 1),
         name: name,
         rollNumber: `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
         sequenceId: `${schoolCode}-${hallTicketSection}-${String(index + 1).padStart(4, '0')}`,
         className: hallTicketClass,
-        section: hallTicketSection
+        section: hallTicketSection,
+        // Add sample profile images for testing - use placeholder services for demo
+        profileImage: index % 3 === 0 ? `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=150&background=random&color=FFFFFF&format=png` :
+          index % 3 === 1 ? `https://via.placeholder.com/150x200/4F46E5/FFFFFF?text=${encodeURIComponent(name.split(' ')[0])}` :
+            undefined
       }));
-      
+
       setStudents(mockStudents);
       toast.success(`Loaded ${mockStudents.length} sample students for Class ${hallTicketClass} Section ${hallTicketSection}`);
       console.log('✅ Mock students loaded:', mockStudents);
+      console.log('📸 Students with photos:', mockStudents.filter(s => s.profileImage).map(s => ({ name: s.name, photo: s.profileImage })));
     } catch (error: any) {
       console.error('Error in fetchStudentsForClass:', error);
       setStudents([]);
     }
   };
 
-  const updateHallTicketData = (subjectId: string, field: 'examDate' | 'examTime' | 'roomNumber', value: string) => {
-    setHallTicketData(prev => ({
-      ...prev,
-      [subjectId]: {
-        ...prev[subjectId],
-        [field]: value
+  // Fetch students for ID card generation
+  const fetchStudentsForIdCards = async () => {
+    try {
+      const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
+
+      if (!schoolCode || !token) {
+        toast.error('Authentication error. Please login again.');
+        return;
       }
-    }));
+
+      console.log(`📡 Fetching students for ID Cards - Class ${idCardClass} Section ${idCardSection}`);
+
+      // Use the same API pattern as hall tickets
+      try {
+        const response = await fetch(`http://localhost:5050/api/users/role/student`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-School-Code': schoolCode.toUpperCase(),
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.success && data.data && data.data.length > 0) {
+            // Filter students by class and section
+            const filteredStudents = data.data.filter((student: any) => {
+              const studentClass = student.studentDetails?.currentClass || student.currentclass || student.class || student.className;
+              const studentSection = student.studentDetails?.currentSection || student.currentsection || student.section;
+              
+              return String(studentClass) === String(idCardClass) &&
+                String(studentSection).toUpperCase() === String(idCardSection).toUpperCase();
+            });
+
+            if (filteredStudents.length > 0) {
+              const studentsWithData = filteredStudents.map((student: any, index: number) => ({
+                id: student._id || student.id,
+                name: student.name?.displayName || `${student.name?.firstName || ''} ${student.name?.lastName || ''}`.trim() || 'Unknown Student',
+                rollNumber: student.studentDetails?.rollNumber || student.rollNumber || `${schoolCode}-${idCardSection}-${String(index + 1).padStart(4, '0')}`,
+                sequenceId: student.userId || student.studentDetails?.admissionNumber || `${schoolCode}-${idCardSection}-${String(index + 1).padStart(4, '0')}`,
+                className: idCardClass,
+                section: idCardSection,
+                profileImage: student.profileImage || student.profilePicture || null,
+                // Additional fields for ID cards - try multiple field paths
+                fatherName: student.parentDetails?.fatherName || student.fatherName || student.parent?.father?.name || 'Not Available',
+                motherName: student.parentDetails?.motherName || student.motherName || student.parent?.mother?.name || 'Not Available',
+                dateOfBirth: student.personalDetails?.dateOfBirth || student.dateOfBirth || student.dob || student.personal?.dateOfBirth || 'Not Available',
+                bloodGroup: student.personalDetails?.bloodGroup || student.bloodGroup || student.personal?.bloodGroup || student.medicalInfo?.bloodGroup || 'Not Available',
+                address: student.address?.permanent?.street || student.address?.street || student.personalDetails?.address || student.address || 'Not Available',
+                phone: student.contact?.primaryPhone || student.contact?.phone || student.phone || student.personalDetails?.phone || 'Not Available'
+              }));
+
+              setIdCardStudents(studentsWithData);
+              toast.success(`Loaded ${studentsWithData.length} students for ID card generation`);
+              console.log('✅ ID Card students loaded:', studentsWithData);
+              return;
+            }
+          }
+        }
+      } catch (apiError) {
+        console.log('❌ ID Card Students API failed:', apiError);
+      }
+
+      // Fallback to mock data
+      console.log('🔄 Using mock data for ID card students...');
+      const mockStudents: Student[] = [
+        'Aarav Sharma', 'Vivaan Patel', 'Aditya Kumar', 'Vihaan Singh', 'Arjun Gupta'
+      ].map((name, index) => ({
+        id: String(index + 1),
+        name: name,
+        rollNumber: `${schoolCode}-${idCardSection}-${String(index + 1).padStart(4, '0')}`,
+        sequenceId: `${schoolCode}-${idCardSection}-${String(index + 1).padStart(4, '0')}`,
+        className: idCardClass,
+        section: idCardSection,
+        profileImage: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=150&background=4F46E5&color=FFFFFF&format=png`,
+        fatherName: `Father of ${name.split(' ')[0]}`,
+        motherName: `Mother of ${name.split(' ')[0]}`,
+        dateOfBirth: '01/01/2010',
+        bloodGroup: ['A+', 'B+', 'O+', 'AB+'][index % 4],
+        address: `Address ${index + 1}, City, State`,
+        phone: `+91 98765${String(index + 1).padStart(5, '0')}`
+      }));
+
+      setIdCardStudents(mockStudents);
+      toast.success(`Loaded ${mockStudents.length} sample students for ID card generation`);
+    } catch (error: any) {
+      console.error('Error in fetchStudentsForIdCards:', error);
+      setIdCardStudents([]);
+    }
+  };
+
+  const updateHallTicketData = (subjectId: string, field: 'examDate' | 'examTime' | 'examHour' | 'examMinute' | 'examAmPm' | 'roomNumber', value: string) => {
+    setHallTicketData(prev => {
+      const currentData = prev[subjectId] || {};
+      const updatedData = {
+        ...currentData,
+        [field]: value
+      };
+
+      // Auto-update examTime when hour/minute/ampm changes for backward compatibility
+      if (field === 'examHour' || field === 'examMinute' || field === 'examAmPm') {
+        const hour = field === 'examHour' ? value : (currentData.examHour || '00');
+        const minute = field === 'examMinute' ? value : (currentData.examMinute || '00');
+        const ampm = field === 'examAmPm' ? value : (currentData.examAmPm || 'AM');
+        
+        // Convert to 24-hour format for examTime field
+        let hour24 = parseInt(hour);
+        if (hour === '00') hour24 = 12; // Handle "00" as 12
+        if (ampm === 'AM' && hour24 === 12) hour24 = 0;
+        if (ampm === 'PM' && hour24 !== 12) hour24 += 12;
+        
+        updatedData.examTime = `${hour24.toString().padStart(2, '0')}:${minute}`;
+        
+        console.log(`🔄 Auto-updating examTime: ${hour}:${minute} ${ampm} → ${updatedData.examTime}`);
+      }
+
+      return {
+        ...prev,
+        [subjectId]: updatedData
+      };
+    });
   };
 
   // Functions to manage instructions
@@ -802,20 +977,32 @@ const AcademicDetails: React.FC = () => {
   const generateHallTickets = async () => {
     const completedSubjects = subjectExams.filter(subject => {
       const examData = hallTicketData[subject.id];
-      const hasRequiredFields = examData?.examDate && examData?.examTime;
-      
+      const hasRequiredFields = examData?.examDate && 
+                               examData?.examHour && 
+                               examData?.examMinute && 
+                               examData?.examAmPm;
+
+      console.log(`🔍 Checking subject ${subject.name}:`, {
+        examDate: examData?.examDate,
+        examHour: examData?.examHour,
+        examMinute: examData?.examMinute,
+        examAmPm: examData?.examAmPm,
+        roomNumber: examData?.roomNumber,
+        hasRequiredFields
+      });
+
       // If room numbers are enabled, require room number as well
       if (enableRoomNumbers) {
         return hasRequiredFields && examData?.roomNumber;
       }
-      
-      // If room numbers are disabled, only require date and time
+
+      // If room numbers are disabled, only require date and time components
       return hasRequiredFields;
     });
 
     if (completedSubjects.length === 0) {
-      const requiredFields = enableRoomNumbers 
-        ? 'exam date, time, and room number' 
+      const requiredFields = enableRoomNumbers
+        ? 'exam date, time, and room number'
         : 'exam date and time';
       toast.error(`Please fill ${requiredFields} for at least one subject`);
       return;
@@ -851,7 +1038,7 @@ const AcademicDetails: React.FC = () => {
       // First try localStorage (same as UniversalTemplate)
       const savedTemplate = localStorage.getItem('universalTemplate');
       console.log('🔍 Raw localStorage data:', savedTemplate);
-      
+
       if (savedTemplate) {
         try {
           const templateData = JSON.parse(savedTemplate);
@@ -871,13 +1058,13 @@ const AcademicDetails: React.FC = () => {
       const hasDefaultValues = templateSettings.schoolCode === 'SCH001' || templateSettings.schoolName === 'School Name';
       if ((!savedTemplate || hasDefaultValues) && (user?.schoolCode || user?.schoolId)) {
         console.log('No saved template, fetching school data using UniversalTemplate logic...');
-        
+
         let schoolData = null;
-        
+
         try {
           console.log('Fetching school info using school API...');
           let response;
-          
+
           const schoolIdentifier = user?.schoolId || user?.schoolCode;
           if (schoolIdentifier) {
             try {
@@ -908,7 +1095,7 @@ const AcademicDetails: React.FC = () => {
                 addr.state,
                 addr.pinCode || addr.zipCode
               ].filter(Boolean);
-              
+
               // Join with commas and limit total length
               formattedAddress = addressParts.join(', ');
               if (formattedAddress.length > 60) {
@@ -928,41 +1115,55 @@ const AcademicDetails: React.FC = () => {
               }
             }
 
+            // Construct full logo URL with backend base URL (same as ManageUsers.tsx)
+            let logoUrl = '';
+            if (data.logoUrl) {
+              // If logoUrl starts with /uploads, prepend the backend URL
+              if (data.logoUrl.startsWith('/uploads')) {
+                // Use the same approach as ManageUsers.tsx - get base URL without /api suffix
+                const envBase = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5050/api';
+                const baseUrl = envBase.replace(/\/api\/?$/, '');
+                logoUrl = `${baseUrl}${data.logoUrl}`;
+                console.log('🖼️ Constructed logo URL:', logoUrl);
+              } else {
+                logoUrl = data.logoUrl;
+                console.log('🖼️ Using direct logo URL:', logoUrl);
+              }
+            }
+
             schoolData = {
               schoolName: data.name || data.schoolName || user?.schoolName,
               schoolCode: data.code || data.schoolCode || user?.schoolCode,
               address: formattedAddress,
-              phone: data.contact?.phone || data.phone || data.contactNumber || '+91-XXXXXXXXXX',
-              email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || 'info@school.com',
+              phone: data.contact?.phone || data.phone || data.contactNumber || templateSettings.phone,
+              email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || templateSettings.email,
               website: formattedWebsite,
-              logoUrl: data.logoUrl || data.logo || ''
+              logoUrl: logoUrl
             };
           }
-        } catch (error) {
-          console.log('Failed to fetch from school API:', error);
-        }
 
-        // If we got school data, update the template settings (EXACT same as UniversalTemplate)
-        if (schoolData) {
-          console.log('Updating template settings with school data:', schoolData);
-          templateSettings = {
-            ...templateSettings,
-            schoolName: schoolData.schoolName || templateSettings.schoolName,
-            schoolCode: schoolData.schoolCode || templateSettings.schoolCode,
-            address: schoolData.address || templateSettings.address,
-            phone: schoolData.phone || templateSettings.phone,
-            email: schoolData.email || templateSettings.email,
-            website: schoolData.website || templateSettings.website,
-            logoUrl: schoolData.logoUrl || templateSettings.logoUrl
-          };
-        } else {
-          // Fallback to auth context data (EXACT same as UniversalTemplate)
-          console.log('Using fallback data from user context');
-          templateSettings = {
-            ...templateSettings,
-            schoolName: user?.schoolName || templateSettings.schoolName,
-            schoolCode: user?.schoolCode || templateSettings.schoolCode
-          };
+          if (schoolData) {
+            templateSettings = {
+              ...templateSettings,
+              schoolName: schoolData.schoolName || templateSettings.schoolName,
+              schoolCode: schoolData.schoolCode || templateSettings.schoolCode,
+              address: schoolData.address || templateSettings.address,
+              phone: schoolData.phone || templateSettings.phone,
+              email: schoolData.email || templateSettings.email,
+              website: schoolData.website || templateSettings.website,
+              logoUrl: schoolData.logoUrl || templateSettings.logoUrl
+            };
+          } else {
+            // Fallback to auth context data (EXACT same as UniversalTemplate)
+            console.log('Using fallback data from user context');
+            templateSettings = {
+              ...templateSettings,
+              schoolName: user?.schoolName || templateSettings.schoolName,
+              schoolCode: user?.schoolCode || templateSettings.schoolCode
+            };
+          }
+        } catch (error: any) {
+          console.log('Failed to fetch from school API:', error.response?.status || error.message);
         }
       }
 
@@ -970,7 +1171,7 @@ const AcademicDetails: React.FC = () => {
       if (templateSettings.schoolCode === 'SCH001' || templateSettings.schoolName === 'School Name') {
         console.log('⚠️ Still have default values, trying user context...');
         console.log('👤 User context:', user);
-        
+
         // Try to get real school data from user context
         if (user?.schoolCode && user.schoolCode !== 'SCH001') {
           templateSettings.schoolCode = user.schoolCode;
@@ -978,7 +1179,7 @@ const AcademicDetails: React.FC = () => {
         if (user?.schoolName && user.schoolName !== 'School Name') {
           templateSettings.schoolName = user.schoolName;
         }
-        
+
         // If we have SB as school code, let's use some known data
         if (user?.schoolCode === 'SB') {
           templateSettings = {
@@ -992,7 +1193,7 @@ const AcademicDetails: React.FC = () => {
           };
           console.log('🏫 Applied SB school data override');
         }
-        
+
         console.log('🔄 Updated templateSettings from user context:', templateSettings);
       }
 
@@ -1028,15 +1229,83 @@ const AcademicDetails: React.FC = () => {
         data: templateSettings
       });
 
+      // Function to format time from 12-hour components
+      const formatTime12Hour = (hour: string, minute: string, ampm: string): string => {
+        if (!hour || !minute || !ampm) return 'Time not set';
+        
+        try {
+          // Convert "00" hour to "12" for display
+          const displayHour = hour === '00' ? '12' : hour;
+          const formattedTime = `${displayHour}:${minute} ${ampm}`;
+          console.log(`🕐 Formatting 12-hour time: ${hour}:${minute} ${ampm} → ${formattedTime}`);
+          return formattedTime;
+        } catch (error) {
+          console.error('Error formatting 12-hour time:', error);
+          return 'Time error';
+        }
+      };
+
+      // Sort completed subjects by exam date and time
+      const sortedSubjects = [...completedSubjects].sort((a, b) => {
+        const examDataA = hallTicketData[a.id];
+        const examDataB = hallTicketData[b.id];
+        
+        console.log(`📅 Sorting: ${a.name} (${examDataA.examDate} ${examDataA.examTime}) vs ${b.name} (${examDataB.examDate} ${examDataB.examTime})`);
+        
+        // First sort by date
+        const dateA = new Date(examDataA.examDate);
+        const dateB = new Date(examDataB.examDate);
+        
+        // Compare dates
+        if (dateA.getTime() !== dateB.getTime()) {
+          const result = dateA.getTime() - dateB.getTime();
+          console.log(`📅 Date comparison: ${examDataA.examDate} vs ${examDataB.examDate} = ${result}`);
+          return result;
+        }
+        
+        // If dates are same, sort by time (convert 12-hour to minutes for proper comparison)
+        const getMinutesFrom12Hour = (hour: string, minute: string, ampm: string): number => {
+          if (!hour || !minute || !ampm) return 0;
+          
+          let hourNum = parseInt(hour);
+          const minuteNum = parseInt(minute);
+          
+          // Handle "00" hour case - treat as 12
+          if (hourNum === 0) hourNum = 12;
+          
+          // Convert 12-hour to 24-hour for comparison
+          if (ampm === 'AM' && hourNum === 12) hourNum = 0;
+          if (ampm === 'PM' && hourNum !== 12) hourNum += 12;
+          
+          return hourNum * 60 + minuteNum;
+        };
+        
+        const minutesA = getMinutesFrom12Hour(examDataA.examHour, examDataA.examMinute, examDataA.examAmPm);
+        const minutesB = getMinutesFrom12Hour(examDataB.examHour, examDataB.examMinute, examDataB.examAmPm);
+        const timeResult = minutesA - minutesB;
+        
+        console.log(`🕐 Time comparison: ${examDataA.examHour}:${examDataA.examMinute} ${examDataA.examAmPm} (${minutesA}min) vs ${examDataB.examHour}:${examDataB.examMinute} ${examDataB.examAmPm} (${minutesB}min) = ${timeResult}`);
+        return timeResult;
+      });
+
+      console.log('📋 Final sorted subjects:', sortedSubjects.map(s => ({ 
+        name: s.name, 
+        date: hallTicketData[s.id].examDate, 
+        time: hallTicketData[s.id].examTime 
+      })));
+
       // Create hall ticket HTML for each student using UniversalTemplate admit card style
       const hallTicketsHTML = students.map(student => {
-        const subjectRows = completedSubjects.map(subject => {
+        const subjectRows = sortedSubjects.map(subject => {
           const examData = hallTicketData[subject.id];
+          const formattedTime = formatTime12Hour(examData.examHour, examData.examMinute, examData.examAmPm);
+          console.log(`🎫 Hall ticket row for ${subject.name}: ${examData.examDate} ${examData.examHour}:${examData.examMinute} ${examData.examAmPm} → ${formattedTime}`);
+          
           return `
             <tr>
               <td class="px-2 py-2 border border-gray-300 text-xs">${subject.name}</td>
               <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examDate}</td>
-              <td class="px-2 py-2 border border-gray-300 text-xs">${examData.examTime}</td>
+              <td class="px-2 py-2 border border-gray-300 text-xs">${formattedTime}</td>
               ${enableRoomNumbers ? `<td class="px-2 py-2 border border-gray-300 text-xs">${examData.roomNumber || 'N/A'}</td>` : ''}
               <td class="px-2 py-2 border border-gray-300 text-xs" style="height: 30px; min-height: 30px;"></td>
             </tr>
@@ -1049,18 +1318,18 @@ const AcademicDetails: React.FC = () => {
               <!-- Header - EXACT UniversalTemplate Structure -->
               <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-300">
                 <div class="flex items-center space-x-4">
-                  ${(logoBase64 || templateSettings.logoUrl) ? 
-                    `<img src="${logoBase64 || templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" 
+                  ${(logoBase64 || templateSettings.logoUrl) ?
+            `<img src="${logoBase64 || templateSettings.logoUrl}" alt="Logo" class="w-16 h-16 object-contain" 
                          style="max-width: 64px; max-height: 64px; display: block; print-color-adjust: exact;" 
                          onload="console.log('Logo loaded successfully')" 
                          onerror="console.log('Logo failed to load'); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                      <div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center" style="display: none;">
                        <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
                      </div>` :
-                    `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
+            `<div class="w-16 h-16 bg-gray-800 rounded-lg flex items-center justify-center">
                       <div class="w-10 h-10 border-2 border-white rounded transform rotate-45"></div>
                     </div>`
-                  }
+          }
                   <div>
                     <h1 class="text-2xl font-bold text-gray-800">${templateSettings.schoolName}</h1>
                     <p class="text-sm text-gray-600">School Code: ${templateSettings.schoolCode}</p>
@@ -1114,12 +1383,51 @@ const AcademicDetails: React.FC = () => {
                       </div>
                     </div>
                     
-                    <!-- Photo Space - Compact -->
+                    <!-- Photo Space - Dynamic -->
                     <div class="flex flex-col items-center">
-                      <div class="w-24 h-32 border-2 border-gray-400 border-dashed flex flex-col items-center justify-center bg-gray-50 rounded">
-                        <div class="text-2xl text-gray-400 mb-1">📷</div>
-                        <p class="text-xs text-gray-500 text-center font-medium leading-tight">PASTE<br/>PHOTO<br/>HERE</p>
-                      </div>
+                      ${(() => {
+            // Construct student photo URL if available (same as ManageUsers.tsx)
+            let studentPhotoUrl = '';
+            console.log('🔍 Processing student:', student.name, 'profileImage:', student.profileImage);
+
+            // Only use real profile images from database
+            if (student.profileImage) {
+              if (student.profileImage.startsWith('/uploads')) {
+                // Use the same approach as ManageUsers.tsx - get base URL without /api suffix
+                const envBase = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5050/api';
+                const baseUrl = envBase.replace(/\/api\/?$/, '');
+                studentPhotoUrl = `${baseUrl}${student.profileImage}`;
+                console.log('📸 Constructed student photo URL for', student.name, ':', studentPhotoUrl);
+              } else {
+                studentPhotoUrl = student.profileImage;
+                console.log('📸 Using direct student photo URL for', student.name, ':', studentPhotoUrl);
+              }
+            }
+
+            // Always show image if we have a URL (either real or generated placeholder)
+            console.log('🎯 Final studentPhotoUrl for', student.name, ':', studentPhotoUrl);
+            if (studentPhotoUrl) {
+              return `
+                            <div class="w-24 h-32 border-2 border-gray-400 rounded overflow-hidden bg-gray-50">
+                              <img src="${studentPhotoUrl}" alt="Student Photo" class="w-full h-full object-cover" 
+                                   style="print-color-adjust: exact; display: block;"
+                                   onload="console.log('✅ Student photo loaded:', '${student.name}', '${studentPhotoUrl}');" 
+                                   onerror="console.log('❌ Student photo failed to load:', '${student.name}', '${studentPhotoUrl}'); this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                              <div class="w-full h-full border-2 border-gray-400 border-dashed flex flex-col items-center justify-center bg-gray-50" style="display: none;">
+                                <div class="text-2xl text-gray-400 mb-1">📷</div>
+                                <p class="text-xs text-gray-500 text-center font-medium leading-tight">PHOTO<br/>FAILED</p>
+                              </div>
+                            </div>
+                          `;
+            } else {
+              return `
+                            <div class="w-24 h-32 border-2 border-gray-400 border-dashed flex flex-col items-center justify-center bg-gray-50 rounded">
+                              <div class="text-2xl text-gray-400 mb-1">📷</div>
+                              <p class="text-xs text-gray-500 text-center font-medium leading-tight">PASTE<br/>PHOTO<br/>HERE</p>
+                            </div>
+                          `;
+            }
+          })()}
                       <div class="mt-1 text-center">
                         <div class="w-20 h-px border-b border-gray-400 mb-1"></div>
                         <p class="text-xs text-gray-500">Signature</p>
@@ -1152,11 +1460,11 @@ const AcademicDetails: React.FC = () => {
                   <h4 class="text-base font-semibold text-gray-800 mb-2 border-b border-gray-300 pb-1">INSTRUCTIONS:</h4>
                   <div class="grid grid-cols-2 gap-3 text-xs text-gray-700">
                     ${(() => {
-                      const halfLength = Math.ceil(customInstructions.length / 2);
-                      const firstHalf = customInstructions.slice(0, halfLength);
-                      const secondHalf = customInstructions.slice(halfLength);
-                      
-                      return `
+            const halfLength = Math.ceil(customInstructions.length / 2);
+            const firstHalf = customInstructions.slice(0, halfLength);
+            const secondHalf = customInstructions.slice(halfLength);
+
+            return `
                         <ul class="space-y-1">
                           ${firstHalf.map(instruction => `
                             <li class="flex items-start">
@@ -1174,7 +1482,7 @@ const AcademicDetails: React.FC = () => {
                           `).join('')}
                         </ul>
                       `;
-                    })()}
+          })()}
                   </div>
                 </div>
 
@@ -1274,7 +1582,7 @@ const AcademicDetails: React.FC = () => {
       printWindow.document.close();
 
       toast.success(`Admit cards generated for ${students.length} students with ${completedSubjects.length} subjects`);
-      
+
       console.log('Admit cards generated successfully:', {
         students: students.length,
         subjects: completedSubjects.length,
@@ -1285,6 +1593,303 @@ const AcademicDetails: React.FC = () => {
       console.error('Error generating admit cards:', error);
       toast.dismiss(loadingToast);
       toast.error('Failed to generate admit cards');
+    }
+  };
+
+  // Generate ID Cards function
+  const generateIdCards = async () => {
+    if (!selectedTemplate) {
+      toast.error('Please select a template first');
+      return;
+    }
+
+    if (idCardStudents.length === 0) {
+      toast.error('No students found. Please select class and section first');
+      return;
+    }
+
+    const loadingToast = toast.loading('Generating ID cards...');
+
+    try {
+      const schoolCode = localStorage.getItem('erp.schoolCode') || user?.schoolCode || '';
+      const token = localStorage.getItem('erp.authToken');
+      
+      // Get school data (same as hall tickets)
+      let templateSettings = {
+        schoolName: 'School Name',
+        schoolCode: 'SCH001',
+        address: '123 School Street, City, State 12345',
+        phone: '+91-XXXXXXXXXX',
+        email: 'info@school.com',
+        logoUrl: ''
+      };
+
+      // Get saved template data (same as hall tickets)
+      const savedTemplate = localStorage.getItem('universalTemplate');
+      if (savedTemplate) {
+        try {
+          const templateData = JSON.parse(savedTemplate);
+          templateSettings = { ...templateSettings, ...templateData };
+          console.log('✅ Using saved UniversalTemplate settings for ID cards:', templateSettings);
+        } catch (e) {
+          console.log('❌ Failed to parse saved template data:', e);
+        }
+      }
+
+      // Try to fetch fresh school data from API (same as hall tickets)
+      try {
+        const schoolResponse = await fetch(`http://localhost:5050/api/schools/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-School-Code': schoolCode,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (schoolResponse.ok) {
+          const schoolData = await schoolResponse.json();
+          console.log('🏫 Fetched fresh school data for ID cards:', schoolData);
+          
+          if (schoolData.success && schoolData.data) {
+            const data = schoolData.data;
+            let logoUrl = '';
+            
+            if (data.logo) {
+              if (data.logo.startsWith('/uploads')) {
+                const envBase = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5050/api';
+                const baseUrl = envBase.replace(/\/api\/?$/, '');
+                logoUrl = `${baseUrl}${data.logo}`;
+              } else {
+                logoUrl = data.logo;
+              }
+            }
+
+            templateSettings = {
+              ...templateSettings,
+              schoolName: data.name || data.schoolName || templateSettings.schoolName,
+              schoolCode: data.code || data.schoolCode || templateSettings.schoolCode,
+              address: data.address || templateSettings.address,
+              phone: data.phone || data.contact?.phone || templateSettings.phone,
+              email: data.email || data.contact?.email || templateSettings.email,
+              logoUrl: logoUrl || templateSettings.logoUrl
+            };
+            console.log('✅ Updated template settings with fresh school data:', templateSettings);
+          }
+        }
+      } catch (error: any) {
+        console.log('Failed to fetch fresh school data for ID cards:', error.message);
+      }
+
+      // Convert logo to base64 if available
+      let logoBase64 = '';
+      if (templateSettings.logoUrl) {
+        try {
+          logoBase64 = await convertImageToBase64(templateSettings.logoUrl);
+        } catch (error) {
+          console.log('Failed to convert logo to base64');
+        }
+      }
+
+      // Get template colors based on selection
+      const getTemplateColors = (templateId: string) => {
+        switch (templateId) {
+          case 'template1':
+            return { primary: '#1E40AF', secondary: '#3B82F6', accent: '#DBEAFE' };
+          case 'template2':
+            return { primary: '#059669', secondary: '#10B981', accent: '#D1FAE5' };
+          case 'template3':
+            return { primary: '#7C3AED', secondary: '#8B5CF6', accent: '#EDE9FE' };
+          case 'template4':
+            return { primary: '#EA580C', secondary: '#F97316', accent: '#FED7AA' };
+          default:
+            return { primary: '#1E40AF', secondary: '#3B82F6', accent: '#DBEAFE' };
+        }
+      };
+
+      const colors = getTemplateColors(selectedTemplate);
+
+      // Generate ID cards HTML
+      const idCardsHtml = idCardStudents.map((student, index) => {
+        // Construct student photo URL
+        let studentPhotoUrl = '';
+        if (student.profileImage) {
+          if (student.profileImage.startsWith('/uploads')) {
+            const envBase = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5050/api';
+            const baseUrl = envBase.replace(/\/api\/?$/, '');
+            studentPhotoUrl = `${baseUrl}${student.profileImage}`;
+          } else {
+            studentPhotoUrl = student.profileImage;
+          }
+        }
+
+        return `
+          <div class="id-card" style="
+            width: 3.375in; 
+            height: 2.125in; 
+            background: white; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin: 10px;
+            page-break-inside: avoid;
+            display: inline-block;
+            vertical-align: top;
+            position: relative;
+            overflow: hidden;
+          ">
+            <!-- Header -->
+            <div style="
+              background: linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%);
+              color: white;
+              padding: 8px;
+              text-align: center;
+              position: relative;
+            ">
+              <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                ${(logoBase64 || templateSettings.logoUrl) ? 
+                  `<img src="${logoBase64 || templateSettings.logoUrl}" alt="Logo" style="width: 24px; height: 24px; object-fit: contain;" />` :
+                  `<div style="width: 24px; height: 24px; background: white; border-radius: 4px; opacity: 0.9;"></div>`
+                }
+                <div>
+                  <h3 style="margin: 0; font-size: 12px; font-weight: bold;">${templateSettings.schoolName}</h3>
+                  <p style="margin: 0; font-size: 8px; opacity: 0.9;">STUDENT ID CARD</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div style="padding: 12px; display: flex; gap: 12px;">
+              <!-- Photo -->
+              <div style="flex-shrink: 0;">
+                ${studentPhotoUrl ? `
+                  <img src="${studentPhotoUrl}" alt="Student Photo" style="
+                    width: 60px; 
+                    height: 80px; 
+                    object-fit: cover; 
+                    border-radius: 4px;
+                    border: 2px solid ${colors.accent};
+                  " />
+                ` : `
+                  <div style="
+                    width: 60px; 
+                    height: 80px; 
+                    background: ${colors.accent}; 
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border: 2px solid ${colors.primary};
+                  ">
+                    <span style="font-size: 24px; color: ${colors.primary};">📷</span>
+                  </div>
+                `}
+              </div>
+
+              <!-- Details -->
+              <div style="flex: 1; font-size: 9px; line-height: 1.3;">
+                <div style="margin-bottom: 4px;">
+                  <strong style="color: ${colors.primary};">${student.name}</strong>
+                </div>
+                <div style="margin-bottom: 2px;">
+                  <span style="color: #666;">Class:</span> <strong>${student.className}-${student.section}</strong>
+                </div>
+                <div style="margin-bottom: 2px;">
+                  <span style="color: #666;">Roll No:</span> <strong>${student.rollNumber}</strong>
+                </div>
+                <div style="margin-bottom: 2px;">
+                  <span style="color: #666;">ID:</span> <strong>${student.sequenceId}</strong>
+                </div>
+                <div style="margin-bottom: 2px;">
+                  <span style="color: #666;">DOB:</span> ${student.dateOfBirth || 'N/A'}
+                </div>
+                <div style="margin-bottom: 2px;">
+                  <span style="color: #666;">Blood:</span> ${student.bloodGroup || 'N/A'}
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="
+              position: absolute;
+              bottom: 0;
+              left: 0;
+              right: 0;
+              background: ${colors.accent};
+              padding: 4px 8px;
+              text-align: center;
+              font-size: 7px;
+              color: ${colors.primary};
+              font-weight: bold;
+            ">
+              ${templateSettings.schoolCode} | ${templateSettings.phone}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Complete HTML document
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Student ID Cards - ${templateSettings.schoolName}</title>
+            <style>
+              @media print {
+                body { margin: 0; padding: 10px; }
+                .id-card { 
+                  page-break-inside: avoid;
+                  margin: 5px !important;
+                }
+              }
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: #f5f5f5;
+              }
+              .container {
+                text-align: center;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1 style="text-align: center; margin-bottom: 20px; color: ${colors.primary};">
+                Student ID Cards - Class ${idCardClass} Section ${idCardSection}
+              </h1>
+              ${idCardsHtml}
+            </div>
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `;
+
+      // Open in new window and print
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+      }
+
+      toast.dismiss(loadingToast);
+      toast.success(`Generated ID cards for ${idCardStudents.length} students`);
+
+      console.log('ID cards generated successfully:', {
+        students: idCardStudents.length,
+        template: selectedTemplate,
+        class: idCardClass,
+        section: idCardSection
+      });
+
+    } catch (error) {
+      console.error('Error generating ID cards:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to generate ID cards');
     }
   };
 
@@ -1306,11 +1911,10 @@ const AcademicDetails: React.FC = () => {
             <nav className="flex space-x-8 px-6">
               <button
                 onClick={() => setActiveTab('subjects')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'subjects'
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'subjects'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4" />
@@ -1319,15 +1923,26 @@ const AcademicDetails: React.FC = () => {
               </button>
               <button
                 onClick={() => setActiveTab('hallticket')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'hallticket'
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'hallticket'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Hall Ticket Generation
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('idcard')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'idcard'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  School ID Card Generation
                 </div>
               </button>
             </nav>
@@ -1356,202 +1971,202 @@ const AcademicDetails: React.FC = () => {
         {activeTab === 'subjects' && (
           <div>
 
-        {/* Add Subject Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Add New Subject</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Class Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Class <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Choose a class...</option>
-                {classList.map(cls => (
-                  <option key={cls} value={cls}>
-                    Class {cls}
-                  </option>
-                ))}
-              </select>
+            {/* Add Subject Section */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Add New Subject</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Class Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Class <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Choose a class...</option>
+                    {classList.map(cls => (
+                      <option key={cls} value={cls}>
+                        Class {cls}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Section Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Section <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedSection}
+                    onChange={(e) => setSelectedSection(e.target.value)}
+                    disabled={!selectedClass || availableSections.length === 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Choose section...</option>
+                    {availableSections.map(section => (
+                      <option key={section.value} value={section.value}>
+                        Section {section.section}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Subject Name Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newSubjectName}
+                    onChange={(e) => setNewSubjectName(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Enter subject name..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Add Button */}
+                <div className="flex items-end">
+                  <button
+                    onClick={addSubject}
+                    disabled={!selectedClass || !selectedSection || !newSubjectName.trim()}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Subject
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Section Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Section <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedSection}
-                onChange={(e) => setSelectedSection(e.target.value)}
-                disabled={!selectedClass || availableSections.length === 0}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="">Choose section...</option>
-                {availableSections.map(section => (
-                  <option key={section.value} value={section.value}>
-                    Section {section.section}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Classes List */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Classes & Subjects</h2>
 
-            {/* Subject Name Input */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Subject Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={newSubjectName}
-                onChange={(e) => setNewSubjectName(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Enter subject name..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+              {loading || classesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-600 mt-2">Loading classes...</p>
+                </div>
+              ) : classList.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No classes configured. Please contact your super admin.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {classList.map(className => {
+                    const isClassExpanded = expandedClass === className;
+                    const classSections = classesData?.sectionsByClass?.[className] || [];
 
-            {/* Add Button */}
-            <div className="flex items-end">
-              <button
-                onClick={addSubject}
-                disabled={!selectedClass || !selectedSection || !newSubjectName.trim()}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Subject
-              </button>
-            </div>
-          </div>
-        </div>
+                    return (
+                      <div key={className} className="border border-gray-200 rounded-lg">
+                        {/* Class Header */}
+                        <div
+                          onClick={() => toggleClassExpansion(className)}
+                          className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                        >
+                          <div className="flex items-center gap-3">
+                            {isClassExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-gray-600" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-gray-600" />
+                            )}
+                            <h3 className="text-lg font-medium text-gray-800">
+                              Class {className}
+                            </h3>
+                            <span className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-full">
+                              {classSections.length} section{classSections.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
 
-        {/* Classes List */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Classes & Subjects</h2>
+                        {/* Sections List */}
+                        {isClassExpanded && (
+                          <div className="border-t border-gray-200 bg-gray-50">
+                            {classSections.length === 0 ? (
+                              <p className="text-gray-500 text-center py-4">
+                                No sections configured for Class {className}
+                              </p>
+                            ) : (
+                              <div className="space-y-2 p-4">
+                                {classSections.map((sectionObj: any) => {
+                                  const section = sectionObj.section;
+                                  const sectionKey = `${className}-${section}`;
+                                  const isSectionExpanded = expandedSection === sectionKey;
+                                  const subjects = getClassSectionSubjects(className, section);
 
-          {loading || classesLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-600 mt-2">Loading classes...</p>
-            </div>
-          ) : classList.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No classes configured. Please contact your super admin.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {classList.map(className => {
-                const isClassExpanded = expandedClass === className;
-                const classSections = classesData?.sectionsByClass?.[className] || [];
+                                  return (
+                                    <div key={sectionKey} className="border border-gray-300 rounded-lg bg-white">
+                                      {/* Section Header */}
+                                      <div
+                                        onClick={() => toggleSectionExpansion(className, section)}
+                                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          {isSectionExpanded ? (
+                                            <ChevronDown className="h-3 w-3 text-gray-600" />
+                                          ) : (
+                                            <ChevronRight className="h-3 w-3 text-gray-600" />
+                                          )}
+                                          <h4 className="text-base font-medium text-gray-700">
+                                            Section {section}
+                                          </h4>
+                                          <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+                                            {subjects.length} subject{subjects.length !== 1 ? 's' : ''}
+                                          </span>
+                                        </div>
+                                      </div>
 
-                return (
-                  <div key={className} className="border border-gray-200 rounded-lg">
-                    {/* Class Header */}
-                    <div
-                      onClick={() => toggleClassExpansion(className)}
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        {isClassExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-gray-600" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-gray-600" />
-                        )}
-                        <h3 className="text-lg font-medium text-gray-800">
-                          Class {className}
-                        </h3>
-                        <span className="bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-full">
-                          {classSections.length} section{classSections.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Sections List */}
-                    {isClassExpanded && (
-                      <div className="border-t border-gray-200 bg-gray-50">
-                        {classSections.length === 0 ? (
-                          <p className="text-gray-500 text-center py-4">
-                            No sections configured for Class {className}
-                          </p>
-                        ) : (
-                          <div className="space-y-2 p-4">
-                            {classSections.map((sectionObj: any) => {
-                              const section = sectionObj.section;
-                              const sectionKey = `${className}-${section}`;
-                              const isSectionExpanded = expandedSection === sectionKey;
-                              const subjects = getClassSectionSubjects(className, section);
-
-                              return (
-                                <div key={sectionKey} className="border border-gray-300 rounded-lg bg-white">
-                                  {/* Section Header */}
-                                  <div
-                                    onClick={() => toggleSectionExpansion(className, section)}
-                                    className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {isSectionExpanded ? (
-                                        <ChevronDown className="h-3 w-3 text-gray-600" />
-                                      ) : (
-                                        <ChevronRight className="h-3 w-3 text-gray-600" />
-                                      )}
-                                      <h4 className="text-base font-medium text-gray-700">
-                                        Section {section}
-                                      </h4>
-                                      <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
-                                        {subjects.length} subject{subjects.length !== 1 ? 's' : ''}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Subjects for this section */}
-                                  {isSectionExpanded && (
-                                    <div className="border-t border-gray-200 p-3">
-                                      {subjects.length === 0 ? (
-                                        <p className="text-gray-500 text-center py-3 text-sm">
-                                          No subjects added yet for Class {className} Section {section}
-                                        </p>
-                                      ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                          {subjects.map((subject, index) => (
-                                            <div
-                                              key={index}
-                                              className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-200"
-                                            >
-                                              <span className="text-gray-800 font-medium text-sm">
-                                                {subject.name}
-                                              </span>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  removeSubject(className, section, subject.name);
-                                                }}
-                                                className="p-1 text-red-600 hover:bg-red-100 rounded"
-                                                title="Remove subject"
-                                              >
-                                                <Trash2 className="h-3 w-3" />
-                                              </button>
+                                      {/* Subjects for this section */}
+                                      {isSectionExpanded && (
+                                        <div className="border-t border-gray-200 p-3">
+                                          {subjects.length === 0 ? (
+                                            <p className="text-gray-500 text-center py-3 text-sm">
+                                              No subjects added yet for Class {className} Section {section}
+                                            </p>
+                                          ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                              {subjects.map((subject, index) => (
+                                                <div
+                                                  key={index}
+                                                  className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border border-gray-200"
+                                                >
+                                                  <span className="text-gray-800 font-medium text-sm">
+                                                    {subject.name}
+                                                  </span>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      removeSubject(className, section, subject.name);
+                                                    }}
+                                                    className="p-1 text-red-600 hover:bg-red-100 rounded"
+                                                    title="Remove subject"
+                                                  >
+                                                    <Trash2 className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                              ))}
                                             </div>
-                                          ))}
+                                          )}
                                         </div>
                                       )}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
           </div>
         )}
 
@@ -1574,7 +2189,7 @@ const AcademicDetails: React.FC = () => {
                 {hallTicketClass && hallTicketSection && subjectExams.length === 0 && (
                   <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
                     <p className="text-xs text-red-700">
-                      ⚠️ No subjects found for Class {hallTicketClass} Section {hallTicketSection}. 
+                      ⚠️ No subjects found for Class {hallTicketClass} Section {hallTicketSection}.
                       Please add subjects in the "Class Subjects Management" tab first.
                     </p>
                     <p className="text-xs text-red-600 mt-1">
@@ -1590,7 +2205,7 @@ const AcademicDetails: React.FC = () => {
               {/* Class, Section, and Test Selection */}
               <div className="bg-white rounded-lg shadow-md p-6">
                 <h2 className="text-lg font-semibold text-gray-800 mb-4">Generate Hall Tickets</h2>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   {/* Class Selection */}
                   <div>
@@ -1631,112 +2246,112 @@ const AcademicDetails: React.FC = () => {
                     </select>
                   </div>
 
-                {/* Test Name Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Test Name <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={selectedTest}
-                    onChange={(e) => setSelectedTest(e.target.value)}
-                    disabled={!hallTicketClass || !hallTicketSection || availableTests.length === 0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Choose test...</option>
-                    {availableTests.map(test => (
-                      <option key={test.id} value={test.id}>
-                        {test.name}
-                      </option>
+                  {/* Test Name Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Test Name <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={selectedTest}
+                      onChange={(e) => setSelectedTest(e.target.value)}
+                      disabled={!hallTicketClass || !hallTicketSection || availableTests.length === 0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Choose test...</option>
+                      {availableTests.map(test => (
+                        <option key={test.id} value={test.id}>
+                          {test.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Room Number Toggle */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enableRoomNumbers"
+                      checked={enableRoomNumbers}
+                      onChange={(e) => setEnableRoomNumbers(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="enableRoomNumbers" className="text-sm font-medium text-gray-700">
+                      Include Room Numbers in Hall Tickets
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 ml-7">
+                    {enableRoomNumbers
+                      ? "Room numbers will be required and displayed in the hall tickets"
+                      : "Room numbers will be optional and not displayed in the hall tickets"
+                    }
+                  </p>
+                </div>
+
+                {/* Instructions Management */}
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Manage Hall Ticket Instructions</h3>
+
+                  {/* Add New Instruction */}
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      type="text"
+                      value={newInstruction}
+                      onChange={(e) => setNewInstruction(e.target.value)}
+                      placeholder="Enter new instruction..."
+                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyPress={(e) => e.key === 'Enter' && addInstruction()}
+                    />
+                    <button
+                      onClick={addInstruction}
+                      disabled={!newInstruction.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {/* Current Instructions */}
+                  <div className="space-y-2 mb-3">
+                    <p className="text-xs text-gray-600 font-medium">Current Instructions:</p>
+                    {customInstructions.map((instruction, index) => (
+                      <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
+                        <span className="text-xs text-gray-700 flex-1">{instruction}</span>
+                        <button
+                          onClick={() => removeInstruction(index)}
+                          className="ml-2 px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     ))}
-                  </select>
-                </div>
-              </div>
+                  </div>
 
-              {/* Room Number Toggle */}
-              <div className="mb-4">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="enableRoomNumbers"
-                    checked={enableRoomNumbers}
-                    onChange={(e) => setEnableRoomNumbers(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="enableRoomNumbers" className="text-sm font-medium text-gray-700">
-                    Include Room Numbers in Hall Tickets
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 mt-1 ml-7">
-                  {enableRoomNumbers 
-                    ? "Room numbers will be required and displayed in the hall tickets" 
-                    : "Room numbers will be optional and not displayed in the hall tickets"
-                  }
-                </p>
-              </div>
-
-              {/* Instructions Management */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">Manage Hall Ticket Instructions</h3>
-                
-                {/* Add New Instruction */}
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newInstruction}
-                    onChange={(e) => setNewInstruction(e.target.value)}
-                    placeholder="Enter new instruction..."
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && addInstruction()}
-                  />
+                  {/* Reset Button */}
                   <button
-                    onClick={addInstruction}
-                    disabled={!newInstruction.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    onClick={resetToDefaultInstructions}
+                    className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700"
                   >
-                    Add
+                    Reset to Default Instructions
                   </button>
                 </div>
 
-                {/* Current Instructions */}
-                <div className="space-y-2 mb-3">
-                  <p className="text-xs text-gray-600 font-medium">Current Instructions:</p>
-                  {customInstructions.map((instruction, index) => (
-                    <div key={index} className="flex items-center justify-between bg-white p-2 rounded border">
-                      <span className="text-xs text-gray-700 flex-1">{instruction}</span>
-                      <button
-                        onClick={() => removeInstruction(index)}
-                        className="ml-2 px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Reset Button */}
-                <button
-                  onClick={resetToDefaultInstructions}
-                  className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700"
-                >
-                  Reset to Default Instructions
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {/* Search Button */}
-                <div className="flex items-end">
-                  <button
-                    onClick={fetchSubjects}
-                    disabled={!hallTicketClass || !hallTicketSection || !selectedTest}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <Search className="h-4 w-4" />
-                    Search Subjects
-                  </button>
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Search Button */}
+                  <div className="flex items-end">
+                    <button
+                      onClick={fetchSubjects}
+                      disabled={!hallTicketClass || !hallTicketSection || !selectedTest}
+                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Search className="h-4 w-4" />
+                      Search Subjects
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
             {/* Subjects and Students List */}
             {subjectExams.length > 0 && (
@@ -1800,12 +2415,42 @@ const AcademicDetails: React.FC = () => {
                                 </div>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <input
-                                  type="time"
-                                  value={hallTicketData[subject.id]?.examTime || ''}
-                                  onChange={(e) => updateHallTicketData(subject.id, 'examTime', e.target.value)}
-                                  className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
+                                <div className="flex items-center gap-1">
+                                  {/* Hour Dropdown (00, 1-12) */}
+                                  <select
+                                    value={hallTicketData[subject.id]?.examHour || '00'}
+                                    onChange={(e) => updateHallTicketData(subject.id, 'examHour', e.target.value)}
+                                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{ width: '60px' }}
+                                  >
+                                    <option value="00">00</option>
+                                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(hour => (
+                                      <option key={hour} value={hour.toString()}>{hour}</option>
+                                    ))}
+                                  </select>
+                                  <span className="text-gray-500">:</span>
+                                  {/* Minute Dropdown (00-59) */}
+                                  <select
+                                    value={hallTicketData[subject.id]?.examMinute || '00'}
+                                    onChange={(e) => updateHallTicketData(subject.id, 'examMinute', e.target.value)}
+                                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{ width: '60px' }}
+                                  >
+                                    {Array.from({length: 60}, (_, i) => i.toString().padStart(2, '0')).map(minute => (
+                                      <option key={minute} value={minute}>{minute}</option>
+                                    ))}
+                                  </select>
+                                  {/* AM/PM Dropdown */}
+                                  <select
+                                    value={hallTicketData[subject.id]?.examAmPm || 'AM'}
+                                    onChange={(e) => updateHallTicketData(subject.id, 'examAmPm', e.target.value)}
+                                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    style={{ width: '60px' }}
+                                  >
+                                    <option value="AM">AM</option>
+                                    <option value="PM">PM</option>
+                                  </select>
+                                </div>
                               </td>
                               {enableRoomNumbers && (
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1853,6 +2498,153 @@ const AcademicDetails: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* School ID Card Generation Content */}
+        {activeTab === 'idcard' && (
+          <div>
+            {/* Class, Section, and Template Selection */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Generate School ID Cards</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {/* Class Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Class <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={idCardClass}
+                    onChange={(e) => {
+                      setIdCardClass(e.target.value);
+                      setIdCardSection('');
+                      setIdCardStudents([]);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Choose a class...</option>
+                    {classList.map(cls => (
+                      <option key={cls} value={cls}>
+                        Class {cls}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Section Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Section <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={idCardSection}
+                    onChange={(e) => {
+                      setIdCardSection(e.target.value);
+                      setIdCardStudents([]);
+                    }}
+                    disabled={!idCardClass}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Choose section...</option>
+                    {idCardClass && getSectionsByClass(idCardClass).map(section => (
+                      <option key={section.value} value={section.value}>
+                        Section {section.section}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Fetch Students Button */}
+              <div className="mb-6">
+                <button
+                  onClick={fetchStudentsForIdCards}
+                  disabled={!idCardClass || !idCardSection}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <Search className="h-4 w-4" />
+                  Load Students
+                </button>
+              </div>
+
+              {/* Template Selection */}
+              {idCardStudents.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Choose ID Card Template</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {idCardTemplates.map(template => (
+                      <div
+                        key={template.id}
+                        onClick={() => setSelectedTemplate(template.id)}
+                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                          selectedTemplate === template.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className={`w-full h-24 rounded-lg mb-3 flex items-center justify-center ${
+                            template.id === 'template1' ? 'bg-blue-100' :
+                            template.id === 'template2' ? 'bg-green-100' :
+                            template.id === 'template3' ? 'bg-purple-100' :
+                            'bg-orange-100'
+                          }`}>
+                            <CreditCard className={`h-8 w-8 ${
+                              template.id === 'template1' ? 'text-blue-600' :
+                              template.id === 'template2' ? 'text-green-600' :
+                              template.id === 'template3' ? 'text-purple-600' :
+                              'text-orange-600'
+                            }`} />
+                          </div>
+                          <h4 className="font-semibold text-sm text-gray-800 mb-1">{template.name}</h4>
+                          <p className="text-xs text-gray-600 mb-2">{template.description}</p>
+                          <p className="text-xs text-gray-500">{template.preview}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Generate Button */}
+              {idCardStudents.length > 0 && selectedTemplate && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={generateIdCards}
+                    className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 text-lg"
+                  >
+                    <CreditCard className="h-5 w-5" />
+                    Generate ID Cards ({idCardStudents.length} students)
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Students List */}
+            {idCardStudents.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  Eligible Students ({idCardStudents.length})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {idCardStudents.map((student) => (
+                    <div key={student.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">{student.name}</p>
+                          <p className="text-sm text-blue-600 font-medium">Sequence ID: {student.sequenceId || student.rollNumber}</p>
+                          <p className="text-xs text-gray-500">Class {student.className} - Section {student.section}</p>
+                        </div>
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 font-bold text-xs">{(student.sequenceId || student.rollNumber).split('-').pop()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -116,6 +116,26 @@ const UniversalTemplate: React.FC = () => {
             }
           }
 
+          // Construct full logo URL with backend base URL (same as ManageUsers.tsx)
+          let logoUrl = '';
+          if (data.logoUrl || data.logo) {
+            const rawLogoUrl = data.logoUrl || data.logo;
+            // If logoUrl starts with /uploads, prepend the backend URL
+            if (rawLogoUrl.startsWith('/uploads')) {
+              // Use the same approach as ManageUsers.tsx - get base URL without /api suffix
+              const envBase = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5050/api';
+              const baseUrl = envBase.replace(/\/api\/?$/, '');
+              logoUrl = `${baseUrl}${rawLogoUrl}`;
+              console.log('🔧 Environment base URL:', envBase);
+              console.log('🔧 Calculated base URL:', baseUrl);
+              console.log('🔧 Raw logo URL from DB:', rawLogoUrl);
+              console.log('🖼️ Final constructed logo URL:', logoUrl);
+            } else {
+              logoUrl = rawLogoUrl;
+              console.log('🖼️ Using direct logo URL:', logoUrl);
+            }
+          }
+
           schoolData = {
             schoolName: data.name || data.schoolName || user?.schoolName,
             schoolCode: data.code || data.schoolCode || user?.schoolCode,
@@ -123,7 +143,7 @@ const UniversalTemplate: React.FC = () => {
             phone: data.contact?.phone || data.phone || data.contactNumber || '+91-XXXXXXXXXX',
             email: data.contact?.email || data.email || data.contactEmail || data.principalEmail || 'info@school.com',
             website: formattedWebsite,
-            logoUrl: data.logoUrl || data.logo || ''
+            logoUrl: logoUrl
           };
         }
       } catch (error: any) {
