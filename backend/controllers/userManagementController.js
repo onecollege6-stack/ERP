@@ -47,6 +47,15 @@ exports.getAllUsers = async (req, res) => {
         // Ensure temporaryPassword is fetched if it exists
         const users = await db.collection(collection).find({ isActive: { $ne: false } }).toArray();
 
+        // DEBUG: Log studentDetails structure
+        if (collection === 'students') {
+          users.forEach(user => {
+            console.log('DEBUG - Student user from DB:', user.userId);
+            console.log('DEBUG - studentDetails keys:', Object.keys(user.studentDetails || {}));
+            console.log('DEBUG - studentDetails:', JSON.stringify(user.studentDetails, null, 2));
+          });
+        }
+
         // Process each user found into a standardized format
         const processedUsers = users.map(user => {
           // --- Name Logic ---
@@ -110,7 +119,7 @@ exports.getAllUsers = async (req, res) => {
             ),
             // ----------------------------------------------------
 
-            // Include full details if needed (optional)
+            // Include full details - return entire studentDetails object as-is
             ...(user.studentDetails ? { studentDetails: user.studentDetails } : {}),
             ...(user.teacherDetails ? { teacherDetails: user.teacherDetails } : {}),
             ...(user.adminDetails ? { adminDetails: user.adminDetails } : {}),
