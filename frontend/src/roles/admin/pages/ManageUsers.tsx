@@ -2739,7 +2739,10 @@ const ManageUsers: React.FC = () => {
     console.log('userData.lastName:', userData.lastName);
     console.log('Contact structure:', userData.contact);
     console.log('Address structure:', userData.address);
+    console.log('Address type:', typeof userData.address);
     console.log('StudentDetails:', userData.studentDetails);
+    console.log('StudentDetails.class:', userData.studentDetails?.class);
+    console.log('StudentDetails.section:', userData.studentDetails?.section);
     console.log('TeacherDetails:', userData.teacherDetails);
     console.log('AdminDetails:', userData.adminDetails);
 
@@ -2765,9 +2768,9 @@ const ManageUsers: React.FC = () => {
       role: userData.role || 'student',
 
       // Admission Details (SATS Standard)
-      class: userData.academicInfo?.class || userData.studentDetails?.currentClass || userData.class || '',
+      class: userData.academicInfo?.class || userData.studentDetails?.currentClass || userData.studentDetails?.class || userData.class || '',
       academicYear: userData.academicYear || userData.studentDetails?.academicYear || '2024-2025',
-      section: userData.section || userData.studentDetails?.currentSection || '',
+      section: userData.academicInfo?.section || userData.section || userData.studentDetails?.currentSection || userData.studentDetails?.section || '',
       mediumOfInstruction: userData.mediumOfInstruction || 'English',
       motherTongue: userData.motherTongue || userData.studentDetails?.motherTongue || '',
       motherTongueOther: userData.motherTongueOther || userData.studentDetails?.motherTongueOther || '',
@@ -2826,7 +2829,8 @@ const ManageUsers: React.FC = () => {
       isRTECandidate: userData.isRTECandidate || userData.studentDetails?.isRTECandidate || 'No',
 
       // Address Information (SATS Standard)
-      address: userData.address?.permanent?.street || userData.address || '',
+      // Handle both nested object and flat string address formats
+      address: userData.address?.permanent?.street || (typeof userData.address === 'string' ? userData.address : '') || '',
       cityVillageTown: userData.cityVillageTown || userData.city || userData.address?.permanent?.city || '',
       locality: userData.locality || '',
       taluka: userData.taluka || userData.taluk || '',
@@ -2840,7 +2844,7 @@ const ManageUsers: React.FC = () => {
       talukaText: userData.talukaText || userData.taluka || '',
 
       // Enhanced Address Fields
-      permanentStreet: userData.address?.permanent?.street || '',
+      permanentStreet: userData.address?.permanent?.street || (typeof userData.address === 'string' ? userData.address : '') || '',
       permanentArea: userData.address?.permanent?.area || '',
       permanentCity: userData.address?.permanent?.city || userData.city || '',
       permanentState: userData.address?.permanent?.state || userData.state || 'Karnataka',
@@ -2900,8 +2904,8 @@ const ManageUsers: React.FC = () => {
       parentEmail: userData.parentEmail || '',
 
       // Academic Information (Legacy)
-      rollNumber: userData.academicInfo?.rollNumber || userData.rollNumber || userData.studentDetails?.rollNumber || '',
-      admissionNumber: userData.academicInfo?.admissionNumber || userData.admissionNumber || userData.studentDetails?.admissionNumber || '',
+      rollNumber: userData.academicInfo?.rollNumber || userData.rollNumber || userData.studentDetails?.rollNumber || userData.studentDetails?.studentId || '',
+      admissionNumber: userData.academicInfo?.admissionNumber || userData.admissionNumber || userData.studentDetails?.admissionNumber || userData.studentDetails?.studentId || '',
       admissionDate: userData.academicInfo?.admissionDate ?
         new Date(userData.academicInfo.admissionDate).toISOString().split('T')[0] :
         (userData.admissionDate || userData.studentDetails?.admissionDate || ''),
@@ -2984,6 +2988,7 @@ const ManageUsers: React.FC = () => {
     console.log('  secondaryPhone:', newFormData.secondaryPhone);
     console.log('  whatsappNumber:', newFormData.whatsappNumber);
     console.log('Address Info:');
+    console.log('  address:', newFormData.address);
     console.log('  permanentStreet:', newFormData.permanentStreet);
     console.log('  permanentCity:', newFormData.permanentCity);
     console.log('  permanentState:', newFormData.permanentState);
@@ -2999,6 +3004,9 @@ const ManageUsers: React.FC = () => {
     console.log('  section:', newFormData.section);
     console.log('  rollNumber:', newFormData.rollNumber);
     console.log('  admissionNumber:', newFormData.admissionNumber);
+    console.log('  academicYear:', newFormData.academicYear);
+    console.log('Student Details Object:');
+    console.log('  studentDetails:', newFormData.studentDetails);
     console.log('Total fields populated:', Object.keys(newFormData).length);
 
     setFormData(newFormData as any);
